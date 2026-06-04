@@ -2,8 +2,14 @@ package com.miniwatson.service;
 
 import com.miniwatson.dto.OllamaRequest;
 import com.miniwatson.dto.OllamaResponse;
+
+import com.miniwatson.governance.QueryLog;
+import com.miniwatson.governance.QueryLogRepository;
+
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+
+
 
 @Service
 public class OllamaService {
@@ -12,11 +18,21 @@ public class OllamaService {
     // 사용할 모델
     private final String Model = "gemma4";
 
+
     // HTTP 호출용 도구
     private final RestTemplate restTemplate = new RestTemplate();
+    // Repository 주입 (governance)
+    private final QueryLogRepository queryLogRepository;
+
+    //생성자
+    public OllamaService(QueryLogRepository queryLogRepository){
+        this.queryLogRepository = queryLogRepository;
+    }
 
     // 메서드 : 질문 받아서 답변 변환
+
     public String ask(String question) {
+        long startTime = System.currentTimeMillis();
         // 1. Ollama 로 보낼 request 만들기
         OllamaRequest request = new OllamaRequest();
         request.setModel(Model);
@@ -30,11 +46,27 @@ public class OllamaService {
                 OllamaResponse.class
         );
 
-        // 3. 응답에서 답변 텍스트 추출해서 반환
-        if (response == null) {
-            return "Error : no response from Ollama";
-        }
-        return response.getResponse();
+        // 응답 시간 계산
+
+        long latency = System.currentTimeMillis() - startTime;
+        // 응답 추출
+        String answer = (response != null) ? response.getResponse() : "Error: no response";
+
+        // DB 에  로그 저장
+        QueryLog log = new QueryLog();
+        log.setQuestion(question);
+        log.setAnswer(answer);
+        log.setModel(Model);
+        log.setLatencyMs(latency);
+        queryLogRepository.save(log);
+        return answer;
+
+        // 응답 시간 계
+//        // 3. 응답에서 답변 텍스트 추출해서 반환
+//        if (response == null) {
+//            return "Error : no response from Ollama";
+//        }
+//        return response.getResponse();
     }
 }
 

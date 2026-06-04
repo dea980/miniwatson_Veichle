@@ -1,6 +1,9 @@
 spring:
   application:
     name: miniwatson
+  profiles:
+    active : dev
+
 
 #database:
 #  host: localhost
@@ -13,3 +16,59 @@ spring:
 
 server:
   port: 8080
+
+#---
+## DEV - 인메모리 (개발용)
+#spring:
+#  config:
+#    activate:
+#      on-profile: dev
+#  datasource:
+#    url: jdbc:h2:mem:miniwatson
+#    driver-class-name: org.h2.Driver
+#    username: daeyeop
+#    passowrd: daeyeop
+#  jpa:
+#    hibernate:
+#      ddl-auto:create-drop
+#    show-sql: true
+#  h2:
+#    console:
+#      enabled: true
+#
+#---
+## DEMO - 파일 저장 (
+#spring:
+#  config:
+#    activate:
+#      on-profile: demo
+#    datasource:
+#      url: jdbc:h2:file:./data/miniwatson;AUTO_SERVER=TRUE
+#      driver-class-name: org.h2.Driver
+#      username: demo
+#      password: demo
+#    jpa:
+#      hibernate:
+#        ## 기존의 데이터 유지를 위해
+#        ddl-auto: update
+#      show-sql: true
+#    h2:
+#      console:
+#        enabled: true
+#
+#---
+## PROD (further) AS POSTGRES)
+#spring:
+#  config:
+#    activate:
+#      on-profile: prod
+#  datasource:
+#    url: ${DATABASE_URL} # set up at 환경변수
+#    username: ${DB_USER}
+#    password: ${DB_PASSWORD}
+#  jpa:
+#    hibernate:
+#      ddl-auto: validate #스키마 변경 X
+#    show-sql: false
+#
+#

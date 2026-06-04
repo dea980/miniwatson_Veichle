@@ -1,0 +1,18 @@
+# DEMO - 파일 저장 (
+spring:
+  config:
+    activate:
+      on-profile: demo
+    datasource:
+      url: jdbc:h2:file:./data/miniwatson;AUTO_SERVER=TRUE
+      driver-class-name: org.h2.Driver
+      username: sa
+      password:
+    jpa:
+      hibernate:
+        ## 기존의 데이터 유지를 위해
+        ddl-auto: update
+      show-sql: true
+    h2:
+      console:
+        enabled: true

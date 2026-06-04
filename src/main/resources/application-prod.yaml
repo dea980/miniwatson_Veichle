@@ -1,0 +1,13 @@
+# PROD (further) AS POSTGRES)
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${DATABASE_URL} # set up at 환경변수
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate #스키마 변경 X
+    show-sql: false
