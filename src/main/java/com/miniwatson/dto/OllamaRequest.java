@@ -9,4 +9,5 @@ public class OllamaRequest {
     private String prompt;
     private boolean stream;
     private Map<String, Object> options;
+    private Boolean think;
 }

@@ -38,7 +38,8 @@ public class OllamaService {
         request.setModel(Model);
         request.setPrompt(question);
         request.setStream(false);
-        request.setOptions(Map.of("num_predict", 200));
+        request.setThink(false);
+        request.setOptions(Map.of("num_predict", 1500));
 
         //2. Ollama API 호출 (POST)
         OllamaResponse response = restTemplate.postForObject(

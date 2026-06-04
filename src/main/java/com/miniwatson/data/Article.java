@@ -1,8 +1,9 @@
 package com.miniwatson.data;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import java.time.LocalDateTime;
-
+import java.util.List;
 // id 우리 시스템 내부 식별자(Long, auto-increment 같은 거지만 우리가 정함)
 // title Wikipedia article 제목
 // summary extract 텍스트 (실제 내용)
@@ -15,4 +16,6 @@ public class Article {
     private String summary;
     private String url;
     private LocalDateTime ingestedAt;
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    private List<Float> embedding;
 }

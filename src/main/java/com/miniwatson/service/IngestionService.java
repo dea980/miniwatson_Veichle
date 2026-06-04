@@ -20,8 +20,11 @@ public class IngestionService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ArticleStore articleStore;
 
-    public IngestionService(ArticleStore articleStore) {
+    private final EmbeddingService embeddingService;
+
+    public IngestionService(ArticleStore articleStore, EmbeddingService embeddingService) {
         this.articleStore = articleStore;
+        this.embeddingService = embeddingService;
     }
 
     public Article ingest(String title) throws IOException {
@@ -45,13 +48,16 @@ public class IngestionService {
             throw new RuntimeException("Wikipedia returned no response for: " + title);
         }
 
-        // 변환
+        // 아티클 객체 생성 변환
         Article article = new Article();
         article.setTitle(response.getTitle());
         article.setSummary(response.getExtract());
         article.setUrl(response.getContent_urls().getDesktop().getPage());
         article.setIngestedAt(LocalDateTime.now());
 
+        // embedding 생성 (title + summary 결합)
+        String textToEmbed = response.getTitle() + ". " + response.getExtract();
+        article.setEmbedding(embeddingService.embed(textToEmbed));
         return articleStore.save(article);
     }
 }
