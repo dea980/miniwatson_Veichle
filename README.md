@@ -10,7 +10,7 @@ enterprise GenAI platforms work end-to-end.
 
 Inspired by IBM watsonx — `data`, `ai`, `governance` layers:
 
-\`\`\`
+```
 ┌─────────────────────────────────────────────┐
 │  Frontend (planned): JavaScript dashboard   │
 └──────────────────┬──────────────────────────┘
@@ -38,7 +38,7 @@ Inspired by IBM watsonx — `data`, `ai`, `governance` layers:
 │
 ▼
 Ollama (local LLM)
-\`\`\`
+```
 
 ## 🛠️ Tech Stack
 
@@ -62,7 +62,7 @@ Ollama (local LLM)
 
 ### Run
 
-\`\`\`bash
+```bash
 # 1. Start Ollama
 ollama serve
 
@@ -73,11 +73,11 @@ ollama serve
 curl -X POST http://localhost:8080/api/ask \\
 -H "Content-Type: application/json" \\
 -d '{"question": "What is RAG? Answer in 2 sentences."}'
-\`\`\`
+```
 
 ## 📁 Project Structure
 
-\`\`\`
+```
 miniwatson/
 ├── src/main/java/com/miniwatson/
 │   ├── MiniwatsonApplication.java       # Spring Boot entry
@@ -94,7 +94,7 @@ miniwatson/
 │   └── application.yml                  # Spring Boot config
 ├── pom.xml                              # Maven dependencies
 └── README.md
-\`\`\`
+```
 
 ## 🔌 API Endpoints
 
@@ -107,16 +107,16 @@ miniwatson/
 ### Example: POST /api/ask
 
 **Request**:
-\`\`\`json
+```json
 {
 "question": "What is RAG?"
 }
-\`\`\`
+```
 
 **Response**:
-\`\`\`
+```
 "RAG (Retrieval-Augmented Generation) is an AI architecture..."
-\`\`\`
+```
 
 ## 🗺️ Roadmap
 
