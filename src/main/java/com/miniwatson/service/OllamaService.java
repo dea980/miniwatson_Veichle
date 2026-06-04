@@ -9,7 +9,7 @@ import com.miniwatson.governance.QueryLogRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-
+import java.util.Map;
 
 @Service
 public class OllamaService {
@@ -38,12 +38,14 @@ public class OllamaService {
         request.setModel(Model);
         request.setPrompt(question);
         request.setStream(false);
+        request.setOptions(Map.of("num_predict", 200));
 
         //2. Ollama API 호출 (POST)
         OllamaResponse response = restTemplate.postForObject(
                 OLLMA_URL,
                 request,
                 OllamaResponse.class
+
         );
 
         // 응답 시간 계산
