@@ -10,10 +10,10 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/governance")
 
-public class GovernanaceController {
+public class GovernanceController {
     private final QueryLogRepository queryLogRepository;
 
-    public GovernanaceController(QueryLogRepository queryLogRepository){
+    public GovernanceController(QueryLogRepository queryLogRepository){
         this.queryLogRepository = queryLogRepository;
     }
     // ahems Q&A 로그 반환
