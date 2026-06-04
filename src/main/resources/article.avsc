@@ -1,7 +1,7 @@
 {
   "type": "record",
   "name": "Article",
-  "namespace": "com.miniwatson.data",
+  "namespace": "miniwatson.schema",
   "fields": [
     {"name": "id", "type": "long"},
     {"name": "title", "type": "string"},

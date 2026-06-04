@@ -26,22 +26,37 @@ public class ArticleParquetStore {
     private final Schema schema;
 
     public ArticleParquetStore() throws IOException {
-        try (InputStream is = getClass().getClassLoader().getResourceAsStream("article.avsc")){
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("article.avsc")) {
+            if (is == null) {
+                throw new IOException("article.avsc not found in classpath");
+            }
             this.schema = new Schema.Parser().parse(is);
         }
     }
+
     public void saveAll(List<Article> articles) throws IOException {
         Path path = new Path(STORAGE_PATH);
-        File parentDir = new File(STORAGE_PATH).getParentFile();
-        if (parentDir != null) parentDir.mkdirs();
 
-        // 기존 파일 삭제 (Parquet은 overwrite 못 함)
-        new File(STORAGE_PATH).delete();
+        File parentDir = new File(STORAGE_PATH).getParentFile();
+        if (parentDir != null && !parentDir.exists()) {
+            boolean created = parentDir.mkdirs();
+            if (!created) {
+                System.err.println("Warning: Failed to create parent dir: " + parentDir);
+            }
+        }
+
+        // Parquet은 overwrite 불가 → 기존 파일 삭제
+        File existing = new File(STORAGE_PATH);
+        if (existing.exists() && !existing.delete()) {
+            throw new IOException("Failed to delete existing Parquet file: " + STORAGE_PATH);
+        }
 
         Configuration conf = new Configuration();
+
         try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
                 .withSchema(schema)
                 .withConf(conf)
+                .withDataModel(GenericData.get())            // Writer는 OK
                 .withCompressionCodec(CompressionCodecName.SNAPPY)
                 .build()) {
 
@@ -56,7 +71,10 @@ public class ArticleParquetStore {
                 writer.write(record);
             }
         }
+
+        System.out.println("[Parquet] Saved " + articles.size() + " articles → " + STORAGE_PATH);
     }
+
     public List<Article> loadAll() throws IOException {
         File file = new File(STORAGE_PATH);
         if (!file.exists()) {
@@ -68,10 +86,11 @@ public class ArticleParquetStore {
         List<Article> articles = new ArrayList<>();
 
         try (ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(path)
-                .withConf(conf)
+                .withConf(conf)                              // Reader는 withDataModel 없음
                 .build()) {
 
             GenericRecord record;
+            int idx = 0;
             while ((record = reader.read()) != null) {
                 Article article = new Article();
                 article.setId((Long) record.get("id"));
@@ -80,15 +99,32 @@ public class ArticleParquetStore {
                 article.setUrl(record.get("url").toString());
                 article.setIngestedAt(LocalDateTime.parse(record.get("ingestedAt").toString()));
 
-                @SuppressWarnings("unchecked")
-                List<Float> embedding = new ArrayList<>((List<Float>) record.get("embedding"));
-                article.setEmbedding(embedding);
+                Object embObj = record.get("embedding");
+                List<Float> embedding = new ArrayList<>();
 
+                if (embObj instanceof List<?> rawList) {
+                    for (Object item : rawList) {
+                        if (item instanceof Number num) {
+                            embedding.add(num.floatValue());
+                        }
+                    }
+                }
+
+                article.setEmbedding(embedding);
                 articles.add(article);
+
+                System.out.println("[Parquet] Loaded #" + idx
+                        + " id=" + article.getId()
+                        + " title=" + article.getTitle()
+                        + " embedding.size=" + embedding.size());
+                idx++;
             }
         }
+
+        System.out.println("[Parquet] loadAll → " + articles.size() + " articles");
         return articles;
     }
+
     public Article save(Article article) throws IOException {
         List<Article> articles = loadAll();
         article.setId((long) (articles.size() + 1));
