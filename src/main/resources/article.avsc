@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "Article",
+  "namespace": "com.miniwatson.data",
+  "fields": [
+    {"name": "id", "type": "long"},
+    {"name": "title", "type": "string"},
+    {"name": "summary", "type": "string"},
+    {"name": "url", "type": "string"},
+    {"name": "ingestedAt", "type": "string"},
+    {"name": "embedding", "type": {"type": "array", "items": "float"}}
+  ]
+}

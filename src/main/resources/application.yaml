@@ -4,18 +4,22 @@ spring:
   profiles:
     active : dev
 
-
 #database:
 #  host: localhost
 #  username: admin
 #  password: secret
-#
 #
 #logging:
 #  level: DEBUG
 
 server:
   port: 8080
+
+ollama:
+  url: ${OLLAMA_URL:http://localhost:11434}
+  chat-model: ${OLLAMA_CHAT_MODEL:gemma4}
+  embed-model: ${OLLAMA_EMBED_MODEL:nomic-embed-text}
+  num-predict: ${OLLAMA_NUM_PREDICT:500}
 
 #---
 ## DEV - 인메모리 (개발용)

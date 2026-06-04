@@ -2,6 +2,7 @@ package com.miniwatson.service;
 
 import com.miniwatson.data.Article;
 import com.miniwatson.data.ArticleStore;
+import com.miniwatson.data.ArticleParquetStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -17,13 +18,21 @@ public class RagService {
     private static final Logger log = LoggerFactory.getLogger(RagService.class);
 
     private final EmbeddingService embeddingService;
-    private final ArticleStore articleStore;
+//    private final ArticleStore articleStore;
+    private final ArticleParquetStore articleStore;
     private final OllamaService ollamaService;
 
     private static final int TOP_K = 2;
 
+//    public RagService(EmbeddingService embeddingService,
+//                      ArticleStore articleStore,
+//                      OllamaService ollamaService) {
+//        this.embeddingService = embeddingService;
+//        this.articleStore = articleStore;
+//        this.ollamaService = ollamaService;
+//    }
     public RagService(EmbeddingService embeddingService,
-                      ArticleStore articleStore,
+                      ArticleParquetStore articleStore,
                       OllamaService ollamaService) {
         this.embeddingService = embeddingService;
         this.articleStore = articleStore;
@@ -51,7 +60,7 @@ public class RagService {
         log.info("Retrieved {} articles: {}", topArticles.size(),
                 topArticles.stream().map(Article::getTitle).collect(Collectors.toList()));
 
-        // ⭐ 간단한 prompt (모델이 헷갈리지 않게)
+        // 간단한 prompt (모델이 헷갈리지 않게)
         StringBuilder context = new StringBuilder();
         for (Article a : topArticles) {
             context.append("- ").append(a.getTitle()).append(": ").append(a.getSummary()).append("\n");

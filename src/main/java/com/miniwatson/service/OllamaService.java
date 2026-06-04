@@ -10,14 +10,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
-
+import org.springframework.beans.factory.annotation.Value;
 @Service
 public class OllamaService {
     //Ollama API URL
-    private final String OLLMA_URL = "http://localhost:11434/api/generate";
+    //private final String OLLMA_URL = "http://localhost:11434/api/generate";
+    @Value("${ollama.url}")
+    private String ollamaUrl;
     // 사용할 모델
-    private final String Model = "gemma4";
+    //private final String Model = "gemma4";
+    @Value("${ollama.chat-model}")
+    private String model;
 
+    @Value("${ollama.num-predict}")
+    private int numPredict;
 
     // HTTP 호출용 도구
     private final RestTemplate restTemplate = new RestTemplate();
@@ -26,6 +32,7 @@ public class OllamaService {
 
     //생성자
     public OllamaService(QueryLogRepository queryLogRepository){
+
         this.queryLogRepository = queryLogRepository;
     }
 
@@ -33,20 +40,18 @@ public class OllamaService {
 
     public String ask(String question) {
         long startTime = System.currentTimeMillis();
-        // 1. Ollama 로 보낼 request 만들기
+
         OllamaRequest request = new OllamaRequest();
-        request.setModel(Model);
+        request.setModel(model);
         request.setPrompt(question);
         request.setStream(false);
         request.setThink(false);
-        request.setOptions(Map.of("num_predict", 1500));
+        request.setOptions(Map.of("num_predict", numPredict));
 
-        //2. Ollama API 호출 (POST)
         OllamaResponse response = restTemplate.postForObject(
-                OLLMA_URL,
+                ollamaUrl + "/api/generate",
                 request,
                 OllamaResponse.class
-
         );
 
         // 응답 시간 계산
@@ -59,7 +64,7 @@ public class OllamaService {
         QueryLog log = new QueryLog();
         log.setQuestion(question);
         log.setAnswer(answer);
-        log.setModel(Model);
+        log.setModel(model);
         log.setLatencyMs(latency);
         queryLogRepository.save(log);
         return answer;

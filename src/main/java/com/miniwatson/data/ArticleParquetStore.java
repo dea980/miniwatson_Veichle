@@ -1,0 +1,99 @@
+package com.miniwatson.data;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.avro.AvroParquetReader;
+import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.springframework.stereotype.Component;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+@Component
+public class ArticleParquetStore {
+
+    private static final String STORAGE_PATH = "./data/articles.parquet";
+    private final Schema schema;
+
+    public ArticleParquetStore() throws IOException {
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream("article.avsc")){
+            this.schema = new Schema.Parser().parse(is);
+        }
+    }
+    public void saveAll(List<Article> articles) throws IOException {
+        Path path = new Path(STORAGE_PATH);
+        File parentDir = new File(STORAGE_PATH).getParentFile();
+        if (parentDir != null) parentDir.mkdirs();
+
+        // 기존 파일 삭제 (Parquet은 overwrite 못 함)
+        new File(STORAGE_PATH).delete();
+
+        Configuration conf = new Configuration();
+        try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(path)
+                .withSchema(schema)
+                .withConf(conf)
+                .withCompressionCodec(CompressionCodecName.SNAPPY)
+                .build()) {
+
+            for (Article article : articles) {
+                GenericRecord record = new GenericData.Record(schema);
+                record.put("id", article.getId());
+                record.put("title", article.getTitle());
+                record.put("summary", article.getSummary());
+                record.put("url", article.getUrl());
+                record.put("ingestedAt", article.getIngestedAt().toString());
+                record.put("embedding", article.getEmbedding());
+                writer.write(record);
+            }
+        }
+    }
+    public List<Article> loadAll() throws IOException {
+        File file = new File(STORAGE_PATH);
+        if (!file.exists()) {
+            return new ArrayList<>();
+        }
+
+        Path path = new Path(STORAGE_PATH);
+        Configuration conf = new Configuration();
+        List<Article> articles = new ArrayList<>();
+
+        try (ParquetReader<GenericRecord> reader = AvroParquetReader.<GenericRecord>builder(path)
+                .withConf(conf)
+                .build()) {
+
+            GenericRecord record;
+            while ((record = reader.read()) != null) {
+                Article article = new Article();
+                article.setId((Long) record.get("id"));
+                article.setTitle(record.get("title").toString());
+                article.setSummary(record.get("summary").toString());
+                article.setUrl(record.get("url").toString());
+                article.setIngestedAt(LocalDateTime.parse(record.get("ingestedAt").toString()));
+
+                @SuppressWarnings("unchecked")
+                List<Float> embedding = new ArrayList<>((List<Float>) record.get("embedding"));
+                article.setEmbedding(embedding);
+
+                articles.add(article);
+            }
+        }
+        return articles;
+    }
+    public Article save(Article article) throws IOException {
+        List<Article> articles = loadAll();
+        article.setId((long) (articles.size() + 1));
+        articles.add(article);
+        saveAll(articles);
+        return article;
+    }
+}

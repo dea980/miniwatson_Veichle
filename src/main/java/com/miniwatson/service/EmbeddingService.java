@@ -4,21 +4,26 @@ import com.miniwatson.dto.EmbeddingRequest;
 import com.miniwatson.dto.EmbeddingResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-
+import org.springframework.beans.factory.annotation.Value;
 import java.util.List;
 @Service
 public class EmbeddingService {
-    private final String OllAMA_EMBED_URL = "http://localhost:11434/api/embed";
-    private final String EMBED_MODEL = "nomic-embed-text";
+//    private final String OllAMA_EMBED_URL = "http://localhost:11434/api/embed";
+    @Value("${ollama.url}")
+    private String ollamaUrl;
+
+//    private final String EMBED_MODEL = "nomic-embed-text";
+    @Value("${ollama.embed-model}")
+    private String embedModel;
     private final RestTemplate restTemplate = new RestTemplate();
 
-    public List<Float> embed(String text){
+    public List<Float> embed(String text) {
         EmbeddingRequest request = new EmbeddingRequest();
-        request.setModel(EMBED_MODEL);
+        request.setModel(embedModel);
         request.setInput(text);
 
         EmbeddingResponse response = restTemplate.postForObject(
-                OllAMA_EMBED_URL,
+                ollamaUrl + "/api/embed",
                 request,
                 EmbeddingResponse.class
         );

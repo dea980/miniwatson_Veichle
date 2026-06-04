@@ -2,6 +2,7 @@ package com.miniwatson.service;
 
 import com.miniwatson.data.Article;
 import com.miniwatson.data.ArticleStore;
+import com.miniwatson.data.ArticleParquetStore;
 import com.miniwatson.data.WikipediaResponse;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -9,6 +10,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -18,11 +20,16 @@ public class IngestionService {
 
     private final String WIKIPEDIA_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/";
     private final RestTemplate restTemplate = new RestTemplate();
-    private final ArticleStore articleStore;
-
+//    private final ArticleStore articleStore;
+    private final ArticleParquetStore articleStore;
     private final EmbeddingService embeddingService;
 
-    public IngestionService(ArticleStore articleStore, EmbeddingService embeddingService) {
+//    public IngestionService(ArticleStore articleStore, EmbeddingService embeddingService) {
+//        this.articleStore = articleStore;
+//        this.embeddingService = embeddingService;
+//    }
+
+    public IngestionService(ArticleParquetStore articleStore, EmbeddingService embeddingService) {
         this.articleStore = articleStore;
         this.embeddingService = embeddingService;
     }
