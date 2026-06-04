@@ -11,6 +11,7 @@ import java.io.IOException;
 
 @RestController
 @RequestMapping("/api/rag")
+
 public class RagController {
 
     private final RagService ragService;

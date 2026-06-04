@@ -312,4 +312,39 @@ MIT
 ## Author
 
 **Daeyeop Kim** — built during preparation for IBM Consulting internship.  
-[github.com/dea980](https://github.com/dea980) · kdea989@gmail.com
+[github.com/dea980](https://github.com/dea980) · kdea989@gmail.com# README snippet — paste into existing README.md
+
+Add this near the top, under your project tagline, so visitors can find the docs immediately.
+
+---
+
+## 📚 Documentation
+
+| Doc                            | What's inside                                              |
+|--------------------------------|------------------------------------------------------------|
+| [docs/API.md](docs/API.md)             | REST API reference — every endpoint with curl + schemas    |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Component diagram, request flows, watsonx mapping          |
+| [docs/DATA-MODEL.md](docs/DATA-MODEL.md)     | Article schema, Avro + Parquet, anti-corruption layer      |
+| [docs/GOVERNANCE.md](docs/GOVERNANCE.md)     | Audit log schema, watsonx.governance parity                |
+| [docs/H2-CONSOLE.md](docs/H2-CONSOLE.md)     | H2 web console — enable, login, SQL cookbook, prod warning |
+
+**Live (interactive) API docs**: run the app, then open [`http://localhost:8080/swagger-ui.html`](http://localhost:8080/swagger-ui.html).
+See [`SWAGGER-SETUP.md`](SWAGGER-SETUP.md) to enable.
+# README snippet — paste into existing README.md
+
+Add this near the top, under your project tagline, so visitors can find the docs immediately.
+
+---
+
+## 📚 Documentation
+
+| Doc                            | What's inside                                              |
+|--------------------------------|------------------------------------------------------------|
+| [docs/API.md](docs/API.md)             | REST API reference — every endpoint with curl + schemas    |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Component diagram, request flows, watsonx mapping          |
+| [docs/DATA-MODEL.md](docs/DATA-MODEL.md)     | Article schema, Avro + Parquet, anti-corruption layer      |
+| [docs/GOVERNANCE.md](docs/GOVERNANCE.md)     | Audit log schema, watsonx.governance parity                |
+| [docs/H2-CONSOLE.md](docs/H2-CONSOLE.md)     | H2 web console — enable, login, SQL cookbook, prod warning |
+
+**Live (interactive) API docs**: run the app, then open [`http://localhost:8080/swagger-ui.html`](http://localhost:8080/swagger-ui.html).
+See [`SWAGGER-SETUP.md`](SWAGGER-SETUP.md) to enable.

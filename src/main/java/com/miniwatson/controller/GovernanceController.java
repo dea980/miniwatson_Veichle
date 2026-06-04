@@ -9,6 +9,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/governance")
+
 public class GovernanaceController {
     private final QueryLogRepository queryLogRepository;
 
