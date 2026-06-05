@@ -303,7 +303,7 @@ MIT
 
 ## Author
 
-**Daeyeop Kim** — built during preparation for IBM Consulting internship.  
+**Daeyeop Kim**  
 [github.com/dea980](https://github.com/dea980) · kdea989@gmail.com# README snippet — paste into existing README.md
 
 Add this near the top, under your project tagline, so visitors can find the docs immediately.
