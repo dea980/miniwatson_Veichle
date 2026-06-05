@@ -11,9 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-
+import java.util.List;
 import java.io.IOException;
 import java.time.LocalDateTime;
+
 
 @Service
 public class IngestionService {
@@ -35,6 +36,14 @@ public class IngestionService {
     }
 
     public Article ingest(String title) throws IOException {
+        //Dedupe : 동일 Title 시,
+        List<Article>existing = articleStore.loadAll();
+        for (Article a : existing){
+            if (a.getTitle().equalsIgnoreCase(title)){
+                return a;
+            }
+        }
+
         String url = WIKIPEDIA_URL + title;
 
         // ⭐ User-Agent 헤더 추가
