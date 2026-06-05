@@ -21,21 +21,21 @@ Three layers, each mapping to a watsonx component:
 │ REST · JSON
 ┌─────────────────────────▼───────────────────────────────┐
 │  Backend: Spring Boot 4 · Java 21 (IBM Semeru)          │
-│                                                          │
+│                                                         │
 │  ┌────────────────────────────────────────────────────┐ │
 │  │  AI Layer (watsonx.ai analog)                      │ │
 │  │  • Ollama gemma4 — chat (think: false)             │ │
 │  │  • Ollama nomic-embed-text — 768-dim embeddings    │ │
 │  │  • RAG: cosine similarity + augmented prompt       │ │
 │  └────────────────────────────────────────────────────┘ │
-│                                                          │
+│                                                         │
 │  ┌────────────────────────────────────────────────────┐ │
 │  │  Data Layer (watsonx.data analog)                  │ │
 │  │  • Wikipedia REST API ingestion                    │ │
 │  │  • Parquet (Avro schema, SNAPPY compression)       │ │
 │  │  • 7× smaller than JSON                            │ │
 │  └────────────────────────────────────────────────────┘ │
-│                                                          │
+│                                                         │
 │  ┌────────────────────────────────────────────────────┐ │
 │  │  Governance Layer (watsonx.governance analog)      │ │
 │  │  • Auto audit log every Q&A in H2                  │ │
@@ -140,12 +140,6 @@ curl http://localhost:8080/api/governance/logs
 
 Every LLM call is logged: question, answer, model, latency (ms), timestamp.
 
-### Health
-
-```bash
-curl http://localhost:8080/api/hello
-# → "hello watsonx"
-```
 
 ---
 
@@ -189,8 +183,6 @@ miniwatson/
 ├── src/main/java/com/miniwatson/
 │   ├── MiniwatsonApplication.java
 │   ├── controller/
-│   │   ├── HelloController.java          # GET /api/hello
-│   │   ├── AskController.java            # POST /api/ask (direct LLM)
 │   │   ├── RagController.java            # POST /api/rag/ask
 │   │   ├── DataController.java           # /api/data/*
 │   │   └── GovernanceController.java     # GET /api/governance/logs
@@ -277,13 +269,13 @@ Notes from building this:
 
 ## Roadmap
 
-- [x] Day 1 — Spring Boot setup
-- [x] Day 2 — Ollama integration (watsonx.ai analog)
-- [x] Day 3 — H2 audit log (watsonx.governance analog)
-- [x] Day 4 — Wikipedia → Parquet (watsonx.data analog)
-- [x] Day 5 — RAG with embeddings + cosine similarity
-- [x] Day 6 — Frontend dashboard (IBM Carbon-style)
-- [ ] Day 7 — Demo video + deployment notes
+- [x] 1 — Spring Boot setup
+- [x] 2 — Ollama integration (watsonx.ai analog)
+- [x] 3 — H2 audit log (watsonx.governance analog)
+- [x] 4 — Wikipedia → Parquet (watsonx.data analog)
+- [x] 5 — RAG with embeddings + cosine similarity
+- [x] 6 — Frontend dashboard (IBM Carbon-style)
+- [ ] 7 — deployment notes
 - [ ] Multi-tenant article namespacing
 - [ ] vector index for sub-linear retrieval
 
