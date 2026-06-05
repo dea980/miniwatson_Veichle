@@ -46,12 +46,12 @@ public class IngestionService {
 
         String url = WIKIPEDIA_URL + title;
 
-        // ⭐ User-Agent 헤더 추가
+        // User-Agent 헤더 추가
         HttpHeaders headers = new HttpHeaders();
         headers.set("User-Agent", "MiniWatson/1.0 (https://github.com/dea980/miniwatson; kdea989@gmail.com)");
         HttpEntity<String> request = new HttpEntity<>(headers);
 
-        // ⭐ getForObject → exchange로 변경 (헤더 포함)
+        // getForObject → exchange로 변경 (헤더 포함)
         ResponseEntity<WikipediaResponse> responseEntity = restTemplate.exchange(
                 url,
                 HttpMethod.GET,

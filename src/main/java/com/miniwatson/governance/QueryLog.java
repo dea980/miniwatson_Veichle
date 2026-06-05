@@ -16,12 +16,14 @@ public class QueryLog {
     @Column(columnDefinition = "TEXT")
     private String question;                  // @Id 제거
 
+    @Column(length = 4000)
+    private String augmentedPrompt;
     @Column(columnDefinition = "TEXT")
     private String answer;
 
     private String model;
 
-    private Long latencyMs;                   // latency (lateny X)
+    private Long latencyMs;
 
     private LocalDateTime createdAt;
 

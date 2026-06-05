@@ -1,4 +1,4 @@
-````
+```
 embed("What is RAG?")
 ↓
 [EmbeddingRequest 객체 생성]
@@ -13,7 +13,7 @@ embeddings: [[0.123, -0.456, ...]]
 [첫 번째 embedding 추출]
 ↓
 [List<Float> 반환] — 768차원 벡터
-````
+```
 768차원 벡터
 
 nomic-embed-text는 768차원 vector 생성
