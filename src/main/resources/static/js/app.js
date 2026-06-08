@@ -158,6 +158,20 @@ async function loadModels() {
         updateAiStatus();                                  // 초기 표시
     } catch (e) { /* 무시 */ }
 }
+async function loadModels() {
+    try {
+        const res = await fetch(`${API}/api/rag/models`);
+        const data = await res.json();
+        const sel = document.getElementById('model-select');
+        sel.innerHTML = (data.available || []).map(m =>
+            `<option value="${m}" ${m === data.default ? 'selected' : ''}>${m}</option>`
+        ).join('');
+        sel.addEventListener('change', updateAiStatus);   // ← 추가: 바꿀 때 카드 갱신
+        updateAiStatus();                                  // ← 추가: 초기 표시
+    } catch (e) {
+        console.error('loadModels failed:', e);
+    }
+}
 function showTab(tab) {
     const articles = document.getElementById('articles-section');
     const logs = document.getElementById('logs-section');
@@ -172,7 +186,6 @@ function showTab(tab) {
     if (tab === 'logs') loadLogs();
     else loadArticles();
 }
-
 function updateAiStatus() {
     const el = document.getElementById('ai-model');
     const sel = document.getElementById('model-select');
@@ -180,6 +193,7 @@ function updateAiStatus() {
 }
 
 loadArticles();
+loadModels();
 
 document.getElementById('question').addEventListener('keypress', e => {
     if (e.key === 'Enter') askRAG();
