@@ -3,6 +3,14 @@ spring:
     name: miniwatson
   profiles:
     active : dev
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+chunking:
+  strategy: semantic # or recursive / semantic / fixed
+  max-size: 250        # 비교 테스트용 (실사용은 800~1000)
 
 #database:
 #  host: localhost

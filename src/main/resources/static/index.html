@@ -48,7 +48,6 @@
                 </div>
             </div>
         </section>
-
         <!-- Ask RAG -->
         <section class="panel">
             <div class="panel-header">
@@ -58,6 +57,7 @@
             <div class="panel-body">
                 <div class="input-row">
                     <input id="question" type="text" placeholder="Type a question. e.g. What is RAG?" class="input">
+                    <input id="ask-namespace" type="text" placeholder="namespace (default)" class="input">
                     <select id="model-select" class="input"></select>
                     <button onclick="askRAG()" class="btn btn-primary">Submit</button>
                 </div>
@@ -93,7 +93,7 @@
             </div>
             <div class="panel-body">
                 <div class="input-row">
-                    <input id = "upload-file" type = "file" accept = "image/*, .txt, .md" class = "input">
+                    <input id="upload-file" type="file" class="input">
                     <input id = "upload-namespace" type ="text" placeholder="namespace (default)" class = "input">
                     <button onclick = "uploadFile()" class = "btn btn-secondary">Upload</button>
                 </div>

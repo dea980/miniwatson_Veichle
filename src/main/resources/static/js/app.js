@@ -3,8 +3,8 @@ const API = 'http://localhost:8080';
 async function askRAG() {
     const question = document.getElementById('question').value;
     if (!question) return;
-
-    const model = document.getElementById('model-select').value;   // ← 추가
+    const model = document.getElementById('model-select').value;
+    const namespace = document.getElementById('ask-namespace')?.value || 'default';  // 추가
 
     document.getElementById('rag-loading').classList.remove('hidden');
     document.getElementById('rag-answer').classList.add('hidden');
@@ -14,7 +14,7 @@ async function askRAG() {
         const res = await fetch(`${API}/api/rag/ask`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ question, model })              // ← model 추가
+            body: JSON.stringify({ question, model, namespace })            // ← model 추가
         });
         const data = await res.json();
 
@@ -35,7 +35,19 @@ async function askRAG() {
         alert('Error: ' + e.message);
     }
 }
-
+async function summarizeArticle(id) {
+    const box = document.getElementById(`summary-${id}`);
+    box.classList.remove('hidden');
+    box.textContent = 'Summarizing...';
+    try {
+        const res = await fetch(`${API}/api/data/summarize/${id}`, { method: 'POST' });
+        if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0,200)}`);
+        const data = await res.json();
+        box.textContent = data.summary;
+    } catch (e) {
+        box.textContent = 'Error: ' + e.message;
+    }
+}
 async function ingestArticle() {
     const title = document.getElementById('ingest-title').value;
     if (!title) return;
@@ -67,7 +79,9 @@ async function loadArticles() {
             <a href="${a.url}" target="_blank">#${a.id} ${a.title}</a>
             <div class="summary">${a.summary.substring(0, 200)}...</div>
             <div class="meta">Ingested: ${a.ingestedAt}</div>
+            <button onclick="summarizeArticle(${a.id})" class="btn-ghost">요약</button>
             <button onclick="deleteArticle(${a.id})" class="btn-ghost">삭제</button>
+            <div id="summary-${a.id}" class="answer-box hidden"></div>
         </div>
     `).join('');
 }
@@ -92,6 +106,44 @@ async function deleteArticle(id) {
     if (!confirm(`#${id} 삭제할까요?`)) return;
     await fetch(`${API}/api/data/articles/${id}`, { method: 'DELETE' });
     loadArticles();
+}
+
+async function uploadFile() {
+    const fileInput = document.getElementById('upload-file');
+    const file = fileInput.files[0];
+    if (!file) { alert('파일을 선택하세요'); return; }
+
+    const ns = document.getElementById('upload-namespace').value || 'default';
+    const isImage = file.type.startsWith('image/');
+
+    const form = new FormData();
+    form.append('namespace', ns);
+    let endpoint;
+    if (isImage) {                                   // 이미지 → 멀티모달 ingest
+        endpoint = `${API}/api/multimodal/ingest`;
+        form.append('image', file);
+    } else {                                         // 텍스트/문서 → 파일 ingest
+        endpoint = `${API}/api/data/ingest-file`;
+        form.append('file', file);
+    }
+
+    document.getElementById('upload-result').textContent = 'Uploading...';
+    try {
+        const res = await fetch(endpoint, { method: 'POST', body: form });  // 헤더 X (FormData)
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`${res.status}: ${text.slice(0, 200)}`);
+        }
+        const data = await res.json();
+        const msg = Array.isArray(data)
+            ? `Ingested: <b>${data.length}</b> chunks (${data[0]?.title?.replace(/ #\d+$/, '') || ''})`
+            : `Ingested: <b>${data.title}</b> (id ${data.id})`;   // 이미지(단일 Article)
+        document.getElementById('upload-result').innerHTML = msg;
+        fileInput.value = '';
+        loadArticles();                              // 목록 갱신
+    } catch (e) {
+        document.getElementById('upload-result').textContent = 'Error: ' + e.message;
+    }
 }
 
 async function loadModels() {

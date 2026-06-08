@@ -7,6 +7,7 @@ import com.miniwatson.service.IngestionService;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.miniwatson.data.ArticleRepository;
+import com.miniwatson.service.OllamaService;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -23,13 +24,16 @@ public class DataController {
     //private final ArticleParquetStore articleStore;
     private final ArticleRepository articleStore;
     private final VectorIndex vectorIndex;
+    private final OllamaService ollamaService;
 
     public DataController(IngestionService ingestionService,
                           ArticleRepository articleStore,
-                          VectorIndex vectorIndex) {
+                          VectorIndex vectorIndex,
+                          OllamaService ollamaService) {
         this.ingestionService = ingestionService;
         this.articleStore = articleStore;
         this.vectorIndex = vectorIndex;
+        this.ollamaService = ollamaService;
     }
 
     /**
@@ -86,6 +90,30 @@ public class DataController {
     }
 
     /**
+     * summarize pdf file
+
+     */
+    @PostMapping("/summarize/{id}")
+    public Map<String, Object> summarize(@PathVariable long id) throws IOException {
+        List<Article> all = articleStore.loadAll();
+        Article target = all.stream().filter(x -> x.getId() == id).findFirst()
+                .orElseThrow(() -> new RuntimeException("Article not found: " + id));
+
+        // "file.pdf #3" → "file.pdf" 로 base 추출
+        String base = target.getTitle().replaceAll(" #\\d+$", "");
+
+        // 같은 문서의 모든 청크를 순서대로 합침
+        String doc = all.stream()
+                .filter(a -> a.getTitle().replaceAll(" #\\d+$", "").equals(base))
+                .map(Article::getSummary)
+                .reduce("", (x, y) -> x + "\n" + y);
+
+        if (doc.length() > 8000) doc = doc.substring(0, 8000);
+        String prompt = "Summarize the following document concisely:\n\n" + doc;
+        String summary = ollamaService.ask(prompt, null, "summarize: " + base);
+        return Map.of("id", id, "title", base, "summary", summary);
+    }
+    /**
      * Article 목록. namespace 미지정 시 전체 반환.
      * GET /api/data/articles            → all
      * GET /api/data/articles?namespace=acme → tenant only
@@ -125,11 +153,11 @@ public class DataController {
     }
 
     @PostMapping("/ingest-file")
-    public Article ingestFile(
+    public List<Article> ingestFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "namespace", required = false, defaultValue = "default") String namespace)
             throws IOException {
-                return ingestionService.ingestText(file, namespace);
+        return ingestionService.ingestText(file, namespace);
     }
     @DeleteMapping("/articles/{id}")
     public Map<String, Object> deleteArticle(@PathVariable long id) throws IOException {

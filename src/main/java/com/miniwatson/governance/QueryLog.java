@@ -16,8 +16,8 @@ public class QueryLog {
     @Column(columnDefinition = "TEXT")
     private String question;                  // @Id 제거
 
-    @Column(length = 4000)
-    private String augmentedPrompt;
+//    @Column(length = 4000)
+//    private String augmentedPrompt;
     @Column(columnDefinition = "TEXT")
     private String answer;
 
@@ -28,6 +28,9 @@ public class QueryLog {
     private LocalDateTime createdAt;
 
     private int piiCount;
+    @Lob
+    @Column(columnDefinition = "CLOB")
+    private String augmentedPrompt;
 
     @PrePersist
     protected void onCreate() {
