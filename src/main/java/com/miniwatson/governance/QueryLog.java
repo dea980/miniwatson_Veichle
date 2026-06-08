@@ -27,6 +27,8 @@ public class QueryLog {
 
     private LocalDateTime createdAt;
 
+    private int piiCount;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

@@ -34,3 +34,13 @@ build/
 
 
 omc/data/
+
+# runtime state
+data/
+.DS_Store
+*.crc
+
+# runtime state
+data/
+.DS_Store
+*.crc

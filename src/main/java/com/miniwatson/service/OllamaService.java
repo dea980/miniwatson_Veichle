@@ -2,43 +2,99 @@ package com.miniwatson.service;
 
 import com.miniwatson.dto.OllamaRequest;
 import com.miniwatson.dto.OllamaResponse;
+import com.miniwatson.governance.PiiRedactionService;
 
 import com.miniwatson.governance.QueryLog;
 import com.miniwatson.governance.QueryLogRepository;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
-import org.springframework.beans.factory.annotation.Value;
+
 @Service
 public class OllamaService {
-    //Ollama API URL
-    //private final String OLLMA_URL = "http://localhost:11434/api/generate";
+
     @Value("${ollama.url}")
     private String ollamaUrl;
-    // 사용할 모델
-    //private final String Model = "gemma4";
+
+    /** Default chat model when the caller doesn't specify one. */
     @Value("${ollama.chat-model}")
-    private String model;
+    private String defaultModel;
+
+    /** Comma-separated whitelist of selectable chat models (multi-LLM). */
+    @Value("${ollama.chat-models:}")
+    private String chatModelsCsv;
 
     @Value("${ollama.num-predict}")
     private int numPredict;
 
-    // HTTP 호출용 도구
     private final RestTemplate restTemplate = new RestTemplate();
-    // Repository 주입 (governance)
     private final QueryLogRepository queryLogRepository;
+    private final PiiRedactionService piiRedactionService;
 
-    //생성자
-    public OllamaService(QueryLogRepository queryLogRepository){
+    public OllamaService(QueryLogRepository queryLogRepository, PiiRedactionService piiRedactionService) {
 
         this.queryLogRepository = queryLogRepository;
+        this.piiRedactionService = piiRedactionService;
     }
 
-    // 메서드 : 질문 받아서 답변 변환
+    /** Available chat models = configured whitelist, always including the default. */
+    public List<String> availableModels() {
+        List<String> models = new ArrayList<>();
+        models.add(defaultModel);
+        if (chatModelsCsv != null && !chatModelsCsv.isBlank()) {
+            for (String m : chatModelsCsv.split(",")) {
+                String t = m.trim();
+                if (!t.isEmpty() && !models.contains(t)) {
+                    models.add(t);
+                }
+            }
+        }
+        return models;
+    }
 
+    public String defaultModel() {
+        return defaultModel;
+    }
+
+    /** Resolve + validate a requested model against the whitelist. */
+    private String resolveModel(String requested) {
+        if (requested == null || requested.isBlank()) {
+            return defaultModel;
+        }
+        List<String> allowed = availableModels();
+        if (!allowed.contains(requested)) {
+            throw new IllegalArgumentException(
+                    "Model '" + requested + "' is not allowed. Available: " + allowed);
+        }
+        return requested;
+    }
+
+    /** Text chat with the default model. */
     public String ask(String question) {
+        return ask(question, null);
+    }
+
+    /** Text chat with a caller-chosen model (validated against the whitelist). */
+    public String ask(String question, String model) {
+        return generate(question, resolveModel(model), null);
+    }
+
+    /**
+     * Multimodal chat: send a prompt plus base64-encoded images to a vision model.
+     * The model is used as-is (vision models live outside the chat whitelist).
+     */
+    public String askWithImages(String question, String visionModel, List<String> base64Images) {
+        String m = (visionModel == null || visionModel.isBlank()) ? defaultModel : visionModel;
+        return generate(question, m, base64Images);
+    }
+
+    /** Core Ollama /api/generate call + governance audit logging. */
+    private String generate(String question, String model, List<String> images) {
         long startTime = System.currentTimeMillis();
 
         OllamaRequest request = new OllamaRequest();
@@ -47,6 +103,9 @@ public class OllamaService {
         request.setStream(false);
         request.setThink(false);
         request.setOptions(Map.of("num_predict", numPredict));
+        if (images != null && !images.isEmpty()) {
+            request.setImages(images);
+        }
 
         OllamaResponse response = restTemplate.postForObject(
                 ollamaUrl + "/api/generate",
@@ -54,26 +113,20 @@ public class OllamaService {
                 OllamaResponse.class
         );
 
-        // 응답 시간 계산
-
         long latency = System.currentTimeMillis() - startTime;
-        // 응답 추출
         String answer = (response != null) ? response.getResponse() : "Error: no response";
 
-        // DB 에  로그 저장
+        //거버넌스 : 감사 로그 남기기전에 PPI 마스킹
+        PiiRedactionService.Redaction rq = piiRedactionService.redact(question);
+        PiiRedactionService.Redaction ra = piiRedactionService.redact(answer);
+
         QueryLog log = new QueryLog();
-        log.setQuestion(question);
-        log.setAnswer(answer);
+        log.setQuestion(rq.text());
+        log.setAnswer(ra.text());
         log.setModel(model);
         log.setLatencyMs(latency);
+        log.setPiiCount(rq.count() + rq.count());
         queryLogRepository.save(log);
         return answer;
-
-        // 응답 시간 계
-//        // 3. 응답에서 답변 텍스트 추출해서 반환
-//        if (response == null) {
-//            return "Error : no response from Ollama";
-//        }
-//        return response.getResponse();
     }
 }

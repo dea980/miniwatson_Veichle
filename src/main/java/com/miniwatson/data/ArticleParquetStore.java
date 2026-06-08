@@ -63,6 +63,9 @@ public class ArticleParquetStore {
             for (Article article : articles) {
                 GenericRecord record = new GenericData.Record(schema);
                 record.put("id", article.getId());
+                String ns = (article.getNamespace() == null || article.getNamespace().isBlank())
+                        ? "default" : article.getNamespace();
+                record.put("namespace", ns);
                 record.put("title", article.getTitle());
                 record.put("summary", article.getSummary());
                 record.put("url", article.getUrl());
@@ -94,6 +97,10 @@ public class ArticleParquetStore {
             while ((record = reader.read()) != null) {
                 Article article = new Article();
                 article.setId((Long) record.get("id"));
+                // backward compat: 예전 Parquet 파일에는 namespace 필드가 없다.
+                boolean hasNs = record.getSchema().getField("namespace") != null;
+                Object nsObj = hasNs ? record.get("namespace") : null;
+                article.setNamespace(nsObj != null ? nsObj.toString() : "default");
                 article.setTitle(record.get("title").toString());
                 article.setSummary(record.get("summary").toString());
                 article.setUrl(record.get("url").toString());
@@ -127,9 +134,16 @@ public class ArticleParquetStore {
 
     public Article save(Article article) throws IOException {
         List<Article> articles = loadAll();
-        article.setId((long) (articles.size() + 1));
+        long nextId = articles.stream().mapToLong(Article::getId).max().orElse(0) + 1;
+        article.setId(nextId);
         articles.add(article);
         saveAll(articles);
         return article;
+    }
+    public boolean deleteById(long id) throws IOException {
+        List<Article> all = loadAll();
+        boolean removed = all.removeIf(a -> a.getId() == id);
+        if (removed) saveAll(all);   // Parquet 전체 재작성 (기존 패턴 그대로)
+        return removed;
     }
 }

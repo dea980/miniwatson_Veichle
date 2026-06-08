@@ -161,7 +161,7 @@ LIMIT 10;
 
 | Topic                       | Note                                                                |
 |-----------------------------|---------------------------------------------------------------------|
-| PII redaction               | `question`/`answer` stored as-is — add masking before prod          |
+| ~~PII redaction~~ ✅ DONE    | Implemented — see section 10 (regex masking before audit-log persist)      |
 | Cryptographic chaining      | Each entry standalone — no hash chain for tamper-evidence           |
 | Right-to-be-forgotten        | No DELETE API — `userId`-scoped purge to be added                   |
 | Cost attribution            | `tookMs` only — no `tokens_in/out` (Ollama doesn't expose easily)   |
@@ -178,4 +178,61 @@ These are documented gaps, not silent omissions. Production version would add ea
 2. **Regulatory awareness** — schema designed against EU AI Act / ISO 42001.
 3. **Anti-corruption** — Wikipedia DTO never reaches the audit log directly.
 4. **Local-first sovereignty** — no audit data leaves the laptop.
-5. **Transparent gaps** — §8 honestly lists what production would add.
+5. **Transparent gaps** — section 8 honestly lists what production would add.
+
+---
+
+## 10. PII 마스킹 (민감정보 자동 가림) — 구현됨
+
+감사 로그는 질문·프롬프트·답변을 그대로 쌓는다. 거기에 이메일·전화번호·주민번호·
+카드번호 같은 **개인식별정보(PII)** 가 섞이면, 로그 자체가 유출 위험이 된다.
+그래서 **로그에 저장되기 직전** 단계에서 PII를 마스킹한다. 이것이
+watsonx.governance가 강조하는 "민감정보 보호 + 감사 가능성"의 소규모 구현이다.
+
+### 동작 흐름
+
+```
+LLM 호출
+  → 응답 받음
+  → PiiRedactionService.redact(question) / redact(answer)   ← 마스킹 + 건수 카운트
+  → QueryLog 저장: 마스킹된 텍스트 + piiCount
+  → 사용자에겐 원본 답변 반환                                 ← 기능은 그대로
+```
+
+핵심 원칙: **사용자 응답은 원본, 저장되는 감사 로그만 마스킹.** 기능을 해치지 않고
+기록만 보호한다.
+
+### 탐지 패턴 (정규식 기반)
+
+| 라벨 | 대상 | 예시 → 결과 |
+|---|---|---|
+| `[EMAIL]` | 이메일 | `john@acme.com` → `[EMAIL]` |
+| `[PHONE]` | 전화번호 | `010-1234-5678` → `[PHONE]` |
+| `[SSN]` | 주민/사회보장번호 패턴 | `123-45-6789` → `[SSN]` |
+| `[CARD]` | 13~16자리 카드번호 | `4111 1111 1111 1111` → `[CARD]` |
+
+`QueryLog`에는 `piiCount`(이 질의에서 마스킹된 건수)가 함께 저장돼, 대시보드
+Audit Trail에서 "🔒 N"으로 표시된다 → 거버넌스가 민감정보를 실제로 잡아냈음을 가시화.
+
+### 예시
+
+요청:
+```json
+{ "question": "My email is john@acme.com, what is RAG?" }
+```
+저장된 로그:
+```
+question: "My email is [EMAIL], what is RAG?"
+piiCount: 1
+```
+
+### 한계 (정직하게)
+
+- **정규식 기반**이라 정형 PII만 잡는다. 이름·주소 같은 **비정형 PII**는 못 잡는다
+  → 프로덕션은 NER(개체명 인식) 모델이나 Presidio 같은 전용 엔진을 결합해야 한다.
+- 카드/전화 패턴은 **오탐(false positive)** 가능 (예: 13자리 일반 숫자열).
+- 마스킹은 **로그 한정**이다. 지식베이스 원문(Article)은 검색 품질 때문에 원본 유지 —
+  필요하면 ingest 단계에도 같은 서비스를 적용할 수 있다.
+
+이 한계들은 숨긴 게 아니라 **의도적으로 문서화한 gap**이다. 프로덕션 버전은 각 항목을
+보강한다.

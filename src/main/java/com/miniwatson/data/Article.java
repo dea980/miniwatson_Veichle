@@ -12,6 +12,9 @@ import java.util.List;
 @Data
 public class Article {
     private long id;
+    // namespace = multi-tenant 분리 키 (tenant / project / collection 단위)
+    // 비어 있으면 "default" 네임스페이스로 취급한다.
+    private String namespace;
     private String title;
     private String summary;
     private String url;

@@ -39,7 +39,10 @@ public class ArticleStore {
 
     public Article save(Article article) throws IOException {
         List<Article> articles = loadAll();
-        article.setId((long) (articles.size() + 1));
+        if (article.getId() == 0) {   // 직접 호출될 때만 부여
+            long nextId = articles.stream().mapToLong(Article::getId).max().orElse(0) + 1;
+            article.setId(nextId);
+        }
         articles.add(article);
         saveAll(articles);
         return article;

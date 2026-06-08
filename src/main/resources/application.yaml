@@ -11,6 +11,9 @@ spring:
 #
 #logging:
 #  level: DEBUG
+storage:
+  tier:
+    threshold: 3
 
 server:
   port: 8080
@@ -18,8 +21,13 @@ server:
 ollama:
   url: ${OLLAMA_URL:http://localhost:11434}
   chat-model: ${OLLAMA_CHAT_MODEL:gemma4}
+  # multi-LLM 화이트리스트 (요청별 model 전환 허용 대상). 기본 모델은 자동 포함됨.
+  chat-models: ${OLLAMA_CHAT_MODELS:gemma4,ibm/granite4:latest,qwen3.6}
+  # 비전 기본 모델: granite3.3-vision:2b는 표/숫자에 약해 llava로 기본값 변경
+  vision-model: ${OLLAMA_VISION_MODEL:llava:latest}
   embed-model: ${OLLAMA_EMBED_MODEL:nomic-embed-text}
   num-predict: ${OLLAMA_NUM_PREDICT:500}
+
 
 #---
 ## DEV - 인메모리 (개발용)

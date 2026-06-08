@@ -64,6 +64,7 @@ async function loadArticles() {
             <a href="${a.url}" target="_blank">#${a.id} ${a.title}</a>
             <div class="summary">${a.summary.substring(0, 200)}...</div>
             <div class="meta">Ingested: ${a.ingestedAt}</div>
+            <button onclick="deleteArticle(${a.id})" class="btn-ghost">🗑 삭제</button>
         </div>
     `).join('');
 }
@@ -79,9 +80,15 @@ async function loadLogs() {
             <td title="${l.question}">${l.question.substring(0, 60)}...</td>
             <td><span class="model-badge">${l.model}</span></td>
             <td class="text-right">${l.latencyMs}</td>
+            <td>${l.piiCount > 0 ? '🔒 ' + l.piiCount : '–'}</td>
             <td class="text-sm text-muted">${l.createdAt}</td>
         </tr>
     `).join('');
+}
+async function deleteArticle(id) {
+    if (!confirm(`#${id} 삭제할까요?`)) return;
+    await fetch(`${API}/api/data/articles/${id}`, { method: 'DELETE' });
+    loadArticles();
 }
 
 function showTab(tab) {

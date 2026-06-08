@@ -4,6 +4,7 @@
   "namespace": "miniwatson.schema",
   "fields": [
     {"name": "id", "type": "long"},
+    {"name": "namespace", "type": "string", "default": "default"},
     {"name": "title", "type": "string"},
     {"name": "summary", "type": "string"},
     {"name": "url", "type": "string"},

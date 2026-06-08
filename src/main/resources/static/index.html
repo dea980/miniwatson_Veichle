@@ -87,6 +87,20 @@
                 <div id="ingest-result" class="status-msg"></div>
             </div>
         </section>
+        <section class = "panel">
+            <div class="panel-header">
+                <h2 class = "panel-title">Upload</h2>
+                <span class ="panel-subtitle">이미지 또는 텍스트 파일을 지식베이스로 </span>
+            </div>
+            <div class="panel-body">
+                <div class="input-row">
+                    <input id = "upload-file" type = "file" accept = "image/*, .txt, .md" class = "input">
+                    <input id = "upload-namespace" type ="text" placeholder="namespace (default)" class = "input">
+                    <button onclick = "uploadFile()" class = "btn btn-secondary">Upload</button>
+                </div>
+                <div id = "upload-result" class="status-msg"></div>
+            </div>
+        </section>
 
         <!-- Tabs -->
         <div class="tab-bar">
@@ -102,6 +116,7 @@
             </div>
             <div class="panel-body">
                 <div id="articles-list"></div>
+                <button onclick="deleteArticle(${a.id})" class="btn-ghost">삭제</button>
             </div>
         </section>
 
@@ -120,6 +135,7 @@
                             <th>Question</th>
                             <th>Model</th>
                             <th class="num">Latency</th>
+                            <th>PII</th>
                             <th>Timestamp</th>
                         </tr>
                         </thead>
