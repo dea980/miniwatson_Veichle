@@ -1,7 +1,7 @@
 # MiniWatson
 
 > A miniature watsonx-style platform — built end-to-end from scratch  
-> Spring Boot · Ollama · Parquet · 768-dim embeddings · RAG
+> Spring Boot · Ollama · Parquet · 768-dim embeddings · RAG · multimodal (vision + OCR) · multi-tenant · PII governance
 
 MiniWatson is a learning project that recreates IBM watsonx's 3-layer architecture
 (data · ai · governance) at a small scale. The goal: understand how enterprise
@@ -24,22 +24,26 @@ Three layers, each mapping to a watsonx component:
 │                                                         │
 │  ┌────────────────────────────────────────────────────┐ │
 │  │  AI Layer (watsonx.ai analog)                      │ │
-│  │  • Ollama gemma4 — chat (think: false)             │ │
-│  │  • Ollama nomic-embed-text — 768-dim embeddings    │ │
-│  │  • RAG: cosine similarity + augmented prompt       │ │
+│  │  • Chat: multi-LLM, per-request (gemma/granite/..) │ │
+│  │  • Embeddings: 768-dim (nomic / granite-embedding) │ │
+│  │  • Vision: image Q&A (llava / granite-vision)      │ │
+│  │  • OCR grounding: Tesseract (exact text/numbers)   │ │
+│  │  • RAG: LSH vector index + augmented prompt        │ │
 │  └────────────────────────────────────────────────────┘ │
 │                                                         │
 │  ┌────────────────────────────────────────────────────┐ │
 │  │  Data Layer (watsonx.data analog)                  │ │
-│  │  • Wikipedia REST API ingestion                    │ │
-│  │  • Parquet (Avro schema, SNAPPY compression)       │ │
-│  │  • 7× smaller than JSON                            │ │
+│  │  • Ingest: Wikipedia / image (vision+OCR) / text   │ │
+│  │  • Multi-tenant namespaces + dedup + CRUD          │ │
+│  │  • Tiered: hot JSON → cold Parquet (compaction)    │ │
+│  │  • Parquet (Avro schema, SNAPPY) — 7× < JSON       │ │
 │  └────────────────────────────────────────────────────┘ │
 │                                                         │
 │  ┌────────────────────────────────────────────────────┐ │
 │  │  Governance Layer (watsonx.governance analog)      │ │
-│  │  • Auto audit log every Q&A in H2                  │ │
+│  │  • Auto audit log every LLM call in H2             │ │
 │  │  • Tracks model, latency, timestamp                │ │
+│  │  • PII detection & redaction before persist        │ │
 │  └────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -53,10 +57,14 @@ Three layers, each mapping to a watsonx component:
 | Language | Java 21 (IBM Semeru) | Lower memory footprint than HotSpot |
 | Framework | Spring Boot 4.0 | Enterprise standard, fast bootstrap |
 | LLM | Ollama (local) | Sovereign deployment, no API keys |
-| Chat model | gemma4 | think: false for fast inference |
-| Embedding model | nomic-embed-text | 768-dim, runs locally |
+| Chat model | gemma4 (default) · multi-LLM | per-request model, whitelist-validated |
+| Embedding model | nomic-embed-text / granite-embedding | 768-dim, runs locally |
+| Vision model | llava / granite-vision | image Q&A + caption (multimodal) |
+| OCR | Tesseract (CLI) | exact text/number extraction for grounding |
 | Data format | Apache Parquet | Columnar + SNAPPY = 7× smaller than JSON |
 | Schema | Avro | Schema-first, evolution-safe |
+| Storage | Tiered (JSON hot → Parquet cold) | cheap appends + columnar compaction |
+| Retrieval | In-memory LSH vector index | sub-linear approximate kNN |
 | Database | H2 (in-memory) | Zero config for governance audit |
 | Build | Maven | pom.xml + spring-boot-maven-plugin |
 | Frontend | Plain HTML + JS | No framework lock-in, instant load |
@@ -73,10 +81,14 @@ java --version    # → openjdk 21+
 
 # 2. Ollama
 brew install ollama
-ollama pull gemma4
-ollama pull nomic-embed-text
+ollama pull gemma4              # chat (default)
+ollama pull nomic-embed-text   # 768-dim embeddings
+ollama pull llava              # vision (multimodal Q&A / image ingest)
 
-# 3. Start Ollama server (separate terminal)
+# 3. OCR (for image grounding — exact text/numbers)
+brew install tesseract
+
+# 4. Start Ollama server (separate terminal)
 ollama serve
 ```
 
@@ -116,20 +128,50 @@ curl -X POST "http://localhost:8080/api/data/ingest?title=Vector_database"
 Returns the stored article (with `id`, `title`, `summary`, `url`, `ingestedAt`).
 Embedding is generated and stored in Parquet but hidden from the response.
 
+Optional `&namespace=acme` scopes the article to a tenant (default: `default`).
+
 ### Ask a RAG question
 
 ```bash
-curl -X POST http://localhost:8080/api/rag/ask \\
--H "Content-Type: application/json" \\
--d '{"question": "What is RAG?"}'
+curl -X POST http://localhost:8080/api/rag/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What is RAG?", "namespace": "default", "model": "gemma4"}'
 ```
 
-Returns answer plus the top-K source articles used for grounding.
+`namespace` and `model` are optional. Returns the answer plus the top-K source
+articles used for grounding.
 
-### List articles
+### Multi-LLM — list selectable chat models
 
 ```bash
-curl http://localhost:8080/api/data/articles
+curl http://localhost:8080/api/rag/models      # { default, available[] }
+```
+
+### Multimodal — image Q&A and image ingest
+
+```bash
+# Ask about an image (vision + OCR grounding)
+curl -X POST http://localhost:8080/api/multimodal/ask \
+  -F "image=@invoice.png" -F "question=What is the total?"
+
+# Ingest an image into the knowledge base (searchable by later text queries)
+curl -X POST http://localhost:8080/api/multimodal/ingest \
+  -F "image=@invoice.png" -F "namespace=demo"
+```
+
+### Upload a text/document file
+
+```bash
+curl -X POST http://localhost:8080/api/data/ingest-file \
+  -F "file=@notes.txt" -F "namespace=demo"
+```
+
+### List / delete articles, index stats
+
+```bash
+curl  http://localhost:8080/api/data/articles            # all (or ?namespace=demo)
+curl -X DELETE http://localhost:8080/api/data/articles/5 # remove by id (+index resync)
+curl  http://localhost:8080/api/data/index/stats         # LSH mode, vectors, buckets
 ```
 
 ### Audit trail
@@ -138,7 +180,8 @@ curl http://localhost:8080/api/data/articles
 curl http://localhost:8080/api/governance/logs
 ```
 
-Every LLM call is logged: question, answer, model, latency (ms), timestamp.
+Every LLM call is logged: question, answer, model, latency (ms), timestamp, and
+**PII count** (sensitive data is masked before persisting).
 
 
 ---
@@ -156,8 +199,20 @@ active: dev      # dev | demo | prod
 ollama:
 url: ${OLLAMA_URL:http://localhost:11434}
 chat-model: ${OLLAMA_CHAT_MODEL:gemma4}
+chat-models: ${OLLAMA_CHAT_MODELS:gemma4,ibm/granite4:latest,qwen3.6}  # multi-LLM whitelist
 embed-model: ${OLLAMA_EMBED_MODEL:nomic-embed-text}
+vision-model: ${OLLAMA_VISION_MODEL:llava:latest}                       # multimodal
 num-predict: ${OLLAMA_NUM_PREDICT:500}
+
+storage:
+tier:
+threshold: ${STORAGE_TIER_THRESHOLD:100}   # hot(JSON) count before compaction → Parquet
+
+vector:
+index:
+lsh:
+enabled: ${VECTOR_LSH_ENABLED:true}        # LSH on/off (false = brute-force)
+hyperplanes: ${VECTOR_LSH_HYPERPLANES:16}
 ```
 
 ### Profile overrides
@@ -183,21 +238,28 @@ miniwatson/
 ├── src/main/java/com/miniwatson/
 │   ├── MiniwatsonApplication.java
 │   ├── controller/
-│   │   ├── RagController.java            # POST /api/rag/ask
-│   │   ├── DataController.java           # /api/data/*
+│   │   ├── RagController.java            # POST /api/rag/ask · GET /api/rag/models
+│   │   ├── DataController.java           # /api/data/* (ingest, file, delete, stats)
+│   │   ├── MultimodalController.java     # /api/multimodal/ask · /ingest (vision)
 │   │   └── GovernanceController.java     # GET /api/governance/logs
 │   ├── service/
-│   │   ├── OllamaService.java            # Chat: gemma4 + think:false
-│   │   ├── EmbeddingService.java         # Embed: nomic-embed-text
-│   │   ├── IngestionService.java         # Wikipedia → Article → Store
-│   │   └── RagService.java               # Embed + similarity + augment
+│   │   ├── OllamaService.java            # Chat (multi-LLM) + vision (images)
+│   │   ├── EmbeddingService.java         # Embed: 768-dim
+│   │   ├── OcrService.java               # Tesseract CLI → text
+│   │   ├── IngestionService.java         # Wikipedia / image / text → Article
+│   │   └── RagService.java               # Embed + LSH search + augment
 │   ├── data/
-│   │   ├── Article.java                  # POJO + embedding (write-only)
+│   │   ├── Article.java                  # POJO + namespace + embedding (write-only)
 │   │   ├── WikipediaResponse.java        # External API DTO
-│   │   └── ArticleParquetStore.java      # Parquet read/write
+│   │   ├── ArticleRepository.java        # storage interface
+│   │   ├── ArticleStore.java             # JSON store (hot tier)
+│   │   ├── ArticleParquetStore.java      # Parquet store (cold tier)
+│   │   ├── TieredArticleStore.java       # hot→cold compaction (@Primary)
+│   │   └── VectorIndex.java              # in-memory LSH index
 │   ├── governance/
-│   │   ├── QueryLog.java                 # JPA entity
-│   │   └── QueryLogRepository.java       # Spring Data JPA
+│   │   ├── QueryLog.java                 # JPA entity (+ piiCount)
+│   │   ├── QueryLogRepository.java       # Spring Data JPA
+│   │   └── PiiRedactionService.java      # regex PII masking
 │   └── dto/
 │       ├── AskRequest.java
 │       ├── OllamaRequest.java            # Includes think:false
@@ -214,9 +276,11 @@ miniwatson/
 │       ├── index.html                    # Dashboard
 │       ├── css/styles.css                # IBM Carbon-inspired
 │       └── js/app.js                     # fetch + DOM
-├── data/
-│   ├── articles.parquet                  # Knowledge base (auto-generated)
-│   └── articles.json.backup              # Legacy JSON (reference)
+├── data/                                 # runtime state (gitignored)
+│   ├── articles.json                     # hot tier (recent appends)
+│   └── articles.parquet                  # cold tier (compacted)
+├── docs/                                 # API, ARCHITECTURE, GOVERNANCE, MULTIMODAL, ...
+├── sample/                               # demo fixtures (invoice, chart, text)
 └── pom.xml
 ```
 
@@ -264,6 +328,30 @@ Notes from building this:
   variables means the same code ships to different environments with
   different credentials. This is the technical implementation of
   "sovereignty at the core."
+
+- **Vision models hallucinate numbers; OCR doesn't** — `llava` invented an
+  invoice total that wasn't on the page. The fix wasn't a bigger model — it was
+  splitting roles: OCR (Tesseract) for exact text, vision for layout/context,
+  and a prompt that tells the LLM to *trust OCR over vision* on conflicts.
+  Combining sources isn't enough; you must declare which one is authoritative.
+  (See `docs/MULTIMODAL.md` for the full before/after and limitations.)
+
+- **OCR has its own failure modes** — it nails row-structured tables but
+  mangles low-contrast/inverted text and loses the 2-D mapping in charts
+  (reads `$28M` but not that it belongs to Q4). The hard part is the pipeline,
+  not the model.
+
+- **LSH for sub-linear retrieval** — random-hyperplane signatures bucket
+  similar vectors so a query only scores a small candidate set, with an
+  exact-cosine fallback for correctness. Dimension-agnostic (384/768/1024).
+
+- **Tiered storage = lakehouse in miniature** — cheap row-oriented appends
+  (JSON hot tier) compacted into columnar Parquet (cold tier) past a threshold.
+  Avoids rewriting the whole Parquet file on every single ingest.
+
+- **Governance must redact PII** — the audit log is the leak risk. Mask
+  emails/phones/SSNs/cards *before persisting*, return the original to the user.
+  Function preserved, record protected.
 
 ---
 
