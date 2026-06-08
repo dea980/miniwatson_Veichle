@@ -80,7 +80,7 @@ public class ArticleParquetStore {
 
     public List<Article> loadAll() throws IOException {
         File file = new File(STORAGE_PATH);
-        if (!file.exists()) {
+        if (!file.exists() || file.length() < 8) {   // 빈/손상 파일은 무시
             return new ArrayList<>();
         }
 

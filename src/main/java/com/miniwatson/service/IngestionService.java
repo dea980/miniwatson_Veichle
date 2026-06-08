@@ -96,7 +96,7 @@ public class IngestionService {
 
         // embedding 생성 (title + summary 결합)
         String textToEmbed = response.getTitle() + ". " + response.getExtract();
-        article.setEmbedding(embeddingService.embed(textToEmbed));
+        article.setEmbedding(embeddingService.embed("search_document: " + textToEmbed));
 
         Article saved = articleStore.save(article);
         // 새 벡터를 인메모리 인덱스에 즉시 반영 (다음 질의부터 검색 대상)
@@ -139,7 +139,7 @@ public class IngestionService {
         article.setSummary(combined);
         article.setUrl("image://" + title);
         article.setIngestedAt(LocalDateTime.now());
-        article.setEmbedding(embeddingService.embed(combined));
+        article.setEmbedding(embeddingService.embed("search_document: " + combined));
 
         Article saved = articleStore.save(article);
         vectorIndex.add(saved);
@@ -160,7 +160,7 @@ public class IngestionService {
         article.setSummary(content);
         article.setUrl("file://" +title);
         article.setIngestedAt(LocalDateTime.now());
-        article.setEmbedding(embeddingService.embed(content));
+        article.setEmbedding(embeddingService.embed("search_document: " + content));
 
         Article saved = articleStore.save(article);
         vectorIndex.add(saved);

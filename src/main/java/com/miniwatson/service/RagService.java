@@ -46,7 +46,7 @@ public class RagService {
         String ns = (namespace == null || namespace.isBlank()) ? DEFAULT_NS : namespace;
         log.info("RAG question (ns={}, model={}): {}", ns, model == null ? "default" : model, question);
 
-        List<Float> questionEmbedding = embeddingService.embed(question);
+        List<Float> questionEmbedding = embeddingService.embed("search_query: " + question);
 
         // Sub-linear retrieval via the in-memory vector index (LSH + exact fallback).
         List<Article> topArticles = vectorIndex.search(ns, questionEmbedding, TOP_K);
@@ -60,7 +60,9 @@ public class RagService {
 
         StringBuilder context = new StringBuilder();
         for (Article a : topArticles) {
-            context.append("- ").append(a.getTitle()).append(": ").append(a.getSummary()).append("\n");
+            String s = a.getSummary();
+            if (s.length() > 600) s = s.substring(0, 600);   // 소스당 최대 600자
+            context.append("- ").append(a.getTitle()).append(": ").append(s).append("\n");
         }
 
         String prompt = "Use the context below. For exact numbers, trust [OCR] sections over [Vision] descriptions.\n"
@@ -68,7 +70,7 @@ public class RagService {
 
         log.info("Augmented prompt length: {} chars", prompt.length());
 
-        String answer = ollamaService.ask(prompt, model);
+        String answer = ollamaService.ask(prompt, model, question);
 
         log.info("Ollama answer length: {} chars", answer != null ? answer.length() : 0);
 

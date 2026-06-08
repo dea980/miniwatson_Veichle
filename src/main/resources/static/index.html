@@ -27,7 +27,7 @@
                 <div class="status-indicator status-active"></div>
                 <div class="status-content">
                     <div class="status-label">AI Layer</div>
-                    <div class="status-value">Ollama · gemma4</div>
+                    <div class="status-value" id = "ai-model">Ollama · gemma4</div>
                     <div class="status-meta">watsonx.ai analog</div>
                 </div>
             </div>
@@ -57,9 +57,8 @@
             </div>
             <div class="panel-body">
                 <div class="input-row">
-                    <input id="question" type="text"
-                           placeholder="Type a question. e.g. What is RAG?"
-                           class="input">
+                    <input id="question" type="text" placeholder="Type a question. e.g. What is RAG?" class="input">
+                    <select id="model-select" class="input"></select>
                     <button onclick="askRAG()" class="btn btn-primary">Submit</button>
                 </div>
                 <div id="rag-loading" class="hidden status-msg">Retrieving · generating</div>
@@ -116,7 +115,6 @@
             </div>
             <div class="panel-body">
                 <div id="articles-list"></div>
-                <button onclick="deleteArticle(${a.id})" class="btn-ghost">삭제</button>
             </div>
         </section>
 

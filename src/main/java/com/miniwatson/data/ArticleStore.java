@@ -2,6 +2,7 @@ package com.miniwatson.data;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
@@ -20,8 +21,12 @@ public class ArticleStore {
     public ArticleStore() {
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
+        this.objectMapper.addMixIn(Article.class, EmbeddingPersistMixin.class);
     }
-
+    private abstract static class EmbeddingPersistMixin {
+        @JsonProperty(access = JsonProperty.Access.READ_WRITE)
+        List<Float> embedding;
+    }
     public void saveAll(List<Article> articles) throws IOException {
         File file = new File(STORAGE_PATH);
         file.getParentFile().mkdirs();

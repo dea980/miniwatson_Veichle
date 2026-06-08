@@ -200,3 +200,75 @@ RagService cosine similarity
   "embedding": "/* 768 floats — hidden from API */"
 }
 ```
+
+---
+
+## 10. 스토리지 함정 (실제로 겪은 것)
+
+티어드 스토리지(hot JSON → cold Parquet)를 붙이면서 드러난 실전 버그들. 기록용.
+
+### 10.1 프레젠테이션 annotation이 영속성을 깨뜨림 ⚠️
+
+`Article.embedding`에 `@JsonProperty(access = WRITE_ONLY)`를 붙여 **API 응답에서 768차원을 숨겼다.** 이건 Parquet만 쓸 땐 문제없었다 — Parquet writer는 Jackson이 아니라 getter로 값을 읽으니까.
+
+그런데 **hot tier를 JSON(`ArticleStore`)으로** 만들자 같은 Jackson 직렬화가 hot 저장에도 쓰였다. WRITE_ONLY = "직렬화 출력 시 제외"라서 **hot JSON에 embedding이 안 저장됨.** 결과:
+
+```
+ingest → hot JSON 저장(embedding 누락)
+→ threshold 도달 → compact() → hot JSON 재로딩(embedding=null)
+→ Parquet은 embedding이 required → RuntimeException: Null-value for required field: embedding
+```
+
+**교훈:** *프레젠테이션용 annotation(API 숨김)을 영속성 모델에 같이 두면, 그 모델을 다른 경로로 직렬화할 때 조용히 깨진다.* 하나의 엔티티가 (1) 스토리지 모델, (2) API 응답 DTO 두 역할을 겸하면 생기는 결합 문제.
+
+**해결:** hot tier 전용 ObjectMapper에 mixin을 줘서 embedding을 강제로 직렬화 포함 (API용 Spring 매퍼는 그대로 숨김 유지):
+```java
+objectMapper.addMixIn(Article.class, EmbeddingPersistMixin.class);
+private abstract static class EmbeddingPersistMixin {
+    @JsonProperty(access = JsonProperty.Access.READ_WRITE) List<Float> embedding;
+}
+```
+근본적으로는 **스토리지 모델과 API 응답 DTO를 분리**하는 게 정석.
+
+### 10.2 임베딩 모델은 지식베이스당 고정
+
+저장된 벡터는 특정 임베딩 모델의 벡터 공간에 속한다. 모델을 바꾸면(예: nomic 768 → mxbai 1024) 기존 벡터와 새 질문 벡터가 **공간 불일치**(또는 차원 불일치)로 검색이 깨진다. chat 모델은 요청별 교체 가능하지만 **embedding 모델은 KB 불변 속성**이다. 모델별 비교가 목적이면 **namespace를 실험 버킷으로** 분리하라 (ns마다 다른 임베딩 모델).
+
+### 10.3 손상/빈 Parquet은 기동을 막는다
+
+compaction이 빈 결과를 쓰거나 쓰기가 중단되면 4바이트짜리 손상 Parquet이 생길 수 있고, 시작 시 `VectorIndex.hydrate()`가 이를 읽다 `RuntimeException`으로 앱이 안 뜬다. `loadAll()`에 파일 크기 가드(`length < 8 → 빈 리스트`)를 두거나 hydrate에서 `Exception`을 넓게 잡아 빈 인덱스로 시작하면 견고해진다.
+
+### 10.4 작은 코퍼스에서 LSH는 엉뚱한 소스를 준다 (recall 문제) ⚠️
+
+문서 3개(Vector database / RAG / Wiki)만 있는 상태에서 "What is RAG?"를 물었더니, 정작 **RAG 문서가 소스에서 빠지고 Wiki가 잡혔다.** RAG 문서는 KB에 분명히 있었는데도.
+
+**원인:** LSH는 **근사(approximate)** 검색이다. 질문 벡터의 해시 버킷에 진짜 최근접 문서(RAG)가 없으면 **후보 집합에서 아예 제외**되고, 코드가 후보들만 exact-cosine 정렬하니 후보에 없는 RAG는 절대 못 뽑힌다. 대신 같은 버킷에 우연히 들어온 Wiki가 올라온다. 게다가 fallback은 "후보 **수** < topK"일 때만 전수 스캔으로 전환하지, "후보가 **틀렸을 때**"는 안 걸린다 → **자신만만하게 틀린 결과**.
+
+문서가 적으면 16비트 해시 버킷이 듬성듬성해서 이런 miss(낮은 recall)가 흔하다.
+
+**해결/원칙:**
+- **작은 코퍼스 → brute-force(`vector.index.lsh.enabled=false`).** 전수 cosine이라 항상 정확하고, n이 작으니 비용도 무의미.
+- **LSH는 수만~수십만 건 이상에서만** 의미. 속도를 위해 정확도(recall)를 희생하는 게 ANN의 본질.
+
+> 교훈: *ANN(LSH)은 "빠르지만 가끔 틀림". 코퍼스가 작을 땐 brute-force가 더 정확하고 충분히 빠르다.* 데모/소규모는 brute-force를 기본으로, LSH는 대규모 옵션으로 문서화하는 게 맞다.
+
+### 10.5 임베딩 모델의 task 프리픽스 (nomic) ⚠️
+
+LSH를 꺼서 brute-force(전수 정확검색)로 돌렸는데도 "What is RAG?"가 RAG 대신 Wiki를 줬다. 범인은 인덱스가 아니라 **임베딩 입력 형식**이었다.
+
+`nomic-embed-text`는 **task 프리픽스를 붙여 학습된** 모델이다. 프리픽스 없이 raw 텍스트를 임베딩하면 벡터 품질이 떨어져 엉뚱한 문서가 더 가깝게 나온다. 규칙:
+- 문서: `search_document: <내용>`
+- 질문: `search_query: <질문>`
+
+**결정적 포인트 — 짝을 맞춰야 한다.** 한쪽(질문)만 프리픽스를 붙이면 질문은 query 공간, 문서는 raw 공간에 있어 **오히려 더 어긋난다.** 둘 다 규칙을 따라야 같은 공간에서 비교된다.
+
+```java
+// 문서 (IngestionService 전 경로)
+embeddingService.embed("search_document: " + text);
+// 질문 (RagService)
+embeddingService.embed("search_query: " + question);
+```
+
+프리픽스를 바꾸면 **기존 벡터를 재생성**해야 한다 (저장된 벡터는 옛 방식이라 새 질문 벡터와 안 맞음). 즉 parquet/json 비우고 재-ingest.
+
+> 교훈: *임베딩 모델마다 요구하는 입력 형식이 있다. 안 지키면 인덱스가 정확(brute-force)해도 retrieval이 망가진다. "검색 품질이 이상하면 인덱스보다 임베딩 입력부터 의심하라."* (모델마다 다름 — granite-embedding류는 프리픽스가 불필요한 경우도 있으니 모델 카드 확인.)

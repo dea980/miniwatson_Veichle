@@ -79,9 +79,13 @@ public class OllamaService {
         return ask(question, null);
     }
 
+    public String ask(String prompt, String model){
+        return ask(prompt, model, prompt);
+    }
     /** Text chat with a caller-chosen model (validated against the whitelist). */
-    public String ask(String question, String model) {
-        return generate(question, resolveModel(model), null);
+
+    public String ask(String prompt, String model, String userQuestion){
+        return generate(prompt, resolveModel(model), null, userQuestion);
     }
 
     /**
@@ -90,19 +94,20 @@ public class OllamaService {
      */
     public String askWithImages(String question, String visionModel, List<String> base64Images) {
         String m = (visionModel == null || visionModel.isBlank()) ? defaultModel : visionModel;
-        return generate(question, m, base64Images);
+        return generate(question, m, base64Images, question);
     }
 
     /** Core Ollama /api/generate call + governance audit logging. */
-    private String generate(String question, String model, List<String> images) {
+    private String generate(String prompt, String model, List<String> images, String userQuestion) {
         long startTime = System.currentTimeMillis();
 
         OllamaRequest request = new OllamaRequest();
         request.setModel(model);
-        request.setPrompt(question);
+        request.setPrompt(prompt);
         request.setStream(false);
         request.setThink(false);
         request.setOptions(Map.of("num_predict", numPredict));
+        request.setKeepAlive("10m");                 // ← 여기로 (호출 전, 별도 줄)
         if (images != null && !images.isEmpty()) {
             request.setImages(images);
         }
@@ -117,15 +122,16 @@ public class OllamaService {
         String answer = (response != null) ? response.getResponse() : "Error: no response";
 
         //거버넌스 : 감사 로그 남기기전에 PPI 마스킹
-        PiiRedactionService.Redaction rq = piiRedactionService.redact(question);
+        PiiRedactionService.Redaction rq = piiRedactionService.redact(userQuestion);
         PiiRedactionService.Redaction ra = piiRedactionService.redact(answer);
 
         QueryLog log = new QueryLog();
+        log.setAugmentedPrompt(prompt);
         log.setQuestion(rq.text());
         log.setAnswer(ra.text());
         log.setModel(model);
         log.setLatencyMs(latency);
-        log.setPiiCount(rq.count() + rq.count());
+        log.setPiiCount(rq.count() + ra.count());
         queryLogRepository.save(log);
         return answer;
     }

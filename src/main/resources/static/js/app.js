@@ -4,6 +4,8 @@ async function askRAG() {
     const question = document.getElementById('question').value;
     if (!question) return;
 
+    const model = document.getElementById('model-select').value;   // ← 추가
+
     document.getElementById('rag-loading').classList.remove('hidden');
     document.getElementById('rag-answer').classList.add('hidden');
     document.getElementById('rag-sources').classList.add('hidden');
@@ -12,7 +14,7 @@ async function askRAG() {
         const res = await fetch(`${API}/api/rag/ask`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({question})
+            body: JSON.stringify({ question, model })              // ← model 추가
         });
         const data = await res.json();
 
@@ -46,13 +48,14 @@ async function ingestArticle() {
         });
         const data = await res.json();
         document.getElementById('ingest-result').innerHTML =
-            `✅ Ingested: <b>${data.title}</b> (id: ${data.id})`;
+            `Ingested: <b>${data.title}</b> (id: ${data.id})`;
         document.getElementById('ingest-title').value = '';
         loadArticles();
     } catch (e) {
-        document.getElementById('ingest-result').textContent = '❌ Error: ' + e.message;
+        document.getElementById('ingest-result').textContent = 'Error: ' + e.message;
     }
 }
+
 
 async function loadArticles() {
     const res = await fetch(`${API}/api/data/articles`);
@@ -64,7 +67,7 @@ async function loadArticles() {
             <a href="${a.url}" target="_blank">#${a.id} ${a.title}</a>
             <div class="summary">${a.summary.substring(0, 200)}...</div>
             <div class="meta">Ingested: ${a.ingestedAt}</div>
-            <button onclick="deleteArticle(${a.id})" class="btn-ghost">🗑 삭제</button>
+            <button onclick="deleteArticle(${a.id})" class="btn-ghost">삭제</button>
         </div>
     `).join('');
 }
@@ -91,6 +94,18 @@ async function deleteArticle(id) {
     loadArticles();
 }
 
+async function loadModels() {
+    try {
+        const res = await fetch(`${API}/api/rag/models`);
+        const data = await res.json();
+        const sel = document.getElementById('model-select');
+        sel.innerHTML = (data.available || []).map(m =>
+            `<option value="${m}" ${m === data.default ? 'selected' : ''}>${m}</option>`
+        ).join('');
+        sel.addEventListener('change', updateAiStatus);   // 바꿀 때마다 갱신
+        updateAiStatus();                                  // 초기 표시
+    } catch (e) { /* 무시 */ }
+}
 function showTab(tab) {
     const articles = document.getElementById('articles-section');
     const logs = document.getElementById('logs-section');
@@ -104,6 +119,12 @@ function showTab(tab) {
 
     if (tab === 'logs') loadLogs();
     else loadArticles();
+}
+
+function updateAiStatus() {
+    const el = document.getElementById('ai-model');
+    const sel = document.getElementById('model-select');
+    if (el && sel && sel.value) el.textContent = 'Ollama · ' + sel.value;
 }
 
 loadArticles();

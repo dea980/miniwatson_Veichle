@@ -1,11 +1,12 @@
 package com.miniwatson.controller;
 
 import com.miniwatson.data.Article;
-import com.miniwatson.data.ArticleParquetStore;
+//import com.miniwatson.data.ArticleParquetStore;
 import com.miniwatson.data.VectorIndex;
 import com.miniwatson.service.IngestionService;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.miniwatson.data.ArticleRepository;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -19,11 +20,12 @@ public class DataController {
     private static final String DEFAULT_NS = "default";
 
     private final IngestionService ingestionService;
-    private final ArticleParquetStore articleStore;
+    //private final ArticleParquetStore articleStore;
+    private final ArticleRepository articleStore;
     private final VectorIndex vectorIndex;
 
     public DataController(IngestionService ingestionService,
-                          ArticleParquetStore articleStore,
+                          ArticleRepository articleStore,
                           VectorIndex vectorIndex) {
         this.ingestionService = ingestionService;
         this.articleStore = articleStore;
