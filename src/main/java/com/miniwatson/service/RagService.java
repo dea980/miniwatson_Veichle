@@ -5,10 +5,12 @@ import com.miniwatson.data.VectorIndex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.Map;
 
 @Service
 public class RagService {
@@ -19,15 +21,19 @@ public class RagService {
     private final VectorIndex vectorIndex;
     private final OllamaService ollamaService;
 
-    private static final int TOP_K = 2;
+    private static final int TOP_K = 2; // LLM 에 최종 전달
+    private static final int FETCH_N = 20;   // rerank 후보군 (1차 검색)
     private static final String DEFAULT_NS = "default";
-
+    private final Reranker reranker;
     public RagService(EmbeddingService embeddingService,
                       VectorIndex vectorIndex,
-                      OllamaService ollamaService) {
+                      OllamaService ollamaService,
+                      Map<String, Reranker> rerankers,                        // 추가
+                      @Value("${rerank.strategy:llm}") String strategy) {
         this.embeddingService = embeddingService;
         this.vectorIndex = vectorIndex;
         this.ollamaService = ollamaService;
+        this.reranker = rerankers.getOrDefault(strategy, rerankers.get("llm")); // 추가
     }
 
     /** Backward-compatible entry point: default namespace, default chat model. */
@@ -47,10 +53,11 @@ public class RagService {
         log.info("RAG question (ns={}, model={}): {}", ns, model == null ? "default" : model, question);
 
         List<Float> questionEmbedding = embeddingService.embed("search_query: " + question);
-
+        List<Article> candidates = vectorIndex.search(ns, questionEmbedding, FETCH_N);
+        if (candidates.isEmpty()) throw new RuntimeException("No articles ...");
         // Sub-linear retrieval via the in-memory vector index (LSH + exact fallback).
-        List<Article> topArticles = vectorIndex.search(ns, questionEmbedding, TOP_K);
-
+        //List<Article> topArticles = vectorIndex.search(ns, questionEmbedding, TOP_K);
+        List<Article> topArticles = reranker.rerank(question, candidates, TOP_K);   // 재정렬
         if (topArticles.isEmpty()) {
             throw new RuntimeException("No articles in knowledge base for namespace '" + ns + "'.");
         }
