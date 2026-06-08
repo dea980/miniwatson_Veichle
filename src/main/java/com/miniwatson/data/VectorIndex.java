@@ -44,7 +44,9 @@ public class VectorIndex {
     private static final Logger log = LoggerFactory.getLogger(VectorIndex.class);
     private static final long SEED = 42L; // deterministic hyperplanes → reproducible buckets
 
-    private final ArticleParquetStore store;
+    // private final ArticleParquetStore store;
+
+    private final ArticleRepository store;
 
     @Value("${vector.index.lsh.enabled:true}")
     private boolean lshEnabled;
@@ -62,7 +64,7 @@ public class VectorIndex {
     private float[][] hyperplanes;
     private int dim = -1;
 
-    public VectorIndex(ArticleParquetStore store) {
+    public VectorIndex(ArticleRepository store) {
         this.store = store;
     }
 

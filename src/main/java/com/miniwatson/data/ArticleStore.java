@@ -47,4 +47,10 @@ public class ArticleStore {
         saveAll(articles);
         return article;
     }
+    public boolean deleteByID(long id) throws IOException{
+        List<Article> all = loadAll();
+        boolean removed = all.removeIf(a -> a.getId() == id);
+        if (removed) saveAll(all);
+        return removed;
+    }
 }

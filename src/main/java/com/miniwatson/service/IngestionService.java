@@ -1,7 +1,8 @@
 package com.miniwatson.service;
 
 import com.miniwatson.data.Article;
-import com.miniwatson.data.ArticleParquetStore;
+// import com.miniwatson.data.ArticleParquetStore;
+import com.miniwatson.data.ArticleRepository;
 import com.miniwatson.data.VectorIndex;
 import com.miniwatson.data.WikipediaResponse;
 import org.springframework.http.HttpEntity;
@@ -25,12 +26,13 @@ public class IngestionService {
     private final String WIKIPEDIA_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/";
     private static final String DEFAULT_NS = "default";
     private final RestTemplate restTemplate = new RestTemplate();
-    private final ArticleParquetStore articleStore;
+    // private final ArticleParquetStore articleStore;
     private final EmbeddingService embeddingService;
     private final VectorIndex vectorIndex;
     private final OllamaService ollamaService;   // 멀티모달: 비전 모델로 이미지 캡션 생성
     private final OcrService ocrService;
-    public IngestionService(ArticleParquetStore articleStore,
+    private final ArticleRepository articleStore;
+    public IngestionService(ArticleRepository articleStore,
                             EmbeddingService embeddingService,
                             VectorIndex vectorIndex,
                             OllamaService ollamaService,

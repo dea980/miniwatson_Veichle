@@ -35,7 +35,11 @@ public class TieredArticleStore implements ArticleRepository{
         if (hot.loadAll().size() >= threshold) compact();
         return a;
     }
-
+    public boolean deleteById(long id) throws IOException{
+        boolean isHot = hot.deleteByID(id);
+        boolean isCold = cold.deleteById(id);
+        return isHot || isCold;
+    }
     private void compact() throws IOException{
         List<Article> merged = loadAll(); // cold + hot
         cold.saveAll(merged); // Parquet 으로 압축

@@ -275,9 +275,16 @@ Notes from building this:
 - [x] 4 — Wikipedia → Parquet (watsonx.data analog)
 - [x] 5 — RAG with embeddings + cosine similarity
 - [x] 6 — Frontend dashboard (IBM Carbon-style)
-- [ ] 7 — deployment notes
-- [ ] Multi-tenant article namespacing
-- [ ] vector index for sub-linear retrieval
+- [x] 7 — Multi-tenant article namespacing
+- [x] 8 — Vector index (random-hyperplane LSH) for sub-linear retrieval
+- [x] 9 — Multi-LLM chat model selection (per-request, whitelist)
+- [x] 10 — Multimodal vision Q&A + image ingest (Ollama vision)
+- [x] 11 — OCR grounding (Tesseract) + OCR/Vision fusion
+- [x] 12 — PII detection & redaction in audit log (governance)
+- [x] 13 — Tiered storage (hot JSON → cold Parquet compaction)
+- [x] 14 — Knowledge-base CRUD (delete, dedup, file upload)
+- [ ] deployment notes (Docker + compose)
+- [ ] tenant isolation enforcement / API auth
 
 ---
 
@@ -301,42 +308,21 @@ MIT
 
 ---
 
+## 📚 Documentation
+
+| Doc | What's inside |
+|---|---|
+| [docs/API.md](docs/API.md) | REST API reference — every endpoint with curl + schemas |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Component diagram, request flows, watsonx mapping |
+| [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | Article schema, Avro + Parquet, anti-corruption layer |
+| [docs/GOVERNANCE.md](docs/GOVERNANCE.md) | Audit log schema + PII redaction, watsonx.governance parity |
+| [docs/MULTIMODAL.md](docs/MULTIMODAL.md) | Vision Q&A + OCR grounding, image ingest, findings & limits |
+| [docs/H2-CONSOLE.md](docs/H2-CONSOLE.md) | H2 web console — enable, login, SQL cookbook, prod warning |
+
+**Live (interactive) API docs**: run the app, then open [`http://localhost:8080/swagger-ui.html`](http://localhost:8080/swagger-ui.html). See [`SWAGGER-SETUP.md`](SWAGGER-SETUP.md) to enable.
+
+---
+
 ## Author
 
-**Daeyeop Kim**  
-[github.com/dea980](https://github.com/dea980) · kdea989@gmail.com# README snippet — paste into existing README.md
-
-Add this near the top, under your project tagline, so visitors can find the docs immediately.
-
----
-
-## 📚 Documentation
-
-| Doc                            | What's inside                                              |
-|--------------------------------|------------------------------------------------------------|
-| [docs/API.md](docs/API.md)             | REST API reference — every endpoint with curl + schemas    |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Component diagram, request flows, watsonx mapping          |
-| [docs/DATA-MODEL.md](docs/DATA-MODEL.md)     | Article schema, Avro + Parquet, anti-corruption layer      |
-| [docs/GOVERNANCE.md](docs/GOVERNANCE.md)     | Audit log schema, watsonx.governance parity                |
-| [docs/H2-CONSOLE.md](docs/H2-CONSOLE.md)     | H2 web console — enable, login, SQL cookbook, prod warning |
-
-**Live (interactive) API docs**: run the app, then open [`http://localhost:8080/swagger-ui.html`](http://localhost:8080/swagger-ui.html).
-See [`SWAGGER-SETUP.md`](SWAGGER-SETUP.md) to enable.
-# README snippet — paste into existing README.md
-
-Add this near the top, under your project tagline, so visitors can find the docs immediately.
-
----
-
-## 📚 Documentation
-
-| Doc                            | What's inside                                              |
-|--------------------------------|------------------------------------------------------------|
-| [docs/API.md](docs/API.md)             | REST API reference — every endpoint with curl + schemas    |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Component diagram, request flows, watsonx mapping          |
-| [docs/DATA-MODEL.md](docs/DATA-MODEL.md)     | Article schema, Avro + Parquet, anti-corruption layer      |
-| [docs/GOVERNANCE.md](docs/GOVERNANCE.md)     | Audit log schema, watsonx.governance parity                |
-| [docs/H2-CONSOLE.md](docs/H2-CONSOLE.md)     | H2 web console — enable, login, SQL cookbook, prod warning |
-
-**Live (interactive) API docs**: run the app, then open [`http://localhost:8080/swagger-ui.html`](http://localhost:8080/swagger-ui.html).
-See [`SWAGGER-SETUP.md`](SWAGGER-SETUP.md) to enable.
+**Daeyeop Kim** — [github.com/dea980](https://github.com/dea980) · kdea989@gmail.com
