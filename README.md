@@ -1,7 +1,7 @@
 # MiniWatson
 
 > A miniature watsonx-style platform — built end-to-end from scratch  
-> Spring Boot · Ollama · Parquet · 768-dim embeddings · RAG · multimodal (vision + OCR) · multi-tenant · PII governance
+> Spring Boot · Ollama · Parquet · 768-dim embeddings · RAG (chunking + reranking) · multimodal (vision + OCR) · multi-tenant · PII governance
 
 MiniWatson is a learning project that recreates IBM watsonx's 3-layer architecture
 (data · ai · governance) at a small scale. The goal: understand how enterprise
@@ -28,12 +28,14 @@ Three layers, each mapping to a watsonx component:
 │  │  • Embeddings: 768-dim (nomic / granite-embedding) │ │
 │  │  • Vision: image Q&A (llava / granite-vision)      │ │
 │  │  • OCR grounding: Tesseract (exact text/numbers)   │ │
-│  │  • RAG: LSH vector index + augmented prompt        │ │
+│  │  • RAG: chunk → embed → LSH search → rerank        │ │
+│  │  • Reranking: none/llm/mmr/cross (pluggable)       │ │
 │  └────────────────────────────────────────────────────┘ │
 │                                                         │
 │  ┌────────────────────────────────────────────────────┐ │
 │  │  Data Layer (watsonx.data analog)                  │ │
-│  │  • Ingest: Wikipedia / image (vision+OCR) / text   │ │
+│  │  • Ingest: Wikipedia / image (vision+OCR) / file   │ │
+│  │  • Chunking: fixed / recursive / semantic          │ │
 │  │  • Multi-tenant namespaces + dedup + CRUD          │ │
 │  │  • Tiered: hot JSON → cold Parquet (compaction)    │ │
 │  │  • Parquet (Avro schema, SNAPPY) — 7× < JSON       │ │
@@ -65,6 +67,9 @@ Three layers, each mapping to a watsonx component:
 | Schema | Avro | Schema-first, evolution-safe |
 | Storage | Tiered (JSON hot → Parquet cold) | cheap appends + columnar compaction |
 | Retrieval | In-memory LSH vector index | sub-linear approximate kNN |
+| Chunking | fixed / recursive / semantic (pluggable) | recursive default; balance quality vs cost |
+| Reranking | none / llm / mmr / cross (pluggable) | two-stage: fetch top-N → rerank → top-K |
+| Cross-encoder | DJL + PyTorch + BGE-reranker | dedicated reranker model (Linux/Apple Silicon) |
 | Database | H2 (in-memory) | Zero config for governance audit |
 | Build | Maven | pom.xml + spring-boot-maven-plugin |
 | Frontend | Plain HTML + JS | No framework lock-in, instant load |
@@ -159,12 +164,26 @@ curl -X POST http://localhost:8080/api/multimodal/ingest \
   -F "image=@invoice.png" -F "namespace=demo"
 ```
 
-### Upload a text/document file
+### Upload a text/document file (any type via Apache Tika)
 
 ```bash
 curl -X POST http://localhost:8080/api/data/ingest-file \
-  -F "file=@notes.txt" -F "namespace=demo"
+  -F "file=@report.pdf" -F "namespace=demo"
 ```
+
+The file is text-extracted (Tika: PDF/docx/txt/csv/...), split into chunks, and
+each chunk stored as an Article (`title #1`, `#2`, ...). Returns the list of
+created chunks. Chunk strategy/size via `chunking.*` config.
+
+### Summarize an uploaded document
+
+```bash
+curl -X POST http://localhost:8080/api/data/summarize/5   # any chunk id of the doc
+```
+
+Aggregates all chunks of the document (by base title) and returns a summary.
+This is separate from RAG `ask` — summarization needs the whole document, not
+retrieved fragments.
 
 ### List / delete articles, index stats
 
@@ -213,6 +232,13 @@ index:
 lsh:
 enabled: ${VECTOR_LSH_ENABLED:true}        # LSH on/off (false = brute-force)
 hyperplanes: ${VECTOR_LSH_HYPERPLANES:16}
+
+chunking:
+strategy: recursive   # fixed | recursive | semantic
+max-size: 1000        # chars per chunk
+
+rerank:
+strategy: llm         # none | llm | mmr | cross
 ```
 
 ### Profile overrides
@@ -246,8 +272,17 @@ miniwatson/
 │   │   ├── OllamaService.java            # Chat (multi-LLM) + vision (images)
 │   │   ├── EmbeddingService.java         # Embed: 768-dim
 │   │   ├── OcrService.java               # Tesseract CLI → text
-│   │   ├── IngestionService.java         # Wikipedia / image / text → Article
-│   │   └── RagService.java               # Embed + LSH search + augment
+│   │   ├── IngestionService.java         # Wikipedia / image / file → chunk → Article
+│   │   ├── Chunker.java                  # interface: fixed / recursive / semantic
+│   │   ├── FixedChunker.java             # N-char + overlap (baseline)
+│   │   ├── RecursiveChunker.java         # separator-priority split (default)
+│   │   ├── SemanticChunker.java          # sentence-embedding boundary detection
+│   │   ├── Reranker.java                 # interface: none / llm / mmr / cross
+│   │   ├── NoopReranker.java             # 1st-stage top-K passthrough (baseline)
+│   │   ├── LlmReranker.java              # listwise LLM rerank
+│   │   ├── MmrReranker.java              # relevance + diversity (MMR)
+│   │   ├── CrossEncoderReranker.java     # DJL cross-encoder (graceful fallback)
+│   │   └── RagService.java               # Embed → LSH search (top-N) → rerank → top-K
 │   ├── data/
 │   │   ├── Article.java                  # POJO + namespace + embedding (write-only)
 │   │   ├── WikipediaResponse.java        # External API DTO
@@ -345,6 +380,28 @@ Notes from building this:
   similar vectors so a query only scores a small candidate set, with an
   exact-cosine fallback for correctness. Dimension-agnostic (384/768/1024).
 
+- **Chunking is the real fix for long-doc retrieval** — a 90k-char PDF stored
+  as one embedding broke retrieval: the embedder truncates past ~8k tokens, and
+  one vector can't match a specific passage. Splitting into per-chunk Articles
+  fixed it (101 chunks). Compared fixed/recursive/semantic — recursive wins on
+  quality-vs-cost; semantic is best but pays a per-sentence embedding cost.
+  (See `docs/CHUNKING.md`.)
+
+- **Reranking helps most when first-stage search is weak** — fetch top-N (20)
+  then rerank to top-K (2). On a strong embedder + good chunks, easy questions
+  already rank right and rerank barely changes them; the gain shows on
+  vocabulary-mismatch questions. Built none/llm/mmr/cross to compare.
+  (See `docs/RERANKING.md`.)
+
+- **Pin the error to the real cause, then design a fallback** — the DJL
+  cross-encoder failed to load on Intel macOS. Suspected the OpenJ9 (Semeru)
+  JVM first, but switching to HotSpot reproduced it — the real cause was a
+  missing osx-x86_64 native (PyTorch dropped Intel-mac wheels). The reranker
+  falls back to top-K instead of crashing (graceful degradation); it runs on
+  Linux/Apple Silicon. Library APIs also differ by version — confirmed the
+  0.30.0 javadoc instead of trusting an example (no `CrossEncoderTranslatorFactory`;
+  input is `StringPair`).
+
 - **Tiered storage = lakehouse in miniature** — cheap row-oriented appends
   (JSON hot tier) compacted into columnar Parquet (cold tier) past a threshold.
   Avoids rewriting the whole Parquet file on every single ingest.
@@ -371,7 +428,9 @@ Notes from building this:
 - [x] 12 — PII detection & redaction in audit log (governance)
 - [x] 13 — Tiered storage (hot JSON → cold Parquet compaction)
 - [x] 14 — Knowledge-base CRUD (delete, dedup, file upload)
-- [ ] deployment notes (Docker + compose)
+- [x] 15 — Universal file ingest (Apache Tika) + document chunking (fixed/recursive/semantic)
+- [x] 16 — Two-stage retrieval with pluggable reranking (none/llm/mmr/cross)
+- [ ] deployment notes (Docker + compose) — also verifies cross-encoder on Linux
 - [ ] tenant isolation enforcement / API auth
 
 ---
@@ -405,6 +464,9 @@ MIT
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | Article schema, Avro + Parquet, anti-corruption layer |
 | [docs/GOVERNANCE.md](docs/GOVERNANCE.md) | Audit log schema + PII redaction, watsonx.governance parity |
 | [docs/MULTIMODAL.md](docs/MULTIMODAL.md) | Vision Q&A + OCR grounding, image ingest, findings & limits |
+| [docs/CHUNKING.md](docs/CHUNKING.md) | Chunking strategies (fixed/recursive/semantic), measured comparison |
+| [docs/CHUNKING-TEST.md](docs/CHUNKING-TEST.md) | Step-by-step guide to reproduce the chunking comparison |
+| [docs/RERANKING.md](docs/RERANKING.md) | Two-stage retrieval, reranker strategies, before/after + platform findings |
 | [docs/H2-CONSOLE.md](docs/H2-CONSOLE.md) | H2 web console — enable, login, SQL cookbook, prod warning |
 
 **Live (interactive) API docs**: run the app, then open [`http://localhost:8080/swagger-ui.html`](http://localhost:8080/swagger-ui.html). See [`SWAGGER-SETUP.md`](SWAGGER-SETUP.md) to enable.

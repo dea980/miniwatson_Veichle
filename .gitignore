@@ -46,3 +46,9 @@ data/
 *.crc
 
 .fuse_hidden*
+
+run.log
+run-hotspot.log
+.fuse_hidden*
+*.log
+run*.log

@@ -13,7 +13,7 @@ chunking:
   max-size: 1000        # 비교 테스트용 250 (실사용은 800~1000)
 
 rerank:
-  strategy: none # llm | cross | mmr | none
+  strategy: cross # llm | cross | mmr | none
 
 #database:
 #  host: localhost
