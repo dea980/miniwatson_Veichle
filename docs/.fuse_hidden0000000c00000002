@@ -161,7 +161,7 @@ LIMIT 10;
 
 | Topic                       | Note                                                                |
 |-----------------------------|---------------------------------------------------------------------|
-| ~~PII redaction~~ DONE    | Implemented — see section 10 (regex masking before audit-log persist)      |
+| ~~PII redaction~~ ✅ DONE    | Implemented — see section 10 (regex masking before audit-log persist)      |
 | Cryptographic chaining      | Each entry standalone — no hash chain for tamper-evidence           |
 | Right-to-be-forgotten        | No DELETE API — `userId`-scoped purge to be added                   |
 | Cost attribution            | `tookMs` only — no `tokens_in/out` (Ollama doesn't expose easily)   |
@@ -212,7 +212,7 @@ LLM 호출
 | `[CARD]` | 13~16자리 카드번호 | `4111 1111 1111 1111` → `[CARD]` |
 
 `QueryLog`에는 `piiCount`(이 질의에서 마스킹된 건수)가 함께 저장돼, 대시보드
-Audit Trail에서 " N"으로 표시된다 → 거버넌스가 민감정보를 실제로 잡아냈음을 가시화.
+Audit Trail에서 "🔒 N"으로 표시된다 → 거버넌스가 민감정보를 실제로 잡아냈음을 가시화.
 
 ### 예시
 
