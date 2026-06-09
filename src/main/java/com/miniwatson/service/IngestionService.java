@@ -5,6 +5,9 @@ import com.miniwatson.data.Article;
 import com.miniwatson.data.ArticleRepository;
 import com.miniwatson.data.VectorIndex;
 import com.miniwatson.data.WikipediaResponse;
+import com.miniwatson.governance.DocumentCatalog;
+import com.miniwatson.governance.DocumentCatalogRepository;
+
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -13,15 +16,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.Base64;
-import java.util.List;
-import java.util.ArrayList;
+import java.util.*;
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Value;
 
 import org.apache.tika.Tika;
+
+import jakarta.annotation.PostConstruct;
 
 @Service
 public class IngestionService {
@@ -38,14 +41,19 @@ public class IngestionService {
     private final Chunker chunker;// 청킹 분리
     private final int maxSize;
     private final Tika tika = new Tika();
+    private final DocumentCatalogRepository catalogRepo;
+    private final String embedModel;
+    //private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(IngestionService.class);
     public IngestionService(ArticleRepository articleStore,
                             EmbeddingService embeddingService,
                             VectorIndex vectorIndex,
                             OllamaService ollamaService,
                             OcrService ocrService,
                             Map<String, Chunker> chunkers,                         // 모든 Chunker 빈
+                            DocumentCatalogRepository catalogRepo,
                             @Value("${chunking.strategy:recursive}") String strategy,
-                            @Value("${chunking.max-size:1000}") int maxSize) {
+                            @Value("${chunking.max-size:1000}") int maxSize,
+                            @Value("${ollama.embed-model:nomic-embed-text}") String embedModel) {
         this.articleStore = articleStore;
         this.embeddingService = embeddingService;
         this.vectorIndex = vectorIndex;
@@ -53,6 +61,8 @@ public class IngestionService {
         this.ocrService = ocrService;
         this.chunker = chunkers.getOrDefault(strategy, chunkers.get("recursive"));
         this.maxSize = maxSize;
+        this.catalogRepo = catalogRepo;
+        this.embedModel = embedModel;
 
     }
 
@@ -190,6 +200,55 @@ public class IngestionService {
             vectorIndex.add(s);
             saved.add(s);
         }
+        catalogRepo.findByTitleAndNamespace(baseTitle, ns).ifPresentOrElse(
+                c -> { c.setChunks(saved.size()); catalogRepo.save(c); },
+                () -> {
+                    DocumentCatalog c = new DocumentCatalog();
+                    c.setTitle(baseTitle);
+                    c.setNamespace(ns);
+                    c.setSourceType("file");
+                    c.setChunks(saved.size());
+                    c.setEmbedModel(embedModel);   // 임베더명 (없으면 상수)
+                    c.setIngestedAt(LocalDateTime.now());
+                    catalogRepo.save(c);
+                    // log.info("[catalog] saved {} [{}]", baseTitle, ns); // debugging
+                }
+        );
         return saved;
+    }
+
+    @PostConstruct
+    public void hydrateCatalog(){
+        try{
+            List<Article> all = articleStore.loadAll();
+            Map<String, List<Article>> grouped = new LinkedHashMap<>();
+            for (Article a : all){
+                String ns = (a.getNamespace() == null || a.getNamespace().isBlank()) ? "default" : a.getNamespace();
+                String base = a.getTitle().replaceAll(" #\\d+$", "");
+                grouped.computeIfAbsent(ns + "||" + base, k -> new ArrayList<>()).add(a);
+            }
+            for (var e: grouped.entrySet()){
+                String[] parts = e.getKey().split("\\|\\|",2);
+                String ns = parts[0], base = parts[1];
+                if (catalogRepo.findByTitleAndNamespace(base, ns).isPresent()) continue;
+                DocumentCatalog c = new DocumentCatalog();
+                c.setTitle(base);
+                c.setNamespace(ns);
+                c.setSourceType(guessType(e.getValue().get(0)));   // url 스킴으로 추정
+                c.setChunks(e.getValue().size());
+                c.setEmbedModel(embedModel);
+                c.setIngestedAt(e.getValue().get(0).getIngestedAt());
+                catalogRepo.save(c);
+
+            }
+        } catch (Exception ex){
+
+        }
+    }
+    private String guessType(Article a) {
+        String url = a.getUrl() == null ? "" : a.getUrl();
+        if (url.startsWith("image://")) return "image";
+        if (url.startsWith("file://")) return "file";
+        return "wikipedia";
     }
 }

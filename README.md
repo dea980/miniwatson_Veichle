@@ -38,6 +38,7 @@ Three layers, each mapping to a watsonx component:
 │  │  • Chunking: fixed / recursive / semantic          │ │
 │  │  • Multi-tenant namespaces + dedup + CRUD          │ │
 │  │  • Tiered: hot JSON → cold Parquet (compaction)    │ │
+│  │  • Catalog: H2 doc metadata (catalog/data split)   │ │
 │  │  • Parquet (Avro schema, SNAPPY) — 7× < JSON       │ │
 │  └────────────────────────────────────────────────────┘ │
 │                                                         │
@@ -46,6 +47,7 @@ Three layers, each mapping to a watsonx component:
 │  │  • Auto audit log every LLM call in H2             │ │
 │  │  • Tracks model, latency, timestamp                │ │
 │  │  • PII detection & redaction before persist        │ │
+│  │  • Provenance: source chunks logged per answer     │ │
 │  └────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -66,6 +68,7 @@ Three layers, each mapping to a watsonx component:
 | Data format | Apache Parquet | Columnar + SNAPPY = 7× smaller than JSON |
 | Schema | Avro | Schema-first, evolution-safe |
 | Storage | Tiered (JSON hot → Parquet cold) | cheap appends + columnar compaction |
+| Catalog | H2 document_catalog (mirror) | SQL-queryable KB metadata; catalog/data split |
 | Retrieval | In-memory LSH vector index | sub-linear approximate kNN |
 | Chunking | fixed / recursive / semantic (pluggable) | recursive default; balance quality vs cost |
 | Reranking | none / llm / mmr / cross (pluggable) | two-stage: fetch top-N → rerank → top-K |
@@ -193,10 +196,24 @@ curl -X DELETE http://localhost:8080/api/data/articles/5 # remove by id (+index 
 curl  http://localhost:8080/api/data/index/stats         # LSH mode, vectors, buckets
 ```
 
-### Audit trail
+### Documents (document-level view over chunks)
 
 ```bash
-curl http://localhost:8080/api/governance/logs
+# List documents (chunks grouped by namespace + title)
+curl "http://localhost:8080/api/data/documents"
+
+# Delete a whole document (all its chunks at once)
+curl -X DELETE "http://localhost:8080/api/data/documents?title=report.pdf&namespace=demo"
+```
+
+A long file is stored as many chunks; these endpoints present and manage it as one
+document. The same metadata is mirrored to the H2 `document_catalog` for SQL queries.
+
+### Audit trail & governance stats
+
+```bash
+curl http://localhost:8080/api/governance/logs    # every LLM call (model, latency, PII, sources)
+curl http://localhost:8080/api/governance/stats   # aggregates: per-model, per-source-type, KPI totals
 ```
 
 Every LLM call is logged: question, answer, model, latency (ms), timestamp, and
@@ -292,8 +309,10 @@ miniwatson/
 │   │   ├── TieredArticleStore.java       # hot→cold compaction (@Primary)
 │   │   └── VectorIndex.java              # in-memory LSH index
 │   ├── governance/
-│   │   ├── QueryLog.java                 # JPA entity (+ piiCount)
+│   │   ├── QueryLog.java                 # JPA entity (+ piiCount, sources/provenance)
 │   │   ├── QueryLogRepository.java       # Spring Data JPA
+│   │   ├── DocumentCatalog.java          # KB metadata mirror (H2, catalog/data split)
+│   │   ├── DocumentCatalogRepository.java
 │   │   └── PiiRedactionService.java      # regex PII masking
 │   └── dto/
 │       ├── AskRequest.java
@@ -410,6 +429,22 @@ Notes from building this:
   emails/phones/SSNs/cards *before persisting*, return the original to the user.
   Function preserved, record protected.
 
+- **Provenance makes answers auditable** — logging the rerank-final source chunks
+  per answer means you can later check "was this grounded, and in what?" — and tell
+  a retrieval error (wrong chunk) apart from a generation error (right chunk, wrong
+  answer). One subtle bug: set the field *before* `save()`, or it never persists.
+
+- **Catalog/data split = lakehouse in miniature** — vectors and text live in
+  Parquet (the data); lightweight document metadata is mirrored to H2 (the catalog),
+  so the knowledge base itself becomes SQL-queryable for governance. Parquet is the
+  source of truth; the H2 catalog is rebuilt from it on startup (`@PostConstruct`),
+  same philosophy as the vector index hydrate.
+
+- **Spring Boot 4 ignores `javax.annotation`** — `@PostConstruct` silently never
+  ran because it was imported from `javax`, not `jakarta`. On Jakarta EE, callbacks
+  must use `jakarta.annotation`. When a lifecycle hook quietly doesn't fire, suspect
+  the javax/jakarta namespace first.
+
 ---
 
 ## Roadmap
@@ -430,6 +465,9 @@ Notes from building this:
 - [x] 14 — Knowledge-base CRUD (delete, dedup, file upload)
 - [x] 15 — Universal file ingest (Apache Tika) + document chunking (fixed/recursive/semantic)
 - [x] 16 — Two-stage retrieval with pluggable reranking (none/llm/mmr/cross)
+- [x] 17 — Provenance: source chunks logged per answer (governance)
+- [x] 18 — Document catalog in H2 (catalog/data split, SQL-queryable KB)
+- [x] 19 — Governance stats dashboard (per-model, per-source-type, KPIs)
 - [ ] deployment notes (Docker + compose) — also verifies cross-encoder on Linux
 - [ ] tenant isolation enforcement / API auth
 

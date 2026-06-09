@@ -4,6 +4,9 @@ import com.miniwatson.data.Article;
 //import com.miniwatson.data.ArticleParquetStore;
 import com.miniwatson.data.VectorIndex;
 import com.miniwatson.service.IngestionService;
+
+import com.miniwatson.governance.DocumentCatalogRepository;
+
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import com.miniwatson.data.ArticleRepository;
@@ -11,6 +14,7 @@ import com.miniwatson.service.OllamaService;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,14 +30,19 @@ public class DataController {
     private final VectorIndex vectorIndex;
     private final OllamaService ollamaService;
 
+    private final DocumentCatalogRepository catalogRepo;
+
     public DataController(IngestionService ingestionService,
                           ArticleRepository articleStore,
                           VectorIndex vectorIndex,
-                          OllamaService ollamaService) {
+                          OllamaService ollamaService,
+                          DocumentCatalogRepository catalogRepo
+                          ) {
         this.ingestionService = ingestionService;
         this.articleStore = articleStore;
         this.vectorIndex = vectorIndex;
         this.ollamaService = ollamaService;
+        this.catalogRepo = catalogRepo;
     }
 
     /**
@@ -132,6 +141,56 @@ public class DataController {
             }
         }
         return filtered;
+    }
+
+    @GetMapping("/documents")
+    public List<Map<String, Object>> getDocuments(@RequestParam(required = false) String namespace) throws IOException{
+        List<Article> all = getAllArticles(namespace);
+
+        // baseTitle 로 그룹핑 (" #3" 제거)
+        Map<String, List<Article>> grouped = new LinkedHashMap<>();
+        for (Article a : all) {
+            String ns = (a.getNamespace() == null || a.getNamespace().isBlank()) ? DEFAULT_NS : a.getNamespace();
+            String base = a.getTitle().replaceAll(" #\\d+$", "");
+            String key = ns + "||" + base;                    // ns + title 복합 키
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(a);
+        }
+
+        List<Map<String, Object>> docs = new ArrayList<>();
+        for (List<Article> chunks : grouped.values()) {
+            Article first = chunks.get(0);
+            String ns = (first.getNamespace() == null || first.getNamespace().isBlank()) ? DEFAULT_NS : first.getNamespace();
+            docs.add(Map.of(
+                    "title", first.getTitle().replaceAll(" #\\d+$", ""),
+                    "chunks", chunks.size(),
+                    "namespace", ns,
+                    "url", first.getUrl() == null ? "" : first.getUrl(),
+                    "ids", chunks.stream().map(Article::getId).toList()
+            ));
+        }
+        return docs;
+    }
+    @DeleteMapping("/documents")
+    public Map<String, Object> deleteDocument(@RequestParam String title,
+                                              @RequestParam(required = false, defaultValue = DEFAULT_NS) String namespace) throws IOException {
+        List<Article> all = articleStore.loadAll();
+        List<Long> toDelete = all.stream()
+                .filter(a -> {
+                    String ns = (a.getNamespace() == null || a.getNamespace().isBlank()) ? DEFAULT_NS : a.getNamespace();
+                    String base = a.getTitle().replaceAll(" #\\d+$", "");
+                    return ns.equals(namespace) && base.equals(title);
+                })
+                .map(Article::getId)
+                .toList();
+
+        int removed = 0;
+        for (Long id : toDelete) {
+            if (articleStore.deleteById(id)) removed++;
+        }
+        if (removed > 0) vectorIndex.rebuild(articleStore.loadAll());   // 인덱스 동기화 1회
+        catalogRepo.findByTitleAndNamespace(title, namespace)
+                .ifPresent(catalogRepo::delete);
+        return Map.of("title", title, "namespace", namespace, "deletedChunks", removed);
     }
 
     /**

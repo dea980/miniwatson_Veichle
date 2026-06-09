@@ -71,13 +71,16 @@ public class RagService {
             if (s.length() > 600) s = s.substring(0, 600);   // 소스당 최대 600자
             context.append("- ").append(a.getTitle()).append(": ").append(s).append("\n");
         }
+        String sources = topArticles.stream()
+                .map(a -> "#" + a.getId() + " " + a.getTitle())
+                .collect(Collectors.joining("; "));
 
         String prompt = "Use the context below. For exact numbers, trust [OCR] sections over [Vision] descriptions.\n"
                 + context + "\nAnswer concisely: " + question;
 
         log.info("Augmented prompt length: {} chars", prompt.length());
 
-        String answer = ollamaService.ask(prompt, model, question);
+        String answer = ollamaService.ask(prompt, model, question, sources);
 
         log.info("Ollama answer length: {} chars", answer != null ? answer.length() : 0);
 

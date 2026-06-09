@@ -26,6 +26,8 @@ public class QueryLog {
     private Long latencyMs;
 
     private LocalDateTime createdAt;
+    @Column(columnDefinition = "TEXT")
+    private String sources;
 
     private int piiCount;
     @Lob

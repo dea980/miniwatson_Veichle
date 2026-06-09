@@ -272,3 +272,72 @@ embeddingService.embed("search_query: " + question);
 프리픽스를 바꾸면 **기존 벡터를 재생성**해야 한다 (저장된 벡터는 옛 방식이라 새 질문 벡터와 안 맞음). 즉 parquet/json 비우고 재-ingest.
 
 > 교훈: *임베딩 모델마다 요구하는 입력 형식이 있다. 안 지키면 인덱스가 정확(brute-force)해도 retrieval이 망가진다. "검색 품질이 이상하면 인덱스보다 임베딩 입력부터 의심하라."* (모델마다 다름 — granite-embedding류는 프리픽스가 불필요한 경우도 있으니 모델 카드 확인.)
+
+---
+
+## 11. 문서 카탈로그 (catalog/data 분리) — 구현됨
+
+청킹 도입으로 한 문서가 청크 N개(Article N개)로 흩어졌다. 데이터(벡터·본문)는 Parquet/JSON에 그대로 두되, **문서 단위 메타데이터만 H2에 미러링**해 SQL로 조회·집계할 수 있게 했다. 이것이 lakehouse의 catalog/data 분리이고, watsonx.data의 카탈로그 개념에 해당한다.
+
+### 왜 분리하나
+
+- 데이터(대량 벡터)는 컬럼형 Parquet에 — 압축·스캔 효율.
+- 카탈로그(가벼운 메타)는 H2에 — SQL 조회·집계·거버넌스 분석.
+- 둘을 한 곳에 섞지 않는다. Parquet이 source of truth, H2 카탈로그는 거기서 파생된 뷰.
+
+### 스키마 — `document_catalog`
+
+| 컬럼 | 의미 |
+|---|---|
+| id | PK |
+| title | baseTitle (청크 번호 제거) |
+| namespace | 테넌트 |
+| source_type | wikipedia / image / file |
+| chunks | 청크 수 |
+| embed_model | 어떤 임베더로 만들었나 |
+| ingested_at | 최초 적재 시각 |
+
+### 쓰기 경로 (dual-write)
+
+ingest가 끝나면 `(title, namespace)` 기준으로 카탈로그를 upsert한다. 이미 있으면 chunks만 갱신, 없으면 새 행. 삭제(`deleteDocument`) 시 청크를 지운 뒤 카탈로그 행도 제거한다.
+
+### 시작 시 재구성 (@PostConstruct hydrate)
+
+H2(dev)는 in-memory라 재시작하면 카탈로그가 빈다. 반면 Parquet은 남는다. 그래서 시작 시 `VectorIndex.hydrate`와 같은 패턴으로 Parquet의 Article을 읽어 `ns + baseTitle`로 그룹핑해 카탈로그를 재구성한다. source_type은 url 스킴으로 추정한다(`image://`, `file://`, 그 외 wikipedia).
+
+핵심 원칙: **영속 데이터(Parquet)가 진실, H2 카탈로그는 파생.** 재시작 시 파생을 다시 만들면 정합성이 유지된다. 벡터 인덱스도 동일한 철학(hydrate)이라 일관된다.
+
+### H2 console 활용
+
+카탈로그가 생기면서 H2 console로 지식베이스 자체를 SQL로 분석할 수 있다.
+
+```sql
+-- 소스 타입별 문서/청크 수
+SELECT source_type, COUNT(*) docs, SUM(chunks) total_chunks
+FROM document_catalog GROUP BY source_type;
+
+-- 테넌트별 문서 수
+SELECT namespace, COUNT(*) docs FROM document_catalog GROUP BY namespace;
+
+-- 청크가 가장 많은 문서
+SELECT title, namespace, chunks FROM document_catalog ORDER BY chunks DESC LIMIT 10;
+
+-- 특정 임베더로 만든 문서 (임베더 교체 시 재인덱싱 대상 식별)
+SELECT title, namespace, embed_model FROM document_catalog WHERE embed_model <> 'nomic-embed-text';
+```
+
+### 한계 (정직하게)
+
+- dual-write라 카탈로그와 Parquet이 일시적으로 어긋날 수 있다. 재시작 hydrate가 보정하지만, 런타임 중 부분 실패는 보정 안 된다 → 프로덕션은 트랜잭션 경계나 주기적 reconciliation이 필요.
+- `embed_model`은 ingest 시점 설정값을 기록한다. 실제 사용 모델과 설정이 다르면 부정확 → EmbeddingService가 실제 모델명을 노출하면 더 정확.
+
+### 11.1 함정: Spring Boot 4에서 javax.annotation은 무시된다
+
+카탈로그 hydrate(@PostConstruct)가 시작 시 안 돌아 카탈로그가 계속 비었다. 원인은 `import javax.annotation.PostConstruct`였다. Spring Boot 3/4는 Jakarta EE라 `jakarta.annotation.PostConstruct`만 인식한다. javax 쪽을 쓰면 컴파일은 되더라도 Spring이 라이프사이클 콜백으로 호출하지 않아, 메서드가 조용히 안 불린다.
+
+```java
+import jakarta.annotation.PostConstruct;   // O
+// import javax.annotation.PostConstruct;  // X — Spring Boot 4에서 호출 안 됨
+```
+
+교훈: 콜백/어노테이션이 "조용히 안 도는" 증상이면 javax vs jakarta 네임스페이스부터 의심한다. (기존에 잘 돌던 VectorIndex.hydrate는 jakarta로 import돼 있었다.)

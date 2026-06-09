@@ -85,20 +85,22 @@ public class OllamaService {
     /** Text chat with a caller-chosen model (validated against the whitelist). */
 
     public String ask(String prompt, String model, String userQuestion){
-        return generate(prompt, resolveModel(model), null, userQuestion);
+        return generate(prompt, resolveModel(model), null, userQuestion, null);
     }
-
+    public String ask(String prompt, String model, String userQuestion, String sources){
+        return generate(prompt, resolveModel(model), null, userQuestion, sources);
+    }
     /**
      * Multimodal chat: send a prompt plus base64-encoded images to a vision model.
      * The model is used as-is (vision models live outside the chat whitelist).
      */
-    public String askWithImages(String question, String visionModel, List<String> base64Images) {
+    public String askWithImages(String prompt, String visionModel, List<String> base64Images) {
         String m = (visionModel == null || visionModel.isBlank()) ? defaultModel : visionModel;
-        return generate(question, m, base64Images, question);
+        return generate(prompt, m, base64Images, prompt, null);
     }
 
     /** Core Ollama /api/generate call + governance audit logging. */
-    private String generate(String prompt, String model, List<String> images, String userQuestion) {
+    private String generate(String prompt, String model, List<String> images, String userQuestion, String sources) {
         long startTime = System.currentTimeMillis();
 
         OllamaRequest request = new OllamaRequest();
@@ -132,6 +134,7 @@ public class OllamaService {
         log.setModel(model);
         log.setLatencyMs(latency);
         log.setPiiCount(rq.count() + ra.count());
+        log.setSources(sources);
         queryLogRepository.save(log);
         return answer;
     }
