@@ -2,7 +2,8 @@ package com.miniwatson.controller;
 
 import com.miniwatson.data.Article;
 //import com.miniwatson.data.ArticleParquetStore;
-import com.miniwatson.data.VectorIndex;
+import com.miniwatson.data.VectorStore;
+
 import com.miniwatson.service.IngestionService;
 import com.miniwatson.service.IndexingService;
 import com.miniwatson.governance.DocumentCatalogRepository;
@@ -27,14 +28,14 @@ public class DataController {
     private final IngestionService ingestionService;
     //private final ArticleParquetStore articleStore;
     private final ArticleRepository articleStore;
-    private final VectorIndex vectorIndex;
+    private final VectorStore vectorIndex;
     private final OllamaService ollamaService;
     private final IndexingService indexingService;
     private final DocumentCatalogRepository catalogRepo;
 
     public DataController(IngestionService ingestionService,
                           ArticleRepository articleStore,
-                          VectorIndex vectorIndex,
+                          VectorStore vectorIndex,
                           OllamaService ollamaService,
                           DocumentCatalogRepository catalogRepo,
                           IndexingService indexingService

@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  * per {@code namespace} so tenants never see each other's vectors.
  */
 @Component
-public class VectorIndex {
+public class VectorIndex implements VectorStore{
 
     private static final Logger log = LoggerFactory.getLogger(VectorIndex.class);
     private static final long SEED = 42L; // deterministic hyperplanes → reproducible buckets

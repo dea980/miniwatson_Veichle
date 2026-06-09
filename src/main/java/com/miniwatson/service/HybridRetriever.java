@@ -3,6 +3,7 @@ package com.miniwatson.service;
 import com.miniwatson.data.Article;
 import com.miniwatson.data.KeywordIndex;
 import com.miniwatson.data.VectorIndex;
+import com.miniwatson.data.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -14,11 +15,11 @@ public class HybridRetriever {
 
     private static final int RRF_K = 60;
 
-    private final VectorIndex vectorIndex;
+    private final VectorStore vectorIndex;
     private final KeywordIndex keywordIndex;
     private final boolean hybridEnabled;
 
-    public HybridRetriever(VectorIndex vectorIndex,
+    public HybridRetriever(VectorStore vectorIndex,
                            KeywordIndex keywordIndex,
                            @Value("${retrieval.hybrid.enabled:true}") boolean hybridEnabled) {
         this.vectorIndex = vectorIndex;

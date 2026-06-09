@@ -1,17 +1,13 @@
-# DEV - 인메모리 (개발용)
 spring:
-  config:
-    activate:
-      on-profile: dev
   datasource:
     url: jdbc:h2:mem:miniwatson
     driver-class-name: org.h2.Driver
     username: sa
-    password:
+    password: ""
   jpa:
     hibernate:
-    ddl-auto: create-drop
-    show-sql: true
+      ddl-auto: create-drop
+    show-sql: false
   h2:
     console:
       enabled: true

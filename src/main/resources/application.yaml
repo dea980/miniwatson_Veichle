@@ -2,7 +2,7 @@ spring:
   application:
     name: miniwatson
   profiles:
-    active : dev
+    active: dev
   servlet:
     multipart:
       max-file-size: 50MB
@@ -10,21 +10,15 @@ spring:
 
 retrieval:
   hybrid:
-    enabled: true     # false면 벡터-only (비교용)
+    enabled: true        # false면 벡터-only (비교용)
+
 chunking:
-  strategy: recursive # or recursive / semantic / fixed
-  max-size: 1000        # 비교 테스트용 250 (실사용은 800~1000)
+  strategy: recursive    # fixed | recursive | semantic
+  max-size: 1000
 
 rerank:
-  strategy: cross # llm | cross | mmr | none
+  strategy: cross        # none | llm | mmr | cross
 
-#database:
-#  host: localhost
-#  username: admin
-#  password: secret
-#
-#logging:
-#  level: DEBUG
 storage:
   tier:
     threshold: 3
@@ -34,10 +28,8 @@ server:
 
 ollama:
   url: ${OLLAMA_URL:http://localhost:11434}
-  chat-model: ${OLLAMA_CHAT_MODEL:gemma4}
-  # multi-LLM 화이트리스트 (요청별 model 전환 허용 대상). 기본 모델은 자동 포함됨.
-  chat-models: ${OLLAMA_CHAT_MODELS:gemma4,ibm/granite4:latest,gpt-oss:latest}
-  # 비전 기본 모델: granite3.3-vision:2b는 표/숫자에 약해 llava로 기본값 변경
+  chat-model: ${OLLAMA_CHAT_MODEL:ibm/granite4:latest}
+  chat-models: ${OLLAMA_CHAT_MODELS:ibm/granite4:latest,gemma4}
   vision-model: ${OLLAMA_VISION_MODEL:llava:latest}
   embed-model: ${OLLAMA_EMBED_MODEL:nomic-embed-text}
   num-predict: ${OLLAMA_NUM_PREDICT:256}
@@ -46,59 +38,3 @@ vector:
   index:
     lsh:
       enabled: false
-
-#---
-## DEV - 인메모리 (개발용)
-#spring:
-#  config:
-#    activate:
-#      on-profile: dev
-#  datasource:
-#    url: jdbc:h2:mem:miniwatson
-#    driver-class-name: org.h2.Driver
-#    username: daeyeop
-#    passowrd: daeyeop
-#  jpa:
-#    hibernate:
-#      ddl-auto:create-drop
-#    show-sql: true
-#  h2:
-#    console:
-#      enabled: true
-#
-#---
-## DEMO - 파일 저장 (
-#spring:
-#  config:
-#    activate:
-#      on-profile: demo
-#    datasource:
-#      url: jdbc:h2:file:./data/miniwatson;AUTO_SERVER=TRUE
-#      driver-class-name: org.h2.Driver
-#      username: demo
-#      password: demo
-#    jpa:
-#      hibernate:
-#        ## 기존의 데이터 유지를 위해
-#        ddl-auto: update
-#      show-sql: true
-#    h2:
-#      console:
-#        enabled: true
-#
-#---
-## PROD (further) AS POSTGRES)
-#spring:
-#  config:
-#    activate:
-#      on-profile: prod
-#  datasource:
-#    url: ${DATABASE_URL} # set up at 환경변수
-#    username: ${DB_USER}
-#    password: ${DB_PASSWORD}
-#  jpa:
-#    hibernate:
-#      ddl-auto: validate #스키마 변경 X
-#    show-sql: false
-#
-#
