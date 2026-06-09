@@ -146,7 +146,30 @@ async function uploadFile() {
         document.getElementById('upload-result').textContent = 'Error: ' + e.message;
     }
 }
+async function loadStats() {
+    const res = await fetch(`${API}/api/governance/stats`);
+    const s = await res.json();
 
+    document.getElementById('stats-cards').innerHTML = `
+        ${statCard('Total Calls', s.totalCalls)}
+        ${statCard('Avg Latency', s.avgLatencyMs + ' ms')}
+        ${statCard('PII Hits', s.totalPii)}
+        ${statCard('Documents', s.totalDocs)}
+    `;
+    document.getElementById('stats-models').innerHTML =
+        '<div class="meta-label">By Model</div>' +
+        (s.byModel || []).map(m => `<div>${m.model}: ${m.calls} calls, ${m.avgMs} ms avg</div>`).join('');
+    document.getElementById('stats-sources').innerHTML =
+        '<div class="meta-label">By Source Type</div>' +
+        (s.bySourceType || []).map(x => `<div>${x.sourceType}: ${x.docs} docs, ${x.chunks} chunks</div>`).join('');
+}
+
+function statCard(label, value) {
+    return `<div class="status-card"><div class="status-content">
+        <div class="status-label">${label}</div>
+        <div class="status-value">${value}</div>
+    </div></div>`;
+}
 async function loadModels() {
     try {
         const res = await fetch(`${API}/api/rag/models`);
