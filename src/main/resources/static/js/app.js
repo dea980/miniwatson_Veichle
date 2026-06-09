@@ -62,7 +62,7 @@ async function ingestArticle() {
         document.getElementById('ingest-result').innerHTML =
             `Ingested: <b>${data.title}</b> (id: ${data.id})`;
         document.getElementById('ingest-title').value = '';
-        loadArticles();
+        loadDocuments();
     } catch (e) {
         document.getElementById('ingest-result').textContent = 'Error: ' + e.message;
     }
@@ -98,6 +98,7 @@ async function loadLogs() {
             <td><span class="model-badge">${l.model}</span></td>
             <td class="text-right">${l.latencyMs}</td>
             <td>${l.piiCount > 0 ? '🔒 ' + l.piiCount : '–'}</td>
+            <td class="text-sm text-muted">${l.sources || '–'}</td>     <!-- 추가 -->
             <td class="text-sm text-muted">${l.createdAt}</td>
         </tr>
     `).join('');
@@ -105,7 +106,7 @@ async function loadLogs() {
 async function deleteArticle(id) {
     if (!confirm(`#${id} 삭제할까요?`)) return;
     await fetch(`${API}/api/data/articles/${id}`, { method: 'DELETE' });
-    loadArticles();
+    loadDocuments();
 }
 
 async function uploadFile() {
@@ -140,7 +141,7 @@ async function uploadFile() {
             : `Ingested: <b>${data.title}</b> (id ${data.id})`;   // 이미지(단일 Article)
         document.getElementById('upload-result').innerHTML = msg;
         fileInput.value = '';
-        loadArticles();                              // 목록 갱신
+        loadDocuments();                              // 목록 갱신
     } catch (e) {
         document.getElementById('upload-result').textContent = 'Error: ' + e.message;
     }
@@ -172,6 +173,35 @@ async function loadModels() {
         console.error('loadModels failed:', e);
     }
 }
+async function loadDocuments() {
+    const res = await fetch(`${API}/api/data/documents`);
+    const docs = await res.json();
+
+    const list = document.getElementById('articles-list');
+    list.innerHTML = docs.map(d => `
+        <div class="article-item">
+            <a href="${d.url}" target="_blank">${d.title}</a>
+            <span class="badge">${d.chunks} chunks</span>
+            <span class="badge">${d.namespace}</span>
+            <button onclick="summarizeDocument('${d.ids[0]}')" class="btn-ghost">요약</button>
+            <button onclick="deleteDocument('${encodeURIComponent(d.title)}','${encodeURIComponent(d.namespace)}')" class="btn-ghost">삭제</button>
+            <div id="summary-${d.ids[0]}" class="answer-box hidden"></div>
+        </div>
+    `).join('');
+}
+async function deleteDocument(title, namespace) {
+    if (!confirm(`"${decodeURIComponent(title)}" 문서를 삭제할까요? (모든 청크)`)) return;
+    await fetch(`${API}/api/data/documents?title=${title}&namespace=${namespace}`, { method: 'DELETE' });
+    loadDocuments();
+}
+async function summarizeDocument(id) {
+    const box = document.getElementById(`summary-${id}`);
+    box.classList.remove('hidden');
+    box.textContent = 'Summarizing...';
+    const res = await fetch(`${API}/api/data/summarize/${id}`, { method: 'POST' });
+    const data = await res.json();
+    box.textContent = data.summary;
+}
 function showTab(tab) {
     const articles = document.getElementById('articles-section');
     const logs = document.getElementById('logs-section');
@@ -184,15 +214,16 @@ function showTab(tab) {
     tabLogs.classList.toggle('active', tab === 'logs');
 
     if (tab === 'logs') loadLogs();
-    else loadArticles();
+    else loadDocuments();
 }
+
 function updateAiStatus() {
     const el = document.getElementById('ai-model');
     const sel = document.getElementById('model-select');
     if (el && sel && sel.value) el.textContent = 'Ollama · ' + sel.value;
 }
 
-loadArticles();
+loadDocuments();    // loadArticles() 대신
 loadModels();
 
 document.getElementById('question').addEventListener('keypress', e => {
