@@ -2,10 +2,12 @@ package com.miniwatson.service;
 
 import com.miniwatson.data.Article;
 import com.miniwatson.data.VectorIndex;
+import com.miniwatson.service.HybridRetriever;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
+
 
 import java.io.IOException;
 import java.util.List;
@@ -18,7 +20,8 @@ public class RagService {
     private static final Logger log = LoggerFactory.getLogger(RagService.class);
 
     private final EmbeddingService embeddingService;
-    private final VectorIndex vectorIndex;
+    // private final VectorIndex vectorIndex;
+    private final HybridRetriever hybridRetriever;
     private final OllamaService ollamaService;
 
     private static final int TOP_K = 2; // LLM 에 최종 전달
@@ -26,12 +29,12 @@ public class RagService {
     private static final String DEFAULT_NS = "default";
     private final Reranker reranker;
     public RagService(EmbeddingService embeddingService,
-                      VectorIndex vectorIndex,
+                      HybridRetriever hybridRetriever,
                       OllamaService ollamaService,
                       Map<String, Reranker> rerankers,                        // 추가
                       @Value("${rerank.strategy:llm}") String strategy) {
         this.embeddingService = embeddingService;
-        this.vectorIndex = vectorIndex;
+        this.hybridRetriever = hybridRetriever;
         this.ollamaService = ollamaService;
         this.reranker = rerankers.getOrDefault(strategy, rerankers.get("llm")); // 추가
     }
@@ -53,7 +56,7 @@ public class RagService {
         log.info("RAG question (ns={}, model={}): {}", ns, model == null ? "default" : model, question);
 
         List<Float> questionEmbedding = embeddingService.embed("search_query: " + question);
-        List<Article> candidates = vectorIndex.search(ns, questionEmbedding, FETCH_N);
+        List<Article> candidates = hybridRetriever.search(ns, questionEmbedding, question, FETCH_N);
         if (candidates.isEmpty()) throw new RuntimeException("No articles ...");
         // Sub-linear retrieval via the in-memory vector index (LSH + exact fallback).
         //List<Article> topArticles = vectorIndex.search(ns, questionEmbedding, TOP_K);

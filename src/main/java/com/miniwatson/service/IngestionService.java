@@ -7,6 +7,7 @@ import com.miniwatson.data.VectorIndex;
 import com.miniwatson.data.WikipediaResponse;
 import com.miniwatson.governance.DocumentCatalog;
 import com.miniwatson.governance.DocumentCatalogRepository;
+import com.miniwatson.service.IndexingService;
 
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -34,7 +35,8 @@ public class IngestionService {
     private final RestTemplate restTemplate = new RestTemplate();
 
     private final EmbeddingService embeddingService;
-    private final VectorIndex vectorIndex;
+    // private final VectorIndex vectorIndex;
+    private final IndexingService indexingService;
     private final OllamaService ollamaService;   // 멀티모달: 비전 모델로 이미지 캡션 생성
     private final OcrService ocrService;
     private final ArticleRepository articleStore;
@@ -46,7 +48,7 @@ public class IngestionService {
     //private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(IngestionService.class);
     public IngestionService(ArticleRepository articleStore,
                             EmbeddingService embeddingService,
-                            VectorIndex vectorIndex,
+                            IndexingService indexingService,
                             OllamaService ollamaService,
                             OcrService ocrService,
                             Map<String, Chunker> chunkers,                         // 모든 Chunker 빈
@@ -56,7 +58,7 @@ public class IngestionService {
                             @Value("${ollama.embed-model:nomic-embed-text}") String embedModel) {
         this.articleStore = articleStore;
         this.embeddingService = embeddingService;
-        this.vectorIndex = vectorIndex;
+        this.indexingService = indexingService;
         this.ollamaService = ollamaService;
         this.ocrService = ocrService;
         this.chunker = chunkers.getOrDefault(strategy, chunkers.get("recursive"));
@@ -115,7 +117,7 @@ public class IngestionService {
         article.setEmbedding(embeddingService.embed("search_document: " + textToEmbed));
 
         Article saved = articleStore.save(article);
-        vectorIndex.add(saved);
+        indexingService.index(saved);
         return saved;
     }
 
@@ -149,7 +151,7 @@ public class IngestionService {
         article.setEmbedding(embeddingService.embed("search_document: " + combined));
 
         Article saved = articleStore.save(article);
-        vectorIndex.add(saved);
+        indexingService.index(saved);
         return saved;
     }
 
@@ -197,7 +199,7 @@ public class IngestionService {
             article.setEmbedding(embeddingService.embed("search_document: " + c));
 
             Article s = articleStore.save(article);
-            vectorIndex.add(s);
+            indexingService.index(s);
             saved.add(s);
         }
         catalogRepo.findByTitleAndNamespace(baseTitle, ns).ifPresentOrElse(

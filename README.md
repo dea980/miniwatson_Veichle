@@ -28,7 +28,8 @@ Three layers, each mapping to a watsonx component:
 │  │  • Embeddings: 768-dim (nomic / granite-embedding) │ │
 │  │  • Vision: image Q&A (llava / granite-vision)      │ │
 │  │  • OCR grounding: Tesseract (exact text/numbers)   │ │
-│  │  • RAG: chunk → embed → LSH search → rerank        │ │
+│  │  • RAG: chunk → embed → hybrid search → rerank     │ │
+│  │  • Hybrid: vector + BM25 keyword (RRF fusion)      │ │
 │  │  • Reranking: none/llm/mmr/cross (pluggable)       │ │
 │  └────────────────────────────────────────────────────┘ │
 │                                                         │
@@ -70,6 +71,7 @@ Three layers, each mapping to a watsonx component:
 | Storage | Tiered (JSON hot → Parquet cold) | cheap appends + columnar compaction |
 | Catalog | H2 document_catalog (mirror) | SQL-queryable KB metadata; catalog/data split |
 | Retrieval | In-memory LSH vector index | sub-linear approximate kNN |
+| Hybrid search | Vector + BM25 keyword, RRF fusion | lexical recall for exact tokens (IDs, codes) |
 | Chunking | fixed / recursive / semantic (pluggable) | recursive default; balance quality vs cost |
 | Reranking | none / llm / mmr / cross (pluggable) | two-stage: fetch top-N → rerank → top-K |
 | Cross-encoder | DJL + PyTorch + BGE-reranker | dedicated reranker model (Linux/Apple Silicon) |
@@ -290,6 +292,8 @@ miniwatson/
 │   │   ├── EmbeddingService.java         # Embed: 768-dim
 │   │   ├── OcrService.java               # Tesseract CLI → text
 │   │   ├── IngestionService.java         # Wikipedia / image / file → chunk → Article
+│   │   ├── IndexingService.java          # one place to update all indexes (vector + keyword)
+│   │   ├── HybridRetriever.java          # vector + BM25 candidates, RRF fusion
 │   │   ├── Chunker.java                  # interface: fixed / recursive / semantic
 │   │   ├── FixedChunker.java             # N-char + overlap (baseline)
 │   │   ├── RecursiveChunker.java         # separator-priority split (default)
@@ -307,7 +311,8 @@ miniwatson/
 │   │   ├── ArticleStore.java             # JSON store (hot tier)
 │   │   ├── ArticleParquetStore.java      # Parquet store (cold tier)
 │   │   ├── TieredArticleStore.java       # hot→cold compaction (@Primary)
-│   │   └── VectorIndex.java              # in-memory LSH index
+│   │   ├── VectorIndex.java              # in-memory LSH index (semantic)
+│   │   └── KeywordIndex.java             # in-memory BM25 index (lexical)
 │   ├── governance/
 │   │   ├── QueryLog.java                 # JPA entity (+ piiCount, sources/provenance)
 │   │   ├── QueryLogRepository.java       # Spring Data JPA
@@ -412,6 +417,14 @@ Notes from building this:
   vocabulary-mismatch questions. Built none/llm/mmr/cross to compare.
   (See `docs/RERANKING.md`.)
 
+- **Hybrid search fixes vector's blind spot for exact tokens** — embeddings can't
+  match "INV-2026-0042" or a model name; BM25 (lexical) can. Fused vector + BM25
+  with RRF (rank-based, no score normalization). Same caveat as rerank: on a small
+  clean corpus the win is small (top-N already covers everything); it pays off on
+  large/noisy corpora with rare-token queries. Indexing was split into one
+  `IndexingService` so adding the keyword index touched only that one class.
+  (See `docs/HYBRID-SEARCH.md`.)
+
 - **Pin the error to the real cause, then design a fallback** — the DJL
   cross-encoder failed to load on Intel macOS. Suspected the OpenJ9 (Semeru)
   JVM first, but switching to HotSpot reproduced it — the real cause was a
@@ -468,6 +481,7 @@ Notes from building this:
 - [x] 17 — Provenance: source chunks logged per answer (governance)
 - [x] 18 — Document catalog in H2 (catalog/data split, SQL-queryable KB)
 - [x] 19 — Governance stats dashboard (per-model, per-source-type, KPIs)
+- [x] 20 — Hybrid search (vector + BM25, RRF) with indexing split
 - [ ] deployment notes (Docker + compose) — also verifies cross-encoder on Linux
 - [ ] tenant isolation enforcement / API auth
 
@@ -505,6 +519,7 @@ MIT
 | [docs/CHUNKING.md](docs/CHUNKING.md) | Chunking strategies (fixed/recursive/semantic), measured comparison |
 | [docs/CHUNKING-TEST.md](docs/CHUNKING-TEST.md) | Step-by-step guide to reproduce the chunking comparison |
 | [docs/RERANKING.md](docs/RERANKING.md) | Two-stage retrieval, reranker strategies, before/after + platform findings |
+| [docs/HYBRID-SEARCH.md](docs/HYBRID-SEARCH.md) | Vector + BM25 hybrid retrieval, RRF fusion, indexing split, measured limits |
 | [docs/H2-CONSOLE.md](docs/H2-CONSOLE.md) | H2 web console — enable, login, SQL cookbook, prod warning |
 
 **Live (interactive) API docs**: run the app, then open [`http://localhost:8080/swagger-ui.html`](http://localhost:8080/swagger-ui.html). See [`SWAGGER-SETUP.md`](SWAGGER-SETUP.md) to enable.

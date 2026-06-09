@@ -4,7 +4,7 @@ import com.miniwatson.data.Article;
 //import com.miniwatson.data.ArticleParquetStore;
 import com.miniwatson.data.VectorIndex;
 import com.miniwatson.service.IngestionService;
-
+import com.miniwatson.service.IndexingService;
 import com.miniwatson.governance.DocumentCatalogRepository;
 
 import org.springframework.web.bind.annotation.*;
@@ -29,20 +29,22 @@ public class DataController {
     private final ArticleRepository articleStore;
     private final VectorIndex vectorIndex;
     private final OllamaService ollamaService;
-
+    private final IndexingService indexingService;
     private final DocumentCatalogRepository catalogRepo;
 
     public DataController(IngestionService ingestionService,
                           ArticleRepository articleStore,
                           VectorIndex vectorIndex,
                           OllamaService ollamaService,
-                          DocumentCatalogRepository catalogRepo
+                          DocumentCatalogRepository catalogRepo,
+                          IndexingService indexingService
                           ) {
         this.ingestionService = ingestionService;
         this.articleStore = articleStore;
         this.vectorIndex = vectorIndex;
         this.ollamaService = ollamaService;
         this.catalogRepo = catalogRepo;
+        this.indexingService = indexingService;
     }
 
     /**
@@ -187,7 +189,7 @@ public class DataController {
         for (Long id : toDelete) {
             if (articleStore.deleteById(id)) removed++;
         }
-        if (removed > 0) vectorIndex.rebuild(articleStore.loadAll());   // 인덱스 동기화 1회
+        if (removed > 0) indexingService.reindex(articleStore.loadAll());   // vectorIndex.rebuild → reindex   // 인덱스 동기화 1회
         catalogRepo.findByTitleAndNamespace(title, namespace)
                 .ifPresent(catalogRepo::delete);
         return Map.of("title", title, "namespace", namespace, "deletedChunks", removed);
@@ -222,7 +224,7 @@ public class DataController {
     public Map<String, Object> deleteArticle(@PathVariable long id) throws IOException {
         boolean removed = articleStore.deleteById(id);
         if (removed) {
-            vectorIndex.rebuild(articleStore.loadAll());  // 인메모리 인덱스 동기화 (중요!)
+            indexingService.reindex(articleStore.loadAll());   // vectorIndex.rebuild → reindex
         }
         return Map.of("deleted", removed, "id", id);
     }

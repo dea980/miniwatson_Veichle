@@ -8,6 +8,9 @@ spring:
       max-file-size: 50MB
       max-request-size: 50MB
 
+retrieval:
+  hybrid:
+    enabled: true     # false면 벡터-only (비교용)
 chunking:
   strategy: recursive # or recursive / semantic / fixed
   max-size: 1000        # 비교 테스트용 250 (실사용은 800~1000)
