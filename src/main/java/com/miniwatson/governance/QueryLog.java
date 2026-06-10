@@ -28,7 +28,7 @@ public class QueryLog {
     private LocalDateTime createdAt;
     @Column(columnDefinition = "TEXT")
     private String sources;
-
+    private String feedback; // "up"| "down" | null (아직 평가 안 함)
     private int piiCount;
     @Lob
     @Column(columnDefinition = "CLOB")

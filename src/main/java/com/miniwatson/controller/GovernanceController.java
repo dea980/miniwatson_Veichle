@@ -3,9 +3,7 @@ package com.miniwatson.controller;
 import com.miniwatson.governance.DocumentCatalogRepository;
 import com.miniwatson.governance.QueryLog;
 import com.miniwatson.governance.QueryLogRepository;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 
 import java.util.LinkedHashMap;
@@ -55,7 +53,25 @@ public class GovernanceController {
             bySource.add(Map.of("sourceType", r[0] == null ? "?" : r[0], "docs", r[1], "chunks", r[2]));
         }
         out.put("bySourceType", bySource);
+        // feedback 집계
+        List<Map<String, Object>> fb = new ArrayList<>();
+        for (Object[] r : queryLogRepository.feedbackCounts()) {
+            fb.add(Map.of("feedback", r[0], "count", r[1]));
+        }
+        out.put("feedback", fb);
+
 
         return out;
+    }
+
+    @PostMapping("/feedback")
+    public Map<String, Object> feedback(@RequestBody Map<String, String> body){
+        long id = Long.parseLong(body.get("id"));
+        String value = body.get("value");
+        QueryLog log = queryLogRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("log not found: " + id));
+        log.setFeedback(value);
+        queryLogRepository.save(log);
+        return Map.of("id", id, "feedback", value);
     }
 }

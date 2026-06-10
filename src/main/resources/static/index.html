@@ -67,6 +67,11 @@
                     <div class="meta-label">Sources</div>
                     <div id="sources-list"></div>
                 </div>
+                <div id="rag-feedback" class="hidden">
+                    <button onclick="sendFeedback('up')" class="btn-ghost">👍</button>
+                    <button onclick="sendFeedback('down')" class="btn-ghost">👎</button>
+                    <span id="feedback-result"></span>
+                </div>
             </div>
         </section>
 
@@ -112,7 +117,6 @@
                 <div id="stats-sources"></div>                      <!-- 소스별 -->
             </div>
         </section>
-
         <!-- Tabs -->
         <div class="tab-bar">
             <button onclick="showTab('articles')" id="tab-articles" class="tab active">Articles</button>

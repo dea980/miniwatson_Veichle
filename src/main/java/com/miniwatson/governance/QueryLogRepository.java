@@ -13,4 +13,7 @@ public interface QueryLogRepository extends JpaRepository<QueryLog, Long> {
     @Query("SELECT COALESCE(AVG(q.latencyMs), 0) FROM QueryLog q")
     double avgLatency();
 
+    @Query("SELECT q.feedback, COUNT(q) FROM QueryLog q WHERE q.feedback IS NOT NULL GROUP BY q.feedback")
+    List<Object[]> feedbackCounts();
+
 }

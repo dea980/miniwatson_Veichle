@@ -28,9 +28,9 @@ public class OllamaService {
     /** Comma-separated whitelist of selectable chat models (multi-LLM). */
     @Value("${ollama.chat-models:}")
     private String chatModelsCsv;
-
     @Value("${ollama.num-predict}")
     private int numPredict;
+    private Long lastQueryLogId;
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final QueryLogRepository queryLogRepository;
@@ -41,7 +41,7 @@ public class OllamaService {
         this.queryLogRepository = queryLogRepository;
         this.piiRedactionService = piiRedactionService;
     }
-
+    public Long lastQueryLogId() { return lastQueryLogId; }
     /** Available chat models = configured whitelist, always including the default. */
     public List<String> availableModels() {
         List<String> models = new ArrayList<>();
@@ -135,7 +135,8 @@ public class OllamaService {
         log.setLatencyMs(latency);
         log.setPiiCount(rq.count() + ra.count());
         log.setSources(sources);
-        queryLogRepository.save(log);
+        QueryLog saved = queryLogRepository.save(log);   // 반환값을 saved에 받고
+        this.lastQueryLogId = saved.getId();             // 그 id를 필드에 저장
         return answer;
     }
 }

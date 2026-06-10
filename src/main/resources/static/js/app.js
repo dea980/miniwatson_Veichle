@@ -1,20 +1,22 @@
 const API = 'http://localhost:8080';
+let lastLogId = null;
 
 async function askRAG() {
     const question = document.getElementById('question').value;
     if (!question) return;
     const model = document.getElementById('model-select').value;
-    const namespace = document.getElementById('ask-namespace')?.value || 'default';  // 추가
+    const namespace = document.getElementById('ask-namespace')?.value || 'default';
 
     document.getElementById('rag-loading').classList.remove('hidden');
     document.getElementById('rag-answer').classList.add('hidden');
     document.getElementById('rag-sources').classList.add('hidden');
+    document.getElementById('rag-feedback').classList.add('hidden');   // 새 질문 시 숨김
 
     try {
         const res = await fetch(`${API}/api/rag/ask`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ question, model, namespace })            // ← model 추가
+            body: JSON.stringify({ question, model, namespace })
         });
         const data = await res.json();
 
@@ -30,6 +32,11 @@ async function askRAG() {
             </div>
         `).join('');
         document.getElementById('rag-sources').classList.remove('hidden');
+
+        // ← 여기 (data 받은 뒤)
+        lastLogId = data.logId;
+        document.getElementById('rag-feedback').classList.remove('hidden');
+        document.getElementById('feedback-result').textContent = '';
     } catch (e) {
         document.getElementById('rag-loading').classList.add('hidden');
         alert('Error: ' + e.message);
@@ -67,7 +74,15 @@ async function ingestArticle() {
         document.getElementById('ingest-result').textContent = 'Error: ' + e.message;
     }
 }
-
+async function sendFeedback(value) {
+    if (!lastLogId) return;
+    await fetch(`${API}/api/governance/feedback`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ id: String(lastLogId), value })
+    });
+    document.getElementById('feedback-result').textContent = `Up ${counts.up || 0} Down ${counts.down || 0}`;
+}
 
 async function loadArticles() {
     const res = await fetch(`${API}/api/data/articles`);

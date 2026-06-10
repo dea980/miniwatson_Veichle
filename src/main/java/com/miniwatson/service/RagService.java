@@ -29,7 +29,7 @@ public class RagService {
     private static final String DEFAULT_NS = "default";
     private final Map<String, Reranker> rerankers; //요청키로  고르기 위해 보관
 
-    private final Reranker reranker; //기본
+    private final Reranker reranker; //
 
     @Value("${eval.overrides.enabled:false}")
     private boolean evalOverrides;
@@ -105,11 +105,12 @@ public class RagService {
         log.info("Augmented prompt length: {} chars", prompt.length());
 
         String answer = ollamaService.ask(prompt, model, question, sources);
+        Long logId = ollamaService.lastQueryLogId();
 
         log.info("Ollama answer length: {} chars", answer != null ? answer.length() : 0);
 
-        return new RagResult(answer, topArticles);
+        return new RagResult(answer, topArticles,logId);
     }
 
-    public record RagResult(String answer, List<Article> sources) {}
+    public record RagResult(String answer, List<Article> sources, Long logId) {}
 }
