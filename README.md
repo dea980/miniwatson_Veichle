@@ -482,6 +482,9 @@ Notes from building this:
 - [x] 18 — Document catalog in H2 (catalog/data split, SQL-queryable KB)
 - [x] 19 — Governance stats dashboard (per-model, per-source-type, KPIs)
 - [x] 20 — Hybrid search (vector + BM25, RRF) with indexing split
+- [x] 21 — Eval harness (recall + LLM-as-judge), unit tests, user feedback loop
+- [x] 22 — PostgreSQL + pgvector via Podman (prod profile, persistent storage)
+- [ ] PgVectorStore — vector search on pgvector (currently in-memory)
 - [ ] deployment notes (Docker + compose) — also verifies cross-encoder on Linux
 - [ ] tenant isolation enforcement / API auth
 
@@ -523,6 +526,7 @@ MIT
 | [docs/EVALUATION.md](docs/EVALUATION.md) | Retrieval eval harness, rerank/hybrid sweep, findings (llm rerank can hurt) |
 | [docs/TESTING.md](docs/TESTING.md) | JUnit unit tests; how a test caught a Korean-phone PII gap |
 | [docs/VERIFICATION.md](docs/VERIFICATION.md) | How each feature was verified — unit / offline eval / curl / UI |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Postgres + pgvector via Podman, profiles, and 3 real deployment gotchas |
 | [docs/H2-CONSOLE.md](docs/H2-CONSOLE.md) | H2 web console — enable, login, SQL cookbook, prod warning |
 
 **Live (interactive) API docs**: run the app, then open [`http://localhost:8080/swagger-ui.html`](http://localhost:8080/swagger-ui.html). See [`SWAGGER-SETUP.md`](SWAGGER-SETUP.md) to enable.
