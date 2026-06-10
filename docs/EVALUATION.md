@@ -1,0 +1,104 @@
+# Evaluation Harness (검색 품질 측정)
+
+chunking / reranking / hybrid를 "느낌"이 아니라 수치로 비교하기 위한 평가 도구. 작은 정답셋(golden set)에 대해 retrieval recall을 측정한다. "측정 없이 최적화 없다."
+
+## 1. 구성
+
+```
+eval/
+├── golden.json     # 질문 + 기대 결과 (정답셋)
+└── run_eval.py     # /api/rag/ask 호출 → sources 검사 → recall 출력
+```
+
+앱 코드가 아니라 외부 보조 스크립트다. 표준 라이브러리만 쓰므로 `python3`만 있으면 된다(설치 불필요). IDE가 모듈을 못 찾는다고 표시해도 터미널 실행은 정상이다.
+
+## 2. 정답셋 (golden.json)
+
+각 케이스는 질문 + namespace + 기대 조건이다. 청크 id를 직접 박지 않고 내용으로 매칭해 유연하게 둔다.
+
+- `expectTitleContains` — 이 문자열을 제목/내용에 포함한 source가 나와야 함
+- `expectKeywords` — 나열한 키워드가 **모두**(AND) 검색된 sources에 있어야 함
+
+정답셋은 결과에 맞춰 느슨하게 바꾸지 않는다(끼워맞추기 방지). 정답셋은 고정하고, 설정을 바꿔 어느 조합이 MISS를 줄이는지 본다.
+
+## 3. 실행
+
+```bash
+# 현재 설정으로
+python3 eval/run_eval.py
+
+# 라벨 붙여서 (조합 비교 기록용)
+LABEL="recursive+llm+hybrid" python3 eval/run_eval.py
+
+# API 주소 지정
+API=http://localhost:8080 python3 eval/run_eval.py
+```
+
+출력: 케이스별 HIT/MISS + 검색된 sources + 전체 recall(%).
+
+## 4. 설정 조합 비교
+
+검색 시점 파라미터(rerank, hybrid)는 재시작 없이 요청별로 오버라이드할 수 있다(아래 5절). chunking은 인덱싱 시점이라 바꾸려면 재인덱싱이 필요하다.
+
+| 축 | 값 | 변경 시점 |
+|---|---|---|
+| rerank | none / llm / mmr / cross | 요청별 (재시작 0) |
+| hybrid | on / off | 요청별 (재시작 0) |
+| chunking | fixed / recursive / semantic | 재인덱싱 필요 |
+
+### 측정 결과 (recursive 청킹, 8 cases, 재시작 0으로 1회 실행)
+
+초기 실행은 6/8 (75%)였고 MISS는 silos, interconnected. 두 MISS의 성격을 구분해 보니 하나는 정답셋 문제, 하나는 진짜 검색 문제였다.
+
+- silos: 답변은 정확했다("functional silos block value"). 그런데 정답셋이 `["silos","fragmentation"]`를 AND로 요구했고, silos는 #3에 fragmentation은 #2에 있어 top-2로 둘 다 못 담았다. 즉 검색 실패가 아니라 정답셋 기준이 과엄격. silos는 핵심어이므로 `["silos"]`로 바로잡았다(결과에 끼워맞춘 게 아니라 올바른 기준).
+- interconnected: 답변은 그럴듯했지만 canonical 정의 청크(#8, "agentic workflows spanning functional domains")가 검색되지 않고 #22/#32가 떴다. 이건 진짜 retrieval gap이므로 기준을 완화하지 않고 MISS로 남긴다(끼워맞추기 금지).
+
+기준 수정 후 재실행:
+
+| config | recall | misses |
+|---|---|---|
+| rerank=none, hybrid=false | 7/8 (88%) | interconnected |
+| rerank=none, hybrid=true | 7/8 (88%) | interconnected |
+| rerank=llm, hybrid=true | 7/8 (88%) | interconnected |
+| rerank=mmr, hybrid=true | 7/8 (88%) | interconnected |
+
+### 해석
+
+네 조합이 여전히 동일하다(88%, 같은 MISS). rerank/hybrid는 1차 후보(FETCH_N=20) 안에서만 재정렬·보강하므로, 남은 interconnected는 후처리로 풀리는 문제가 아니다. 정의 청크가 애초에 후보에 안 들어왔거나 순위가 너무 낮다. 후처리 밖의 레버가 필요하다: FETCH_N 확대, chunking 변경(재인덱싱), 또는 쿼리 재작성.
+
+이 구분(정답셋 과엄격 vs 진짜 검색 실패)을 잡아낸 것 자체가 하니스의 가치다. 무조건 통과시키는 게 목적이 아니라 어디가 약한지 드러내는 것이다.
+
+### 통찰
+
+이 코퍼스에서 검색은 이미 천장(75%)에 가깝고, rerank/hybrid의 한계 이득은 사실상 0이었다. reranking(RERANKING.md), MMR, hybrid(HYBRID-SEARCH.md) 문서에서 개별적으로 본 "1차 검색이 강하면 후처리 이득이 작다"가 정량으로 재확인됐다. 후처리 기법은 1차 검색이 약하거나 코퍼스가 크고 노이즈가 많을 때 가치가 커진다.
+
+주의: cross는 인텔 맥에서 네이티브 부재로 폴백되므로(see RERANKING.md) 비교에서 제외하고 llm으로 측정했다.
+
+## 5. EVAL-ONLY: 요청별 오버라이드 (프로덕션 전 제거)
+
+평가를 재시작 없이 빠르게 돌리려고, `/api/rag/ask`가 요청 본문으로 `rerank`/`hybrid`를 받아 그 요청에만 적용하도록 했다.
+
+```json
+{ "question": "...", "namespace": "...", "rerank": "llm", "hybrid": false }
+```
+
+이 오버라이드는 **평가 전용**이다. 프로덕션에서 외부 요청이 검색 전략을 마음대로 바꾸면 일관성·보안 문제가 된다. 그래서:
+
+- 관련 코드에는 `// EVAL-ONLY` 주석을 달았다. 정리할 때 한 번에 찾는다:
+  ```bash
+  grep -rn "EVAL-ONLY" src/
+  ```
+- 프로덕션 전 처리: 오버라이드 필드/분기를 제거하거나, 평가 프로필에서만 허용하도록 잠근다(예: dev/demo 프로필 또는 내부 헤더 게이트).
+- 제거해도 기본 동작은 그대로다. 오버라이드가 null이면 설정값(`rerank.strategy`, `retrieval.hybrid.enabled`)을 쓰기 때문이다.
+
+영향 받는 위치(대략):
+- `dto/AskRequest` — `rerank`, `hybrid` 필드
+- `RagService.ask(...)` — 오버라이드 인자 분기
+- `HybridRetriever.search(..., hybridOverride)` — 오버라이드 파라미터
+- `RagController` — 요청 필드 전달
+
+## 6. 다음 단계
+
+- 답변 정확도(생성 품질) 측정 추가 — 답에 기대 키워드 포함 여부. 지금은 retrieval recall만.
+- 조합 자동 루프 — run_eval.py가 rerank x hybrid 조합을 요청 오버라이드로 한 번에 돌려 표 출력.
+- 정답셋 확장 — 케이스 수를 늘려 통계적 신뢰도 확보.

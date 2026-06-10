@@ -1,0 +1,58 @@
+[
+  {
+    "id": "rag-def",
+    "question": "What is retrieval-augmented generation?",
+    "namespace": "default",
+    "expectTitleContains": "Retrieval-augmented generation",
+    "note": "semantic — vector should nail this"
+  },
+  {
+    "id": "vectordb-def",
+    "question": "What is a vector database used for?",
+    "namespace": "default",
+    "expectTitleContains": "Vector database",
+    "note": "semantic"
+  },
+  {
+    "id": "invoice-number",
+    "question": "INV-2026-0042",
+    "namespace": "default",
+    "expectTitleContains": "invoice",
+    "note": "exact token — BM25/hybrid should win"
+  },
+  {
+    "id": "invoice-total",
+    "question": "What is the total amount on the invoice?",
+    "namespace": "default",
+    "expectKeywords": ["852"],
+    "note": "OCR-grounded number"
+  },
+  {
+    "id": "silos",
+    "question": "Why do companies struggle to get value from their AI investments?",
+    "namespace": "IBM-blueprint-for-agentic-opeation",
+    "expectKeywords": ["silos"],
+    "note": "vocabulary mismatch — no 'silos' in question"
+  },
+  {
+    "id": "energy-twin",
+    "question": "What digital twin capability do energy companies value most?",
+    "namespace": "IBM-blueprint-for-agentic-opeation",
+    "expectKeywords": ["optimization recommendations"],
+    "note": "specific fact in one chunk"
+  },
+  {
+    "id": "interconnected",
+    "question": "What is the interconnected enterprise?",
+    "namespace": "IBM-blueprint-for-agentic-opeation",
+    "expectKeywords": ["agentic workflows", "functional domains"],
+    "note": "core concept, semantic"
+  },
+  {
+    "id": "pods",
+    "question": "What is a cross-disciplinary pod?",
+    "namespace": "IBM-blueprint-for-agentic-opeation",
+    "expectKeywords": ["specialists", "workflow"],
+    "note": "definition deep in the doc"
+  }
+]

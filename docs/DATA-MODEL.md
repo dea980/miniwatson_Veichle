@@ -341,3 +341,35 @@ import jakarta.annotation.PostConstruct;   // O
 ```
 
 교훈: 콜백/어노테이션이 "조용히 안 도는" 증상이면 javax vs jakarta 네임스페이스부터 의심한다. (기존에 잘 돌던 VectorIndex.hydrate는 jakarta로 import돼 있었다.)
+
+---
+
+## 12. OLTP vs OLAP — 저장소 선택의 기준
+
+MiniWatson은 두 종류의 저장소를 쓴다. 왜 하나로 안 하고 나누는지의 근거가 OLTP/OLAP 구분이다.
+
+### 정의
+
+- OLTP (Online Transaction Processing): 행 단위의 잦은 읽기/쓰기. 주문, 로그 적재, 단건 조회. 정합성·낮은 지연이 중요. 예: Postgres, H2.
+- OLAP (Online Analytical Processing): 대량 행을 집계·스캔하는 분석 쿼리. 리포팅, 추세 분석. 컬럼형 저장 + 압축이 중요. 예: Parquet/lakehouse, Redshift, BigQuery, Snowflake.
+
+### 장단점
+
+| 구분 | OLTP (행 지향) | OLAP (열 지향) |
+|---|---|---|
+| 강점 | 단건 insert/update/조회 빠름, 트랜잭션·정합성 | 대량 집계·스캔 빠름, 높은 압축률 |
+| 약점 | 대량 분석 스캔 느림, 압축 낮음 | 단건 쓰기 느리고 비쌈, 트랜잭션 약함 |
+| 적합 | 감사 로그 적재, 카탈로그, 실시간 조회 | 기간별 집계, BI, 대규모 추세 |
+
+### MiniWatson의 적용
+
+- query_log(감사), document_catalog(메타) -> H2/Postgres (OLTP). 호출마다 행 하나씩 insert되고 단건/소량 조회가 많다. 행 지향이 맞다.
+- Article + embedding(콜드 티어) -> Parquet (OLAP/lakehouse). 대량 벡터를 압축 저장하고 스캔한다. 열 지향이 맞다. watsonx.data가 Parquet을 native 포맷으로 쓰는 이유와 같다.
+
+즉 tiered storage(10절)의 hot/cold 분리는 사실상 OLTP(JSON/H2 hot)와 OLAP(Parquet cold)의 분리이기도 하다.
+
+### 규모가 커지면
+
+감사 로그가 수억 건이 되면, 운영 DB(OLTP)에서 받되 장기 보관·대규모 분석은 웨어하우스(OLAP: Redshift/BigQuery/Snowflake)나 lakehouse로 ETL해 옮긴다. Redshift 같은 웨어하우스에 행을 하나씩 insert하는 것은 안티패턴이다(배치 적재·대량 스캔에 최적화돼 있어 단건 쓰기가 느리고 비싸다). 현재 규모에서는 불필요하므로 도입하지 않는다 — 개념만 남긴다.
+
+교훈: "한 DB로 다 하려" 하지 말고, 워크로드(트랜잭션 vs 분석)에 맞는 저장소를 고른다. 잘못 고르면(예: 로그를 웨어하우스에 단건 insert) 느리고 비싸진다.
