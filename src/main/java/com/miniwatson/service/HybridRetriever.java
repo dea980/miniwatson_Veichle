@@ -26,8 +26,14 @@ public class HybridRetriever {
         this.keywordIndex = keywordIndex;
         this.hybridEnabled = hybridEnabled;
     }
+    /** 기본 설정 사용. */
+    public List<Article> search(String ns, List<Float>queryEmbedding, String queryText, int topN){
+        return search(ns, queryEmbedding, queryText, topN, null);
+    }
+    /** hybridOverride != null 이면 그 값으로 (EVAL-ONLY 경로에서 사용). */
+    public List<Article> search(String ns, List<Float> queryEmbedding, String queryText, int topN, Boolean hybridOverride) {
 
-    public List<Article> search(String ns, List<Float> queryEmbedding, String queryText, int topN) {
+        boolean useHybrid = (hybridOverride != null) ? hybridOverride : hybridEnabled;
         List<Article> vec = vectorIndex.search(ns, queryEmbedding, topN);
         if (!hybridEnabled) return vec;
 

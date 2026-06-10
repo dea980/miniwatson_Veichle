@@ -9,4 +9,8 @@ public class AskRequest {
     private String namespace;
     // 선택: 사용할 chat model (없으면 서버 기본 모델)
     private String model;
+    // Eval-Only 검색 전략 요청별 오버라이드 (평가용)
+    private String rerank;
+    private Boolean hybrid;
+
 }

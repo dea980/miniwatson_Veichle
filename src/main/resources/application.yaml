@@ -38,3 +38,7 @@ vector:
   index:
     lsh:
       enabled: false
+
+eval:
+  overrides:
+    enabled: ${EVAL_OVERRIDES:true} # dev/demo = true , prod = false

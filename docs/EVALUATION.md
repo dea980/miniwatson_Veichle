@@ -50,29 +50,40 @@ API=http://localhost:8080 python3 eval/run_eval.py
 
 초기 실행은 6/8 (75%)였고 MISS는 silos, interconnected. 두 MISS의 성격을 구분해 보니 하나는 정답셋 문제, 하나는 진짜 검색 문제였다.
 
-- silos: 답변은 정확했다("functional silos block value"). 그런데 정답셋이 `["silos","fragmentation"]`를 AND로 요구했고, silos는 #3에 fragmentation은 #2에 있어 top-2로 둘 다 못 담았다. 즉 검색 실패가 아니라 정답셋 기준이 과엄격. silos는 핵심어이므로 `["silos"]`로 바로잡았다(결과에 끼워맞춘 게 아니라 올바른 기준).
-- interconnected: 답변은 그럴듯했지만 canonical 정의 청크(#8, "agentic workflows spanning functional domains")가 검색되지 않고 #22/#32가 떴다. 이건 진짜 retrieval gap이므로 기준을 완화하지 않고 MISS로 남긴다(끼워맞추기 금지).
+- silos: 답변은 정확했다("functional silos block value"). 정답셋이 `["silos","fragmentation"]`를 AND로 요구했는데 두 단어가 다른 청크에 있어 top-2로 못 담았다. 검색 실패가 아니라 정답셋 과엄격. 핵심어 `["silos"]`로 바로잡았다.
 
-기준 수정 후 재실행:
+### 중요한 함정: 측정 변수가 실제로 적용되는지부터 검증하라
+
+처음 조합 비교에서 네 조합이 전부 동일한 결과(75%, 이후 88%)였다. "후처리 이득 0"이라고 결론냈는데 — 사실은 **요청별 rerank/hybrid 오버라이드가 RagService까지 배선되지 않아, 4조합이 전부 같은 기본 설정으로 돌고 있었다.** 같은 걸 4번 측정한 셈.
+
+오버라이드를 끝까지 엮은 뒤(AskRequest -> RagController -> RagService -> HybridRetriever, evalOverrides 게이트) 재측정하니 조합이 실제로 갈렸다. (ill-posed였던 interconnected를 변별력 있는 dismantling-boundaries로 교체한 최종 8케이스 기준:)
 
 | config | recall | misses |
 |---|---|---|
-| rerank=none, hybrid=false | 7/8 (88%) | interconnected |
-| rerank=none, hybrid=true | 7/8 (88%) | interconnected |
-| rerank=llm, hybrid=true | 7/8 (88%) | interconnected |
-| rerank=mmr, hybrid=true | 7/8 (88%) | interconnected |
+| rerank=none, hybrid=false | 8/8 (100%) | - |
+| rerank=none, hybrid=true | 8/8 (100%) | - |
+| rerank=llm, hybrid=true | 7/8 (88%) | pods |
+| rerank=mmr, hybrid=true | 8/8 (100%) | - |
 
-### 해석
+교훈: 비교 결과가 전부 동일하면 "차이가 없다"가 아니라 "변수가 안 먹는 것 아닌가"부터 의심한다. 측정 도구 자체의 검증이 먼저다.
 
-네 조합이 여전히 동일하다(88%, 같은 MISS). rerank/hybrid는 1차 후보(FETCH_N=20) 안에서만 재정렬·보강하므로, 남은 interconnected는 후처리로 풀리는 문제가 아니다. 정의 청크가 애초에 후보에 안 들어왔거나 순위가 너무 낮다. 후처리 밖의 레버가 필요하다: FETCH_N 확대, chunking 변경(재인덱싱), 또는 쿼리 재작성.
+### 발견 1: LLM rerank가 recall을 깎을 수 있다
 
-이 구분(정답셋 과엄격 vs 진짜 검색 실패)을 잡아낸 것 자체가 하니스의 가치다. 무조건 통과시키는 게 목적이 아니라 어디가 약한지 드러내는 것이다.
+none/mmr은 8/8(100%)인데 llm만 7/8로 떨어졌다(pods 탈락). LLM 재정렬이 정답이던 pods 청크를 top-2 밖으로 밀어냈다. rerank는 항상 +가 아니다 — 1차 검색이 이미 맞게 뽑은 결과를 후처리가 망칠 수 있다. 이 코퍼스에선 best 조합이 단순 벡터(none) 또는 mmr이고, llm rerank는 역효과였다. "무조건 rerank를 붙이지 말고 측정해서 판단한다"의 근거.
+
+### 발견 2: ubiquitous-term query는 retrieval로 못 잡는다 (interconnected)
+
+interconnected("What is the interconnected enterprise?")는 모든 조합에서 MISS였다. 본문 정확 표현("agentic workflows spanning functional domains")으로 직접 검색해도 정의 청크가 안 떴다.
+
+원인: 이 문서는 101청크 전체가 agentic workflows 주제다. "agentic", "workflows", "functional" 같은 단어가 거의 모든 청크에 있어 BM25 IDF가 0에 가깝고(변별력 없음), 벡터도 모든 청크가 비슷해 정의 청크가 도드라지지 않는다. 즉 질의어가 코퍼스 전체에 깔려 있으면(저 IDF + 낮은 의미 대비) rerank/hybrid/쿼리재작성 무엇으로도 그 청크를 집어낼 수 없다. "문서 전체가 답"인 질문은 retrieval로 답할 종류가 아니다.
+
+이 케이스는 평가용으로 부적절했으므로, 더 변별력 있는 질문(dismantling-boundaries, "61%"라는 고유 수치)으로 교체했다. interconnected를 억지로 통과시키지 않고, 왜 부적절했는지를 기록으로 남긴다.
 
 ### 통찰
 
-이 코퍼스에서 검색은 이미 천장(75%)에 가깝고, rerank/hybrid의 한계 이득은 사실상 0이었다. reranking(RERANKING.md), MMR, hybrid(HYBRID-SEARCH.md) 문서에서 개별적으로 본 "1차 검색이 강하면 후처리 이득이 작다"가 정량으로 재확인됐다. 후처리 기법은 1차 검색이 약하거나 코퍼스가 크고 노이즈가 많을 때 가치가 커진다.
+이 코퍼스에서 1차 검색은 이미 강해서 rerank/hybrid의 한계 이득이 작거나 오히려 음수(llm)였다. 후처리 기법은 1차 검색이 약하거나 코퍼스가 크고 노이즈가 많을 때 가치가 커진다. 그리고 어떤 질의(ubiquitous-term)는 후처리 이전에 retrieval 자체의 한계다.
 
-주의: cross는 인텔 맥에서 네이티브 부재로 폴백되므로(see RERANKING.md) 비교에서 제외하고 llm으로 측정했다.
+주의: cross는 인텔 맥에서 네이티브 부재로 폴백되므로(see RERANKING.md) 비교에서 제외했다.
 
 ## 5. EVAL-ONLY: 요청별 오버라이드 (프로덕션 전 제거)
 

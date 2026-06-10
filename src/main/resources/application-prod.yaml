@@ -11,3 +11,6 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  eval:
+    overrides:
+      enabled: ${EVAL_OVERRIDES:false}

@@ -27,7 +27,12 @@ public class RagController {
     /** Ask a RAG question. Body may include optional namespace + model. */
     @PostMapping("/ask")
     public RagService.RagResult ask(@RequestBody AskRequest request) throws IOException {
-        return ragService.ask(request.getQuestion(), request.getNamespace(), request.getModel());
+        return ragService.ask(
+                            request.getQuestion(),
+                            request.getNamespace(),
+                            request.getModel(),
+                            request.getRerank(), // EVAL-ONLY
+                            request.getHybrid()); //EVAL-ONLY
     }
 
     /** Multi-LLM: list selectable chat models and the default. */

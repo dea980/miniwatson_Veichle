@@ -27,7 +27,12 @@ public class RagService {
     private static final int TOP_K = 2; // LLM 에 최종 전달
     private static final int FETCH_N = 20;   // rerank 후보군 (1차 검색)
     private static final String DEFAULT_NS = "default";
-    private final Reranker reranker;
+    private final Map<String, Reranker> rerankers; //요청키로  고르기 위해 보관
+
+    private final Reranker reranker; //기본
+
+    @Value("${eval.overrides.enabled:false}")
+    private boolean evalOverrides;
     public RagService(EmbeddingService embeddingService,
                       HybridRetriever hybridRetriever,
                       OllamaService ollamaService,
@@ -36,12 +41,17 @@ public class RagService {
         this.embeddingService = embeddingService;
         this.hybridRetriever = hybridRetriever;
         this.ollamaService = ollamaService;
+        this.rerankers = rerankers;
         this.reranker = rerankers.getOrDefault(strategy, rerankers.get("llm")); // 추가
     }
 
     /** Backward-compatible entry point: default namespace, default chat model. */
     public RagResult ask(String question) throws IOException {
-        return ask(question, DEFAULT_NS, null);
+        return ask(question, DEFAULT_NS, null, null, null);
+    }
+
+    public RagResult ask(String question, String namespace, String model) throws IOException{
+        return ask(question, namespace, model, null,null);
     }
 
     /**
@@ -51,16 +61,27 @@ public class RagService {
      * @param namespace tenant / collection to retrieve from (null/blank → "default")
      * @param model     chat model override (null/blank → configured default)
      */
-    public RagResult ask(String question, String namespace, String model) throws IOException {
+    public RagResult ask(String question, String namespace, String model, String rerankOverride, Boolean hybridOverride) throws IOException {
         String ns = (namespace == null || namespace.isBlank()) ? DEFAULT_NS : namespace;
+        // 평가를 위한 게이트
+        Reranker rr = reranker;
+        Boolean hy = null;
+        if (evalOverrides){
+            if (rerankOverride != null && rerankers.containsKey(rerankOverride)){
+                rr = rerankers.get(rerankOverride);
+            }
+            hy = hybridOverride;
+        }
+
         log.info("RAG question (ns={}, model={}): {}", ns, model == null ? "default" : model, question);
 
         List<Float> questionEmbedding = embeddingService.embed("search_query: " + question);
-        List<Article> candidates = hybridRetriever.search(ns, questionEmbedding, question, FETCH_N);
-        if (candidates.isEmpty()) throw new RuntimeException("No articles ...");
+        List<Article> candidates = hybridRetriever.search(ns, questionEmbedding, question, FETCH_N, hy);
+        if (candidates.isEmpty()) throw new RuntimeException("No articles in knowledge base for namespace '" + ns + "'.");
         // Sub-linear retrieval via the in-memory vector index (LSH + exact fallback).
         //List<Article> topArticles = vectorIndex.search(ns, questionEmbedding, TOP_K);
-        List<Article> topArticles = reranker.rerank(question, candidates, TOP_K);   // 재정렬
+        List<Article> topArticles = rr.rerank(question, candidates, TOP_K);   // 재정렬
+
         if (topArticles.isEmpty()) {
             throw new RuntimeException("No articles in knowledge base for namespace '" + ns + "'.");
         }

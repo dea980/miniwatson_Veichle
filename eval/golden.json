@@ -42,11 +42,11 @@
     "note": "specific fact in one chunk"
   },
   {
-    "id": "interconnected",
-    "question": "What is the interconnected enterprise?",
+    "id": "dismantling-boundaries",
+    "question": "What share of executives are actively dismantling functional boundaries?",
     "namespace": "IBM-blueprint-for-agentic-opeation",
-    "expectKeywords": ["agentic workflows", "functional domains"],
-    "note": "core concept, semantic"
+    "expectKeywords": ["61%"],
+    "note": "discriminative fact (replaces ill-posed 'interconnected' — that query's terms were ubiquitous across the doc, see EVALUATION.md)"
   },
   {
     "id": "pods",

@@ -11,3 +11,7 @@ spring:
   h2:
     console:
       enabled: true
+
+  eval:
+    overrides:
+      enabled: ${EVAL_OVERRIDES:true}
