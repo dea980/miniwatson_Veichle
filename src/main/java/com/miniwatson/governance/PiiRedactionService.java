@@ -14,7 +14,7 @@ public class PiiRedactionService {
         put("[CARD]", Pattern.compile("\\b(?:\\d[ -]?){13,16}\\b"));
         put("[SSN]",   Pattern.compile("\\b\\d{3}-\\d{2}-\\d{4}\\b"));
         put("[EMAIL]", Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"));
-        put("[PHONE]", Pattern.compile("\\b(?:\\+?\\d{1,2}[ -]?)?(?:\\(?\\d{3}\\)?[ -]?)\\d{3}[ -]?\\d{4}\\b"));
+        put("[PHONE]", Pattern.compile("\\b\\d{2,4}[ -]\\d{3,4}[ -]\\d{4}\\b"));
     }};
 
     public Redaction redact(String text){
