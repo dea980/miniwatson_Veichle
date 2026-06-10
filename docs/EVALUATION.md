@@ -21,6 +21,28 @@ eval/
 
 정답셋은 결과에 맞춰 느슨하게 바꾸지 않는다(끼워맞추기 방지). 정답셋은 고정하고, 설정을 바꿔 어느 조합이 MISS를 줄이는지 본다.
 
+### 케이스를 왜 이렇게 골랐나 (설계 의도)
+
+골든셋은 "쉬운 질문 모음"이 아니라, 검색·생성의 서로 다른 능력과 알려진 약점을 의도적으로 겨냥한 묶음이다. 각 category가 노리는 것:
+
+| category | 노리는 것 (왜 넣었나) | 예시 케이스 |
+|---|---|---|
+| semantic | 의미 검색의 기본기. 벡터가 강해야 하는 질의 | rag-def, vectordb-def, wiki-def |
+| lexical | 정확 토큰(ID/코드). 벡터가 약하고 BM25가 강한 영역 — 하이브리드의 존재 이유 | invoice-number(INV-2026-0042) |
+| ocr-fact | OCR로 추출한 정확 숫자/필드. 멀티모달 grounding 검증 | invoice-total($852.50), bill-to(Acme), ocr-line-item($240) |
+| vocab-mismatch | 답의 핵심어가 질문에 없음. 어휘 일치에 기대지 않고 의미를 잡는지 | silos, fragmentation-cause |
+| discriminative-number | 희귀 토큰(82%, 61%, 5.4x). 변별력 있는 사실 검색. 5.4x는 ubiquitous-term이라 일부러 약점 추적용 | silos-stat, dismantling-boundaries, adoption-multiplier |
+| specific-fact | 문서 깊은 곳의 단일 사실 | energy-twin, cross-domain-leadership(79%) |
+| definition | 본문 깊숙한 정의를 정확히 끌어오는지 | pods |
+| reasoning | 패러프레이즈·부정·다중 사실 종합. 단순 매칭으로 안 되는 것 | rag-vs-finetune, negation-trap, multi-fact |
+| refusal | 근거가 없을 때 confident 오답 대신 "모른다"고 하는지(hallucination 억제). 테넌트 격리도 포함 | out-of-scope(프랑스 수도), wrong-namespace |
+
+핵심 원칙:
+- 일부러 어려운 유형(vocab-mismatch, reasoning, refusal)을 넣어 "쉬운 질문만 통과"하는 착시를 막는다.
+- 알려진 약점(5.4x 같은 ubiquitous-term)을 케이스로 박아 회귀를 추적한다.
+- refusal 케이스는 retrieval recall로는 평가할 수 없고(정답 청크가 없음) LLM-as-judge로만 의미가 있다 — "근거 없음"을 잘 말하는지가 점수.
+- 일부 expectKeywords(79%, 240 등)는 코퍼스에서 본 것 기반이나 100% 확신은 아니다. MISS가 나면 silos 사례처럼 "정답셋 오류 vs 진짜 검색 실패"를 먼저 가린다.
+
 ## 3. 실행
 
 ```bash
@@ -84,6 +106,32 @@ interconnected("What is the interconnected enterprise?")는 모든 조합에서 
 이 코퍼스에서 1차 검색은 이미 강해서 rerank/hybrid의 한계 이득이 작거나 오히려 음수(llm)였다. 후처리 기법은 1차 검색이 약하거나 코퍼스가 크고 노이즈가 많을 때 가치가 커진다. 그리고 어떤 질의(ubiquitous-term)는 후처리 이전에 retrieval 자체의 한계다.
 
 주의: cross는 인텔 맥에서 네이티브 부재로 폴백되므로(see RERANKING.md) 비교에서 제외했다.
+
+### 확장 측정 (20 cases, recall + LLM-as-judge)
+
+케이스를 8개 카테고리 20개로 늘려 재측정했다.
+
+Retrieval recall:
+
+| config | recall | misses |
+|---|---|---|
+| rerank=none, hybrid=false | 20/20 (100%) | - |
+| rerank=none, hybrid=true | 20/20 (100%) | - |
+| rerank=llm, hybrid=true | 17/20 (85%) | pods, negation-trap, multi-fact |
+| rerank=mmr, hybrid=true | 20/20 (100%) | - |
+
+Answer quality (LLM-as-judge, granite4, 기본 설정): 평균 4.90 / 5. 20개 중 19개가 5점, invoice-number만 3점.
+
+발견:
+- best = none 또는 mmr(recall 100%). llm rerank는 recall을 85%로 깎았다(pods·negation-trap·multi-fact를 top-K 밖으로 밀어냄). 케이스를 늘릴수록 llm rerank의 역효과가 더 선명해졌다 — "무조건 rerank를 붙이지 않는다"의 정량 근거.
+- refusal 검증 성공: out-of-scope("프랑스 수도")와 wrong-namespace(타 테넌트의 invoice 질의) 둘 다 judge 5점. 근거가 없을 때 confident 오답을 만들지 않고 "모른다/근거 없음"으로 답했다. hallucination 억제 + 테넌트 격리가 생성 단에서도 확인됐다.
+- invoice-number(3점): 질의가 "INV-2026-0042" 토큰뿐이라 무엇을 답할지 모호했고, 답변 품질이 낮게 채점됐다. retrieval은 HIT(invoice 청크를 찾음)지만 generation은 약했던 케이스 — 두 축을 따로 보는 이유.
+
+### LLM-as-judge의 한계 (정직하게)
+
+- 자기 채점 편향: 답변과 채점을 같은 계열(로컬 Ollama)로 하면 점수가 후하게 나오는 경향이 있다(평균 4.90이 그 영향일 수 있다). 절대 점수보다 설정 간 상대 비교에 쓰는 게 안전하다.
+- 작은 로컬 judge 모델은 노이즈가 있다. 숫자만 강제(num_predict 작게)하고 파싱을 견고하게 했지만, 동점이 많아 변별력이 낮을 수 있다.
+- 더 엄밀하려면 더 강한 judge 모델, 다중 judge 합의, 사람 라벨과의 상관 검증이 필요하다.
 
 ## 5. EVAL-ONLY: 요청별 오버라이드 (프로덕션 전 제거)
 
