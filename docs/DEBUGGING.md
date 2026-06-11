@@ -7,13 +7,13 @@
 ## 0. 30초 진단 트리
 
 ```
-앱이 안 뜸 ─────────► §1 Boot Failures
-앱은 떴는데 /api/hello 가 응답 안 함 ─► §2 Network / Port
-ingest 가 실패 ─────────────────────► §3 Ingestion Failures
-RAG 답이 이상하거나 느림 ────────────► §4 LLM / Embedding
-Parquet 파일 관련 에러 ───────────────► §6 Parquet
-governance log가 안 쌓임 ─────────────► §7 H2 / JPA
-원인 모름 ────────────────────────────► §8 Observation Toolkit
+앱이 안 뜸 ─────────► 1 Boot Failures
+앱은 떴는데 /api/rag/models 가 응답 안 함 ─► 2 Network / Port
+ingest 가 실패 ─────────────────────► 3 Ingestion Failures
+RAG 답이 이상하거나 느림 ────────────► 4 LLM / Embedding
+Parquet 파일 관련 에러 ───────────────► 6 Parquet
+governance log가 안 쌓임 ─────────────► 7 H2 / JPA
+원인 모름 ────────────────────────────► 8 Observation Toolkit
 ```
 
 ---
@@ -69,7 +69,7 @@ SERVER_PORT=8081 ./mvnw spring-boot:run
 
 ## 2. Network / Port
 
-### 2.1 `/api/hello` curl이 멈춤
+### 2.1 `/api/rag/models` curl이 멈춤
 - 앱이 진짜 떴는지 로그 확인 (`Started MiniwatsonApplication in X seconds`).
 - 다른 인터페이스에서 listen 중일 수도: `lsof -nP -iTCP:8080 -sTCP:LISTEN`.
 
@@ -110,13 +110,13 @@ find . -name "articles.parquet" -type f
 
 **확인**:
 ```java
-public static class ContentUrls { ... }   // ⭐ static
-public static class Desktop     { ... }   // ⭐ static
+public static class ContentUrls { ... }   // static
+public static class Desktop     { ... }   // static
 ```
 
 ### 3.5 batch ingest가 중간에 멈춤
 - 각 article은 try-catch로 격리되어 있어 한 건 실패해도 다음 진행 (`DataController.ingestBatch`).
-- 그래도 멈춘다면 Ollama embedding 호출이 hang일 가능성 — §4.4 참조.
+- 그래도 멈춘다면 Ollama embedding 호출이 hang일 가능성 — 4.4 참조.
 
 ---
 
@@ -191,7 +191,7 @@ OLLAMA_NUM_PREDICT=1500 ./mvnw spring-boot:run
 - Parquet 1.14에서 reader의 withDataModel은 deprecated/NPE. writer만 사용.
 
 ### 5.7 `pom.xml` `-Djava.security.manager=allow`
-- Java 21 + Hadoop 호환. 빼면 부팅 실패 (§1.1).
+- Java 21 + Hadoop 호환. 빼면 부팅 실패 (1.1).
 
 ### 5.8 `application.yaml` 의 `OLLAMA_*` env override
 - 코드에 모델명/URL 박혀 있지 않음. 변경 시 `@Value` 키 일치 확인.
@@ -313,7 +313,7 @@ parquet-tools meta ./data/articles.parquet  # SNAPPY 압축 통계
 
 | 증상 | 가장 흔한 원인 |
 |---|---|
-| `/api/hello` 자체가 응답 없음 | 앱이 떠 있지 않거나 다른 포트 |
+| `/api/rag/models` 자체가 응답 없음 | 앱이 떠 있지 않거나 다른 포트 |
 | ingest 403 | User-Agent 미설정 (코드 회귀) |
 | ingest 404 | title 오타 / 대소문자 |
 | RAG 답이 잘리거나 짧음 | `num_predict` 부족 또는 `think:true` 회귀 |

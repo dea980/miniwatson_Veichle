@@ -130,15 +130,16 @@ public class DataController {
 }
 ```
 
-Repeat the same `@Tag` + `@Operation` pattern on `RagController` and `AuditController`.
+Repeat the same `@Tag` + `@Operation` pattern on `RagController`, `GovernanceController`, and `MultimodalController`.
 
 Suggested tag names:
 
-| Controller         | Tag                 | Description                                   |
-|--------------------|---------------------|-----------------------------------------------|
-| `DataController`   | "Data Ingestion"    | Wikipedia → embedding → Parquet                |
-| `RagController`    | "RAG"               | Retrieval-augmented generation                 |
-| `AuditController`  | "Governance"        | Audit log for every RAG call (watsonx parity)  |
+| Controller             | Tag                 | Description                                       |
+|------------------------|---------------------|---------------------------------------------------|
+| `DataController`       | "Data Ingestion"    | Ingest → chunk → embed → index                    |
+| `RagController`        | "RAG"               | Retrieval-augmented generation                    |
+| `GovernanceController` | "Governance"        | Audit logs, stats, feedback for every RAG call    |
+| `MultimodalController` | "Multimodal"        | OCR + vision ingest/ask                           |
 
 ---
 

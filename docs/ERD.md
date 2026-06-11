@@ -25,13 +25,17 @@
 │         Article  (Parquet)               │         │       QueryLog  (H2 query_log)       │
 │         miniwatson.schema.Article        │         │       JPA @Entity                    │
 ├──────────────────────────────────────────┤         ├──────────────────────────────────────┤
-│ PK id           long                     │         │ PK id           BIGINT IDENTITY      │
-│    title        string                   │         │    question     TEXT                 │
-│    summary      string                   │         │    answer       TEXT                 │
-│    url          string                   │         │    model        VARCHAR              │
-│    ingestedAt   string (ISO-8601)        │         │    latencyMs    BIGINT               │
-│    embedding    array<float> (768)       │         │    createdAt    TIMESTAMP (@PrePersist)
-└──────────────────────────────────────────┘         └──────────────────────────────────────┘
+│ PK id           long                     │         │ PK id              BIGINT IDENTITY   │
+│    namespace    string (multi-tenant)    │         │    question        TEXT (@Lob)       │
+│    title        string                   │         │    answer          TEXT (@Lob)       │
+│    summary      string                   │         │    model           VARCHAR          │
+│    url          string                   │         │    latencyMs       BIGINT           │
+│    ingestedAt   string (ISO-8601)        │         │    createdAt       TIMESTAMP (@PrePersist)
+│    embedding    array<float> (768)       │         │    sources         TEXT             │
+└──────────────────────────────────────────┘         │    feedback        VARCHAR          │
+                  │                                   │    piiCount        INTEGER          │
+                  │                                   │    augmentedPrompt CLOB (@Lob)      │
+                  │                                   └──────────────────────────────────────┘
                   │                                                  ▲
                   │ (referenced indirectly:                          │
                   │  RagResult.sources contains Articles             │
@@ -39,6 +43,20 @@
                   │  logged in QueryLog. No FK enforced — they       │
                   │  live in different stores.)                      │
                   └─────────────────── logical link ─────────────────┘
+
+┌──────────────────────────────────────────┐
+│   DocumentCatalog  (H2 document_catalog)  │
+│   JPA @Entity — catalog/data 분리         │
+├──────────────────────────────────────────┤
+│ PK id           BIGINT IDENTITY          │
+│    title        VARCHAR (baseTitle)      │
+│    namespace    VARCHAR (tenant)         │
+│    sourceType   VARCHAR (wikipedia/...)  │
+│    chunks       INTEGER                  │
+│    embedModel   VARCHAR                  │
+│    ingestedAt   TIMESTAMP                │
+└──────────────────────────────────────────┘
+(Article 청크들의 문서 단위 메타데이터 미러. Parquet이 진실, 이 카탈로그는 파생 뷰.)
 ```
 
 **FK는 강제하지 않음**. Parquet과 H2는 물리적으로 분리. `QueryLog.question` 안의 prompt를 파싱하면 어떤 Article을 인용했는지 추론은 가능하지만, 명시적 join 키는 없음. (확장 후보: `QueryLog.sourceArticleIds VARCHAR` 또는 별도 `query_log_source` junction 테이블.)
@@ -99,25 +117,45 @@ JPA가 `QueryLog` 어노테이션 기반으로 다음과 동치인 DDL을 생성
 
 ```sql
 CREATE TABLE query_log (
-    id         BIGINT       IDENTITY PRIMARY KEY,
-    question   CLOB         NULL,      -- @Column(columnDefinition="TEXT") → H2 CLOB
-    answer     CLOB         NULL,
-    model      VARCHAR(255) NULL,
-    latency_ms BIGINT       NULL,
-    created_at TIMESTAMP    NULL
+    id               BIGINT       IDENTITY PRIMARY KEY,
+    question         CLOB         NULL,      -- @Column(columnDefinition="TEXT") → H2 CLOB
+    answer           CLOB         NULL,      -- @Column(columnDefinition="TEXT")
+    model            VARCHAR(255) NULL,
+    latency_ms       BIGINT       NULL,
+    created_at       TIMESTAMP    NULL,
+    sources          CLOB         NULL,      -- @Column(columnDefinition="TEXT") provenance
+    feedback         VARCHAR(255) NULL,      -- "up" | "down" | null
+    pii_count        INTEGER      NOT NULL,  -- int (primitive) → NOT NULL
+    augmented_prompt CLOB         NULL       -- @Lob
 );
 ```
 
-JPA naming: `latencyMs` → `latency_ms`, `createdAt` → `created_at` (Spring physical naming 기본).
+JPA naming: `latencyMs` → `latency_ms`, `createdAt` → `created_at`, `piiCount` → `pii_count`, `augmentedPrompt` → `augmented_prompt` (Spring physical naming 기본).
+
+`DocumentCatalog` 엔티티도 같은 governance 데이터소스에 자동 생성됨 (catalog/data 분리 — Article 청크의 문서 단위 메타 미러):
+
+```sql
+CREATE TABLE document_catalog (
+    id          BIGINT       IDENTITY PRIMARY KEY,
+    title       VARCHAR(255) NULL,      -- baseTitle (청크 번호 제거)
+    namespace   VARCHAR(255) NULL,      -- tenant
+    source_type VARCHAR(255) NULL,      -- wikipedia / image / file
+    chunks      INTEGER      NOT NULL,  -- int (primitive) → NOT NULL
+    embed_model VARCHAR(255) NULL,      -- ingest 시점 임베더
+    ingested_at TIMESTAMP    NULL
+);
+```
+
+JPA naming: `sourceType` → `source_type`, `embedModel` → `embed_model`, `ingestedAt` → `ingested_at`.
 
 ### 4.2 Profile 별 동작
 | Profile | datasource URL | ddl-auto | 재시작 후 데이터 |
 |---|---|---|---|
 | `dev` (기본) | `jdbc:h2:mem:miniwatson` | `create-drop` | **사라짐** |
 | `demo` | `jdbc:h2:file:./data/miniwatson;AUTO_SERVER=TRUE` | `update` | 유지 |
-| `prod` | `${DATABASE_URL}` (PostgreSQL 예상) | `validate` | 유지, 스키마 변경 금지 |
+| `prod` | `${DATABASE_URL}` (PostgreSQL) | `update` | 유지 (현재 update — 처음엔 테이블 자동 생성용) |
 
-> ⚠️ `application-dev.yaml` 의 들여쓰기에 한 줄 미묘한 오타 (`hibernate:`/`ddl-auto: create-drop` 같은 라인 들여쓰기). 현재는 동작하나 PR 시 정리 권장.
+> 주의: `application-dev.yaml` 의 들여쓰기에 한 줄 미묘한 오타 (`hibernate:`/`ddl-auto: create-drop` 같은 라인 들여쓰기). 현재는 동작하나 PR 시 정리 권장.
 
 ### 4.3 H2 콘솔
 `dev` / `demo`: `http://localhost:8080/h2-console`
@@ -147,9 +185,9 @@ Parquet 자체는 강한 호환성을 가지나, 본 프로젝트의 `ArticlePar
 |---|---|
 | dev | `create-drop` — 매번 클린, 신경 X |
 | demo | `update` — JPA가 ALTER TABLE 자동. column 추가 OK, 삭제는 수동 |
-| prod | `validate` — schema 불일치 시 부팅 실패. Flyway/Liquibase 도입 권장 |
+| prod | `update` (현재) — JPA가 테이블/컬럼 자동 생성·추가. 운영 안정화 후 `validate` + Flyway/Liquibase 전환 권장 |
 
-prod 진입 전에 반드시 마이그레이션 도구 도입할 것 (현재 미설치).
+prod 진입 전에 반드시 마이그레이션 도구 도입할 것 (현재 미설치, ddl-auto=update로 부팅).
 
 ### 5.3 Migration recipe — "Article에 language 필드 추가"
 1. `article.avsc` 에 새 필드 + `default`.
@@ -193,13 +231,18 @@ prod 진입 전에 반드시 마이그레이션 도구 도입할 것 (현재 미
 
 본 프로젝트는 학습용으로 다음을 가정하지 않음:
 - 사용자 식별 정보 (login, IP, session) **수집 안 함**.
-- `QueryLog` 는 question/answer/model/latency만 — 개인 정보 없음.
+- `QueryLog` 는 사용자 식별 정보를 담지 않음 (question/answer/model/latency + provenance·PII 카운트).
 - 단, **사용자가 질문에 PII를 직접 넣으면** governance log에 남음. 운영 환경 적용 전 mask/scrub 레이어 필요.
 
-확장 시 추가할 컬럼 (예시):
-- `user_id`, `tenant_id` — multi-tenant
-- `source_article_ids` — RAG citation 추적
-- `flagged`, `safety_score` — content policy
+이미 구현된 governance 컬럼 (확장 아님 — 현재 존재):
+- `sources` — RAG citation/provenance (인용 Article 추적, TEXT)
+- `pii_count` — 질문 내 PII 탐지 카운트 (content policy 기초)
+- `feedback` — 사용자 평가 ("up" / "down" / null)
+- `augmented_prompt` — 실제 LLM에 전달된 증강 프롬프트 (@Lob)
+
+확장 시 추가할 컬럼 (예시 — 아직 미구현):
+- `user_id`, `tenant_id` — multi-tenant (Article엔 `namespace`가 이미 있으나 QueryLog엔 없음)
+- `flagged`, `safety_score` — content policy 자동 판정
 - `cost_estimate` — 모델별 비용
 
 ---
@@ -212,6 +255,7 @@ GitHub/IDE에서 렌더링용:
 erDiagram
     ARTICLE {
         long id PK
+        string namespace "multi-tenant"
         string title
         string summary
         string url
@@ -225,8 +269,22 @@ erDiagram
         string model
         bigint latency_ms
         timestamp created_at
+        text sources "provenance"
+        string feedback "up|down|null"
+        int pii_count
+        clob augmented_prompt
+    }
+    DOCUMENT_CATALOG {
+        bigint id PK
+        string title "baseTitle"
+        string namespace "tenant"
+        string source_type "wikipedia|image|file"
+        int chunks
+        string embed_model
+        timestamp ingested_at
     }
     ARTICLE ||..o{ QUERY_LOG : "logical-cited-in (no FK)"
+    ARTICLE ||..o{ DOCUMENT_CATALOG : "metadata-mirror (derived, no FK)"
 ```
 
-`||..o{` 점선 = 실제 FK는 없고 의미적 참조만 있음을 표시.
+`||..o{` 점선 = 실제 FK는 없고 의미적 참조만 있음을 표시. `DOCUMENT_CATALOG`는 `query_log`와 같은 H2 governance 데이터소스에 있지만 Article(Parquet)에서 파생된 메타 뷰 — 물리 store는 분리.

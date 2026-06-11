@@ -10,12 +10,12 @@ LLM applications are unauditable by default. If a customer asks "what model gave
 
 MiniWatson treats every RAG call as a **regulated event**:
 
-- **Who** asked (`userId`)
-- **What** was asked (`question`)
-- **What** came back (`answerPreview`)
-- **Which** sources were used (`sourceCount`)
+- **What** was asked (`question`, PII redacted)
+- **What** came back (`answer`, PII redacted)
+- **Which** sources grounded it (`sources`)
 - **Which** model produced the answer (`model`)
-- **How long** it took (`tookMs`)
+- **How long** it took (`latencyMs`)
+- **How much** PII was masked (`piiCount`)
 - **When** (`createdAt`)
 
 This is the minimum schema to satisfy:
@@ -26,42 +26,46 @@ This is the minimum schema to satisfy:
 
 ---
 
-## 2. Schema — `AuditLog` (설계 초안)
+## 2. Schema — `QueryLog` (`query_log`)
 
-> 주의: 아래는 초기 설계안이다. 실제 구현 엔티티는 `QueryLog`이고 테이블은 `query_log`다. 실제 컬럼과 H2 console 쿼리는 6절을 참조한다.
+> 실제 구현 엔티티는 `QueryLog`이고 테이블은 `query_log`다. H2 console 쿼리는 6절을 참조한다.
 
 
 ```java
 @Entity
-@Table(name = "audit_log")
-public class AuditLog {
-    @Id @GeneratedValue
+@Table(name = "query_log")
+public class QueryLog {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String userId;          // "anonymous" until auth added
-    private String endpoint;        // "/api/rag/ask"
-    @Column(length = 2000)
-    private String question;
-    @Column(length = 2000)
-    private String answerPreview;   // first 200 chars
-    private Integer sourceCount;
-    private String model;           // "gemma4"
-    private Long tookMs;
-    private LocalDateTime createdAt;
+    @Column(columnDefinition = "TEXT")
+    private String question;        // PII 마스킹됨
+    @Column(columnDefinition = "TEXT")
+    private String answer;          // PII 마스킹됨
+    @Lob
+    private String augmentedPrompt; // LLM에 실제 들어간 증강 프롬프트
+    private String model;           // "ibm/granite4:latest"
+    private Long latencyMs;
+    private int piiCount;           // 이 질의에서 마스킹된 PII 건수
+    @Column(columnDefinition = "TEXT")
+    private String sources;         // 근거 청크 "#id title; ..." (RAG만)
+    private String feedback;        // "up" | "down" | null
+    private LocalDateTime createdAt; // @PrePersist
 }
 ```
 
-| Column         | Type        | Purpose                          |
-|----------------|-------------|----------------------------------|
-| id             | bigint PK   | Auto-increment                   |
-| user_id        | varchar     | Identity (auth-aware later)      |
-| endpoint       | varchar     | Which route was hit              |
-| question       | varchar(2k) | Full user input                  |
-| answer_preview | varchar(2k) | Truncated answer for fast scan   |
-| source_count   | int         | Sources retrieved                |
-| model          | varchar     | Foundation model name+version    |
-| took_ms        | bigint      | End-to-end latency               |
-| created_at     | timestamp   | UTC                              |
+| Column           | Type        | Purpose                          |
+|------------------|-------------|----------------------------------|
+| id               | bigint PK   | Auto-increment                   |
+| question         | TEXT        | User input (PII redacted)        |
+| answer           | TEXT        | Answer (PII redacted)            |
+| augmented_prompt | CLOB        | Prompt actually sent to the LLM  |
+| model            | varchar     | Foundation model name            |
+| latency_ms       | bigint      | End-to-end latency               |
+| pii_count        | int         | PII matches masked in this call  |
+| sources          | TEXT        | Provenance chunks (RAG only)     |
+| feedback         | varchar     | up / down / null                 |
+| created_at       | timestamp   | Set on persist                   |
 
 ---
 
@@ -77,38 +81,40 @@ public class AuditLog {
 
 ## 4. Write Path
 
-Every entry-point that touches an LLM goes through `AuditService.log(...)`:
+감사 로깅은 별도 서비스가 아니라 `OllamaService.generate(...)` 안에서 LLM 호출 직후에 일어난다. 모든 LLM 호출(ask / RAG / multimodal)이 이 한 곳을 지나므로, 여기서 PII 마스킹 후 `QueryLog`를 저장한다:
 
 ```java
-public void log(String endpoint, String question, String answer,
-                int sourceCount, String model, long tookMs) {
-    AuditLog entry = new AuditLog();
-    entry.setUserId(SecurityContext.userId());        // "anonymous" today
-    entry.setEndpoint(endpoint);
-    entry.setQuestion(question);
-    entry.setAnswerPreview(truncate(answer, 200));
-    entry.setSourceCount(sourceCount);
-    entry.setModel(model);
-    entry.setTookMs(tookMs);
-    entry.setCreatedAt(LocalDateTime.now());
-    repository.save(entry);
-}
+// OllamaService.generate(...) 끝부분
+long latency = System.currentTimeMillis() - startTime;
+
+// 거버넌스: 저장 직전 PII 마스킹
+PiiRedactionService.Redaction rq = piiRedactionService.redact(userQuestion);
+PiiRedactionService.Redaction ra = piiRedactionService.redact(answer);
+
+QueryLog log = new QueryLog();
+log.setAugmentedPrompt(prompt);
+log.setQuestion(rq.text());
+log.setAnswer(ra.text());
+log.setModel(model);
+log.setLatencyMs(latency);
+log.setPiiCount(rq.count() + ra.count());
+log.setSources(sources);            // RAG만 채워짐, 그 외 null
+queryLogRepository.save(log);
 ```
 
-Called at the **end** of `RagService.ask(...)`, after the LLM responds.
-
-> **Failure isolation**: audit write failure must NOT fail the user request. Wrap in try/catch; log at WARN.
+> **Failure isolation (gap)**: 현재 저장 실패가 사용자 요청을 함께 실패시킨다. 별도 try/catch로 격리하는 건 아직 미구현(8절 참조).
 
 ---
 
 ## 5. Read Path — API
 
-| Endpoint                        | Description                |
-|---------------------------------|----------------------------|
-| `GET /api/audit/logs`           | All logs, newest first     |
-| `GET /api/audit/logs/{id}`      | Single log by ID           |
-| `GET /api/audit/logs?endpoint=` | Filter by endpoint         |
-| `GET /api/audit/logs?model=`    | Filter by model name       |
+| Endpoint                     | Description                                    |
+|------------------------------|------------------------------------------------|
+| `GET /api/governance/logs`   | All logs (`findAll`, no filters)               |
+| `GET /api/governance/stats`  | Aggregates: per-model, per-source-type, KPIs (12절) |
+| `POST /api/governance/feedback` | Set up/down feedback on a log (`{id, value}`) |
+
+> 현재 `/logs`는 필터 없이 전체를 반환한다. endpoint/model/{id} 필터는 미구현.
 
 (See `docs/API.md` for request/response examples.)
 
@@ -201,13 +207,13 @@ ORDER BY created_at DESC;
 
 | MiniWatson concept     | watsonx.governance concept             |
 |------------------------|----------------------------------------|
-| `AuditLog` row         | Model card · decision record           |
+| `QueryLog` row         | Model card · decision record           |
 | `model` field          | AI Factsheet model identifier          |
-| `sourceCount` + sources| Provenance / lineage                   |
-| `tookMs`               | Performance monitoring                 |
-| `endpoint`             | Use-case tag                           |
-| `userId`               | Subject (consent / data-subject right) |
-| Filter API             | Risk dashboard query interface         |
+| `sources`              | Provenance / lineage                   |
+| `latencyMs`            | Performance monitoring                 |
+| `piiCount`             | Sensitive-data exposure signal         |
+| `feedback`             | Human evaluation / quality signal      |
+| `/stats` aggregates    | Risk dashboard query interface         |
 
 ---
 
@@ -216,9 +222,10 @@ ORDER BY created_at DESC;
 | Topic                       | Note                                                                |
 |-----------------------------|---------------------------------------------------------------------|
 | ~~PII redaction~~ DONE    | Implemented — see section 10 (regex masking before audit-log persist)      |
+| Failure isolation           | Audit save failure currently fails the request — no try/catch wrap yet |
 | Cryptographic chaining      | Each entry standalone — no hash chain for tamper-evidence           |
-| Right-to-be-forgotten        | No DELETE API — `userId`-scoped purge to be added                   |
-| Cost attribution            | `tookMs` only — no `tokens_in/out` (Ollama doesn't expose easily)   |
+| Right-to-be-forgotten        | No DELETE API — subject-scoped purge to be added                    |
+| Cost attribution            | `latencyMs` only — no `tokens_in/out` (Ollama doesn't expose easily) |
 | Streaming events            | Synchronous write — Kafka/event-bus version is production direction |
 | Per-tenant separation       | Single tenant assumed                                               |
 

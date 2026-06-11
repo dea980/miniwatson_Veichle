@@ -145,7 +145,20 @@ rerank가 #3 대신 #2를 1등으로 끌어올렸다. #2는 "Fragmentation - not
 - 차이는 질문 단어와 본문 표현이 어긋나는(어휘 불일치) 질문, 여러 청크가 비슷하게 매칭되는 질문에서 분명해진다.
 - 비용: LLM rerank는 답변 생성과 별개로 LLM 호출이 1회 추가된다. 검색 1 + rerank 1 + 생성 1. 품질 이득과 지연을 저울질해야 한다.
 
-## 5. 함정: 라이브러리 API는 버전마다 다르다 (DJL CrossEncoder)
+## 5. 선택 가이드
+
+핵심은 하나다. rerank 이득은 1차 검색이 약할 때만 나온다(4절). 1차가 강하면 안 붙이는 게 낫다.
+
+| 상황 | 선택 | 근거 |
+|---|---|---|
+| 1차 검색이 이미 강함 (작은·깨끗한 코퍼스) | none | 3.1에서 차이 없음. 호출만 늘어남 |
+| 후보에 비슷한 청크가 몰림 | mmr | 3.3. 중복일 때만 효과, 아니면 none과 동일 |
+| 어휘 불일치·의도 구분이 필요 | llm | 3.2에서 #2를 끌어올림. LLM 호출 1회 추가 |
+| 대규모·고정밀, Linux/GPU 환경 | cross | 토큰 상호작용까지 봄. 인텔 맥은 네이티브 부재로 폴백(2.4) |
+
+비용 순서 none(0) < mmr(계산만) < llm(호출 1회) < cross(후보마다 추론), 정확도는 대체로 그 역순. 이 코퍼스에서는 none/mmr이면 충분했다. 교차 비교는 [DECISIONS.md](DECISIONS.md).
+
+## 6. 함정: 라이브러리 API는 버전마다 다르다 (DJL CrossEncoder)
 
 cross-encoder 구현 중 `CrossEncoderTranslatorFactory`를 import하니 "Cannot resolve symbol"이 떴다. 다른 블로그/예제에서 본 이름이라 맞다고 가정했던 것이 원인이었다.
 
@@ -159,7 +172,7 @@ cross-encoder 구현 중 `CrossEncoderTranslatorFactory`를 import하니 "Cannot
 
 교훈: 외부 라이브러리의 클래스명/시그니처는 버전마다 바뀐다. 기억이나 다른 버전 예제에 의존하지 말고, 프로젝트가 실제로 의존하는 버전의 javadoc(또는 jar 내용)을 확인한다.
 
-## 6. 다음 단계
+## 7. 다음 단계
 
 - 네 reranker(none/llm/mmr/cross) 정량 비교를 같은 질문 세트로 측정해 표로 정리
 - cross-encoder의 지연을 재서 품질 대비 비용을 판단(후보 N 조정, 배치 추론 검토)

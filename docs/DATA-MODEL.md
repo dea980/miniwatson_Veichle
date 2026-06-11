@@ -9,7 +9,8 @@ The lifecycle of an `Article` from Wikipedia API to Parquet on disk.
 ```java
 @Data
 public class Article {
-    private Long id;
+    private long id;
+    private String namespace;        // multi-tenant 분리 키 (비면 "default")
     private String title;
     private String summary;
     private String url;
@@ -22,7 +23,8 @@ public class Article {
 
 | Field        | Type            | Source                                           | Notes                             |
 |--------------|-----------------|--------------------------------------------------|-----------------------------------|
-| `id`         | `Long`          | Generated (`store.size() + 1`)                   | Monotonic, not durable PK         |
+| `id`         | `long`          | Generated (`store.size() + 1`)                   | Monotonic, not durable PK         |
+| `namespace`  | `String`        | Ingest 시 지정 (tenant/project/collection)        | 비면 `"default"`, multi-tenant 키 |
 | `title`      | `String`        | Wikipedia `title`                                | UTF-8                             |
 | `summary`    | `String`        | Wikipedia `/page/summary` → `extract` field      | Plain text, no markup             |
 | `url`        | `String`        | Wikipedia `content_urls.desktop.page`            | Canonical                         |
@@ -37,7 +39,7 @@ Wikipedia's JSON has dozens of fields you don't need. The internal DTO ignores t
 
 ```java
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class WikipediaSummary {
+public class WikipediaResponse {
     private String title;
     private String extract;
     private ContentUrls content_urls;
@@ -139,7 +141,7 @@ Wikipedia (REST)
    │  GET /api/rest_v1/page/summary/{title}
    │  + User-Agent: MiniWatson/1.0 (mailto:kdea989@gmail.com)
    ▼
-WikipediaSummary (DTO, ignoreUnknown)
+WikipediaResponse (DTO, ignoreUnknown)
    │
    ▼
 Article (POJO)  ◄── embedding via Ollama nomic-embed-text

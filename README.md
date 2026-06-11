@@ -62,7 +62,7 @@ Three layers, each mapping to a watsonx component:
 | Language | Java 21 (IBM Semeru) | Lower memory footprint than HotSpot |
 | Framework | Spring Boot 4.0 | Enterprise standard, fast bootstrap |
 | LLM | Ollama (local) | Sovereign deployment, no API keys |
-| Chat model | gemma4 (default) · multi-LLM | per-request model, whitelist-validated |
+| Chat model | ibm/granite4:latest (default) · multi-LLM | per-request model, whitelist-validated |
 | Embedding model | nomic-embed-text / granite-embedding | 768-dim, runs locally |
 | Vision model | llava / granite-vision | image Q&A + caption (multimodal) |
 | OCR | Tesseract (CLI) | exact text/number extraction for grounding |
@@ -70,7 +70,7 @@ Three layers, each mapping to a watsonx component:
 | Schema | Avro | Schema-first, evolution-safe |
 | Storage | Tiered (JSON hot → Parquet cold) | cheap appends + columnar compaction |
 | Catalog | H2 document_catalog (mirror) | SQL-queryable KB metadata; catalog/data split |
-| Retrieval | In-memory LSH vector index | sub-linear approximate kNN |
+| Retrieval | In-memory vector index (brute-force default, LSH opt-in) | exact cosine by default; LSH for sub-linear approximate kNN |
 | Hybrid search | Vector + BM25 keyword, RRF fusion | lexical recall for exact tokens (IDs, codes) |
 | Chunking | fixed / recursive / semantic (pluggable) | recursive default; balance quality vs cost |
 | Reranking | none / llm / mmr / cross (pluggable) | two-stage: fetch top-N → rerank → top-K |
@@ -91,7 +91,7 @@ java --version    # → openjdk 21+
 
 # 2. Ollama
 brew install ollama
-ollama pull gemma4              # chat (default)
+ollama pull ibm/granite4:latest  # chat (default)
 ollama pull nomic-embed-text   # 768-dim embeddings
 ollama pull llava              # vision (multimodal Q&A / image ingest)
 
@@ -145,7 +145,7 @@ Optional `&namespace=acme` scopes the article to a tenant (default: `default`).
 ```bash
 curl -X POST http://localhost:8080/api/rag/ask \
   -H "Content-Type: application/json" \
-  -d '{"question": "What is RAG?", "namespace": "default", "model": "gemma4"}'
+  -d '{"question": "What is RAG?", "namespace": "default", "model": "ibm/granite4:latest"}'
 ```
 
 `namespace` and `model` are optional. Returns the answer plus the top-K source
@@ -195,7 +195,7 @@ retrieved fragments.
 ```bash
 curl  http://localhost:8080/api/data/articles            # all (or ?namespace=demo)
 curl -X DELETE http://localhost:8080/api/data/articles/5 # remove by id (+index resync)
-curl  http://localhost:8080/api/data/index/stats         # LSH mode, vectors, buckets
+curl  http://localhost:8080/api/data/index/stats         # mode (brute-force default), vectors, buckets
 ```
 
 ### Documents (document-level view over chunks)
@@ -236,20 +236,24 @@ active: dev      # dev | demo | prod
 
 ollama:
 url: ${OLLAMA_URL:http://localhost:11434}
-chat-model: ${OLLAMA_CHAT_MODEL:gemma4}
-chat-models: ${OLLAMA_CHAT_MODELS:gemma4,ibm/granite4:latest,qwen3.6}  # multi-LLM whitelist
+chat-model: ${OLLAMA_CHAT_MODEL:ibm/granite4:latest}
+chat-models: ${OLLAMA_CHAT_MODELS:ibm/granite4:latest,gemma4}  # multi-LLM whitelist
 embed-model: ${OLLAMA_EMBED_MODEL:nomic-embed-text}
 vision-model: ${OLLAMA_VISION_MODEL:llava:latest}                       # multimodal
-num-predict: ${OLLAMA_NUM_PREDICT:500}
+num-predict: ${OLLAMA_NUM_PREDICT:256}
+
+retrieval:
+hybrid:
+enabled: true          # vector + BM25 (false = vector-only)
 
 storage:
 tier:
-threshold: ${STORAGE_TIER_THRESHOLD:100}   # hot(JSON) count before compaction → Parquet
+threshold: ${STORAGE_TIER_THRESHOLD:3}     # hot(JSON) count before compaction → Parquet
 
 vector:
 index:
 lsh:
-enabled: ${VECTOR_LSH_ENABLED:true}        # LSH on/off (false = brute-force)
+enabled: ${VECTOR_LSH_ENABLED:false}       # brute-force default; true = LSH approximate kNN
 hyperplanes: ${VECTOR_LSH_HYPERPLANES:16}
 
 chunking:
@@ -257,7 +261,11 @@ strategy: recursive   # fixed | recursive | semantic
 max-size: 1000        # chars per chunk
 
 rerank:
-strategy: llm         # none | llm | mmr | cross
+strategy: mmr         # none | llm | mmr | cross
+
+eval:
+overrides:
+enabled: ${EVAL_OVERRIDES:true}    # dev/demo = true, prod = false
 ```
 
 ### Profile overrides
@@ -271,7 +279,7 @@ strategy: llm         # none | llm | mmr | cross
 Switch model without code change:
 
 ```bash
-OLLAMA_CHAT_MODEL=qwen3.6 ./mvnw spring-boot:run
+OLLAMA_CHAT_MODEL=gemma4 ./mvnw spring-boot:run
 ```
 
 ---
@@ -286,7 +294,7 @@ miniwatson/
 │   │   ├── RagController.java            # POST /api/rag/ask · GET /api/rag/models
 │   │   ├── DataController.java           # /api/data/* (ingest, file, delete, stats)
 │   │   ├── MultimodalController.java     # /api/multimodal/ask · /ingest (vision)
-│   │   └── GovernanceController.java     # GET /api/governance/logs
+│   │   └── GovernanceController.java     # /api/governance/logs · /stats · POST /feedback
 │   ├── service/
 │   │   ├── OllamaService.java            # Chat (multi-LLM) + vision (images)
 │   │   ├── EmbeddingService.java         # Embed: 768-dim
@@ -303,7 +311,7 @@ miniwatson/
 │   │   ├── LlmReranker.java              # listwise LLM rerank
 │   │   ├── MmrReranker.java              # relevance + diversity (MMR)
 │   │   ├── CrossEncoderReranker.java     # DJL cross-encoder (graceful fallback)
-│   │   └── RagService.java               # Embed → LSH search (top-N) → rerank → top-K
+│   │   └── RagService.java               # Embed → vector search (top-N) → rerank → top-K
 │   ├── data/
 │   │   ├── Article.java                  # POJO + namespace + embedding (write-only)
 │   │   ├── WikipediaResponse.java        # External API DTO
@@ -483,8 +491,8 @@ Notes from building this:
 - [x] 19 — Governance stats dashboard (per-model, per-source-type, KPIs)
 - [x] 20 — Hybrid search (vector + BM25, RRF) with indexing split
 - [x] 21 — Eval harness (recall + LLM-as-judge), unit tests, user feedback loop
-- [x] 22 — PostgreSQL + pgvector via Podman (prod profile, persistent storage)
-- [ ] PgVectorStore — vector search on pgvector (currently in-memory)
+- [x] 22 — PostgreSQL + pgvector container via Podman (prod profile, persistent governance storage)
+- [ ] PgVectorStore — vector search on pgvector (container ready; search still in-memory VectorIndex)
 - [ ] deployment notes (Docker + compose) — also verifies cross-encoder on Linux
 - [ ] tenant isolation enforcement / API auth
 

@@ -6,7 +6,7 @@ flowchart TB
         RC["RagController<br/>/rag/ask, /rag/models"]
         DC["DataController<br/>/data/ingest, /documents, /summarize, /index/stats"]
         MC["MultimodalController<br/>/multimodal/ask, /ingest"]
-        GC["GovernanceController<br/>/governance/logs, /stats"]
+        GC["GovernanceController<br/>/governance/logs, /stats, /feedback"]
     end
 
     subgraph AI["AI Layer (watsonx.ai)"]
@@ -22,7 +22,7 @@ flowchart TB
         ING["IngestionService<br/>wiki / image / file"]
         CHK["Chunker (interface)<br/>fixed / recursive / semantic"]
         IDX["IndexingService<br/>updates all indexes"]
-        VEC["VectorIndex (LSH)<br/>semantic"]
+        VEC["VectorIndex<br/>cosine, brute-force (LSH opt-in)"]
         KW["KeywordIndex (BM25)<br/>lexical"]
         REPO["ArticleRepository"]
         HOT["ArticleStore (JSON hot)"]

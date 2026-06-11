@@ -17,11 +17,11 @@ chunking:
   max-size: 1000
 
 rerank:
-  strategy: cross        # none | llm | mmr | cross
+  strategy: mmr          # none | llm | mmr | cross  (mmr 기본: eval recall 100%, cross는 맥에서 폴백)
 
 storage:
   tier:
-    threshold: 3
+    threshold: 3          # 데모용 낮은 값: 3개마다 JSON(hot)→Parquet(cold) compact가 바로 보이게. prod에서 override
 
 server:
   port: 8080

@@ -22,7 +22,7 @@
 **IBM watsonx의 3-layer 구조 (data · ai · governance) 를 Spring Boot + Ollama + Parquet 로 미니어처화한 로컬 RAG 시스템.**
 
 - **목적**: enterprise GenAI platform이 실제로 어떻게 동작하는지 코드로 이해.
-- **상태**: Day 1~6 (코어 기능) 완료. Day 7 (데모/배포) 진행 중. `roadmap` 참조 (README.md).
+- **상태**: roadmap 1~22 (코어 + RAG 고도화 + governance + multimodal + Postgres prod) 완료. 배포 노트/PgVectorStore 진행 중. `roadmap` 참조 (README.md).
 - **작성자**: Daeyeop Kim (`kdea989@gmail.com`)
 
 ---
@@ -54,11 +54,11 @@ User → POST /api/rag/ask {"question": "..."}
      → RagController.ask()
      → RagService.ask()
          → EmbeddingService.embed(question)
-         → ArticleParquetStore.loadAll()
-         → cosineSimilarity 정렬 → top-K (=2)
-         → augmented prompt 조립
-         → OllamaService.ask(prompt) — gemma4, think:false
-             → QueryLogRepository.save(log)   ← governance 자동 audit
+         → HybridRetriever — vector + BM25, RRF 융합 → 후보 top-N (FETCH_N=20)
+         → Reranker (none/llm/mmr/cross) → 최종 top-K (=2)
+         → augmented prompt 조립 + sources "#id title" 생성
+         → OllamaService.ask(prompt, model, question, sources) — granite4 기본, think:false
+             → PII 마스킹 → QueryLogRepository.save(log)   ← governance 자동 audit
      → {answer, sources[]} 반환
 ```
 
@@ -70,11 +70,11 @@ User → POST /api/rag/ask {"question": "..."}
 | Gotcha | 조치 |
 |---|---|
 | `ollama serve` 가 별도 터미널에서 떠 있어야 함 (11434 포트) | `lsof -i :11434` 로 확인 |
-| `gemma4`, `nomic-embed-text` 모델 둘 다 `ollama pull` 필요 | `ollama list` 로 확인 |
+| `ibm/granite4:latest`, `nomic-embed-text` 모델 둘 다 `ollama pull` 필요 | `ollama list` 로 확인 |
 | Java 21 (Hadoop SecurityManager 호환) 필요 | `pom.xml` 가 `-Djava.security.manager=allow` 자동 부여 |
 | `./mvnw spring-boot:run` 첫 실행은 의존성 다운로드 1~3분 | 정상 |
 
-확인: `curl http://localhost:8080/api/hello` → `hello watsonx`
+확인: `curl http://localhost:8080/api/rag/models` → `{ default, available[] }` 반환
 
 ---
 
@@ -92,8 +92,8 @@ miniwatson/
 │
 ├── src/main/java/com/miniwatson/
 │   ├── MiniwatsonApplication.java     ← Spring Boot 엔트리
-│   ├── controller/                    ← 5개 REST 컨트롤러 (presentation)
-│   ├── service/                       ← 4개 비즈니스 서비스 (logic)
+│   ├── controller/                    ← 4개 REST 컨트롤러 (Rag/Data/Multimodal/Governance)
+│   ├── service/                       ← 비즈니스 서비스 (~19: ingest/embed/ocr/retrieve/rerank/chunk)
 │   ├── data/                          ← Article 도메인 + Parquet I/O
 │   ├── governance/                    ← QueryLog JPA entity + repo
 │   └── dto/                           ← Ollama/Embedding/Ask 요청/응답
@@ -104,9 +104,9 @@ miniwatson/
 │   ├── article.avsc                   ← Parquet schema (Avro)
 │   └── static/                        ← index.html + css + js (Carbon-style)
 │
-├── data/
-│   ├── articles.parquet               ← 지식 베이스 (런타임 생성)
-│   ├── articles.json.backup           ← (deleted) 레거시
+├── data/                              ← 런타임 상태 (gitignored)
+│   ├── articles.json                  ← hot tier (recent appends)
+│   ├── articles.parquet               ← cold tier (compacted)
 │   └── .articles.parquet.crc          ← Hadoop checksum (자동)
 │
 ├── pom.xml                            ← Maven (Spring Boot 4.0.6, Java 21)
@@ -114,8 +114,8 @@ miniwatson/
 ```
 
 크기 감각:
-- Java 소스: ~20 파일, ~700 줄
-- 의존성: Spring Boot 4 + JPA + Parquet/Avro + Hadoop + Lombok + Jackson
+- Java 소스: ~36 파일 (controller/service/data/governance/dto)
+- 의존성: Spring Boot 4 + JPA + Parquet/Avro + Hadoop + Lombok + Jackson + Tika + DJL
 - 외부 시스템 의존: Ollama(localhost:11434), Wikipedia REST API
 
 ---
@@ -124,9 +124,9 @@ miniwatson/
 
 신규 SWE가 처음 받았을 때 확인하세요.
 
-- [ ] `ollama list` — `gemma4`, `nomic-embed-text` 둘 다 존재?
+- [ ] `ollama list` — `ibm/granite4:latest`, `nomic-embed-text` 둘 다 존재?
 - [ ] `./mvnw clean compile` — 클린 빌드 성공?
-- [ ] `./mvnw spring-boot:run` 후 `curl http://localhost:8080/api/hello` 응답 = `hello watsonx`?
+- [ ] `./mvnw spring-boot:run` 후 `curl http://localhost:8080/api/rag/models` 응답에 default/available 들어옴?
 - [ ] `curl -X POST "http://localhost:8080/api/data/ingest?title=RAG"` 성공? (Article JSON 반환)
 - [ ] `curl http://localhost:8080/api/data/articles` 가 ingest한 article 보여줌?
 - [ ] `curl -X POST http://localhost:8080/api/rag/ask -H 'Content-Type: application/json' -d '{"question":"What is RAG?"}'` 응답 들어옴?
@@ -140,7 +140,7 @@ miniwatson/
 
 ## 5. "지금 당장 손대지 마라" 영역
 
-특정 부분은 미묘한 trade-off가 있으니 함부로 리팩토링하지 마세요. 자세한 이유는 [DEBUGGING.md §5 Landmines](./DEBUGGING.md#5-landmines--dont-touch-without-reading) 에 있습니다.
+특정 부분은 미묘한 trade-off가 있으니 함부로 리팩토링하지 마세요. 자세한 이유는 [DEBUGGING.md 5 Landmines](./DEBUGGING.md#5-landmines--dont-touch-without-reading) 에 있습니다.
 
 | 위치 | 왜 만지면 안 되는가 |
 |---|---|
@@ -168,7 +168,7 @@ miniwatson/
 | 의존성 | 주소 / 버전 | 어디서 쓰임 | 끊기면? |
 |---|---|---|---|
 | Ollama daemon | `localhost:11434` | `OllamaService`, `EmbeddingService` | Ask/RAG/Ingest 전부 실패 |
-| gemma4 (chat model) | `ollama pull gemma4` | `OllamaService.ask()` | RAG 답변 생성 실패 |
+| ibm/granite4:latest (chat model) | `ollama pull ibm/granite4:latest` | `OllamaService.ask()` | RAG 답변 생성 실패 |
 | nomic-embed-text (embedding) | `ollama pull nomic-embed-text` | `EmbeddingService.embed()` | Ingest + RAG retrieval 실패 |
 | Wikipedia REST | `https://en.wikipedia.org/api/rest_v1/page/summary/{title}` | `IngestionService` | Ingest 실패 (기존 데이터는 OK) |
 | H2 DB | in-memory(dev) / file(demo) | governance audit log | 부팅 실패 |
@@ -180,11 +180,14 @@ miniwatson/
 
 - **원작자**: Daeyeop Kim (`kdea989@gmail.com`, [github.com/dea980](https://github.com/dea980))
 - **목적**: IBM Consulting 인턴십 준비용 — watsonx 3-layer 구조를 실제로 짜본 학습 프로젝트.
-- **상용 사용 의도 없음**: 학습용/포트폴리오. 보안 강화, 멀티 테넌시, vector index 등은 미구현.
-- **확장 방향** (README roadmap):
-  - multi-tenant article namespacing
-  - vector index (현재 brute-force cosine)
-  - 진짜 PostgreSQL 백엔드 (`application-prod.yaml` 만 준비됨, 미검증)
+- **상용 사용 의도 없음**: 학습용/포트폴리오.
+- **구현 완료**: vector index(in-memory), hybrid search(vector+BM25 RRF), reranking(none/llm/mmr/cross),
+  chunking(fixed/recursive/semantic), multimodal(vision+OCR), PII redaction, governance stats/feedback,
+  multi-tenant namespacing, document catalog, eval harness, Postgres prod 프로필. (README roadmap 1~22 참조)
+- **벡터 검색 기본값은 brute-force cosine** — LSH는 `vector.index.lsh.enabled=true` 로 opt-in. 의도된 config 선택이지 미구현 아님.
+- **남은 gap**:
+  - PgVectorStore — pgvector 컨테이너는 떠 있으나 벡터 검색은 아직 in-memory VectorIndex
+  - 보안/인증, tenant isolation 강제, audit 저장 실패 격리(try/catch)
 
 ---
 
@@ -192,12 +195,12 @@ miniwatson/
 
 다음을 본인이 직접 수행할 수 있어야 인수인계 완료라고 봅니다.
 
-1. ☑ 로컬에서 빌드/실행/dashboard 접속까지 한 번에.
-2. ☑ Wikipedia article 1개를 ingest 하고 RAG 질문을 던져 governance log까지 확인.
-3. ☑ Parquet 파일이 어떻게 생기고 schema는 `article.avsc` 라는 것을 설명할 수 있다.
-4. ☑ "`OllamaRequest.think=false` 를 왜 두었나?" 같은 질문에 답할 수 있다.
-5. ☑ 새 API endpoint를 추가하는 절차 (controller → service → DTO) 를 알고 있다.
-6. ☑ 장애 발생 시 [DEBUGGING.md](./DEBUGGING.md) 의 어느 섹션을 봐야 하는지 안다.
+1. [x] 로컬에서 빌드/실행/dashboard 접속까지 한 번에.
+2. [x] Wikipedia article 1개를 ingest 하고 RAG 질문을 던져 governance log까지 확인.
+3. [x] Parquet 파일이 어떻게 생기고 schema는 `article.avsc` 라는 것을 설명할 수 있다.
+4. [x] "`OllamaRequest.think=false` 를 왜 두었나?" 같은 질문에 답할 수 있다.
+5. [x] 새 API endpoint를 추가하는 절차 (controller → service → DTO) 를 알고 있다.
+6. [x] 장애 발생 시 [DEBUGGING.md](./DEBUGGING.md) 의 어느 섹션을 봐야 하는지 안다.
 
 **완료되면 이 파일 맨 아래에 인수일자/인수자 sign-off 한 줄 추가하기를 권장.**
 

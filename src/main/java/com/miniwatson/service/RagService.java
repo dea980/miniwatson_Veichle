@@ -37,12 +37,12 @@ public class RagService {
                       HybridRetriever hybridRetriever,
                       OllamaService ollamaService,
                       Map<String, Reranker> rerankers,                        // 추가
-                      @Value("${rerank.strategy:llm}") String strategy) {
+                      @Value("${rerank.strategy:mmr}") String strategy) {
         this.embeddingService = embeddingService;
         this.hybridRetriever = hybridRetriever;
         this.ollamaService = ollamaService;
         this.rerankers = rerankers;
-        this.reranker = rerankers.getOrDefault(strategy, rerankers.get("llm")); // 추가
+        this.reranker = rerankers.getOrDefault(strategy, rerankers.get("mmr")); // 알 수 없는 키면 mmr 폴백 (eval 최선)
     }
 
     /** Backward-compatible entry point: default namespace, default chat model. */

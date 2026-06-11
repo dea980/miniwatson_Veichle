@@ -11,3 +11,8 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+# 운영: hot(JSON) 누적분만 가끔 Parquet로 풀-리라이트 (데모값 3 대신 현실값)
+storage:
+  tier:
+    threshold: 500

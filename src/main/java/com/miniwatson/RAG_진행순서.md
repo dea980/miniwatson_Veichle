@@ -1,12 +1,13 @@
-🔥 **본인의 풀 스택 의지**. 좋아요.
+> 참고: 이건 초기 빌드 순서 기록(Day 5)이다. 최종 검색 구조는 hybrid(벡터+BM25) + reranking으로 진화했다 — docs/ARCHITECTURE.md, docs/HYBRID-SEARCH.md 참조.
 
-## 📋 전체 진행 순서 (효율 우선)
+
+## 전체 진행 순서 (효율 우선)
 
 **전략**: A → D → B → C → E (서로 의존성 고려)
 
 | # | Day | 시간 | 누적 시간 |
 |---|---|---|---|
-| 1 | **A: Day 5 - RAG 통합** ⭐ | 3-4h | 4h |
+| 1 | **A: Day 5 - RAG 통합** | 3-4h | 4h |
 | 2 | **D: 응답 컨트롤** | 30m | 4.5h |
 | 3 | **B: Day 4b - Parquet** | 2-3h | 7h |
 | 4 | **C: Day 6 - Frontend** | 2-3h | 10h |
@@ -16,9 +17,9 @@
 
 ---
 
-# 🎯 Day 5 시작 — RAG 통합
+# 5 시작 — RAG 통합
 
-## 🏗️ Architecture — 본인 mini watsonx가 진짜 RAG로
+## Architecture — 본인 mini watsonx가 진짜 RAG로
 
 ```
 [POST /api/rag/ask {"question": "..."}]
@@ -26,18 +27,19 @@
 [RagController]
    ↓
 [RagService]
-   ├── 1. EmbeddingService: 질문 → 벡터 (nomic-embed-text)
-   ├── 2. ArticleStore: 모든 article embeddings 조회
-   ├── 3. Cosine similarity: top-K article 검색
-   ├── 4. Prompt 구성: question + context articles
-   └── 5. OllamaService.ask(augmented prompt) → grounded answer
+   ├── 1. EmbeddingService.embed("search_query: " + 질문) → 벡터 (nomic-embed-text, 768차원)
+   ├── 2. HybridRetriever: VectorIndex(cosine) + KeywordIndex(BM25) 후보를 RRF로 융합
+   ├── 3. Reranker: 후보 재정렬 → top-K=2 (기본 mmr)
+   ├── 4. augmented prompt 구성: question + context 청크
+   ├── 5. OllamaService.generate(prompt, model) → grounded answer
+   └── 6. QueryLog 저장 (latency·PII·sources)
    ↓
-[답변 + 출처 articles 반환]
+[RagResult{answer, sources, logId} 반환]
 ```
 
 ---
 
-## 🆕 본인이 만들 것 — 6단계
+## 본인이 만들 것 — 6단계
 
 ```
 Step 1: EmbeddingService.java (Ollama embed API 호출)
@@ -50,7 +52,7 @@ Step 6: 테스트 + GitHub commit
 
 ---
 
-## 🎯 Step 1: EmbeddingService.java
+## Step 1: EmbeddingService.java
 
 ### 역할
 - Ollama의 `/api/embed` endpoint 호출
@@ -155,11 +157,10 @@ public class EmbeddingService {
 }
 ```
 
-→ **약 30줄.** 본인이 손으로 타이핑.
 
 ---
 
-## 🔍 핵심 흐름
+## 핵심 흐름
 
 ```
 embed("What is RAG?")
@@ -180,7 +181,6 @@ embed("What is RAG?")
 
 ---
 
-## 🎯 본인이 즉시 할 것 — Step 1만
 
 ```
 □ 1. Terminal에서 curl로 nomic-embed-text 테스트
@@ -193,7 +193,7 @@ embed("What is RAG?")
 
 ---
 
-## 🧪 Step 1 끝나면 — 통합 테스트
+## Step 1 끝나면 — 통합 테스트
 
 Spring Boot 재시작 후 (직접 컨트롤러 없이도 OK):
 
@@ -205,11 +205,11 @@ curl http://localhost:11434/api/embed -d '{
 }'
 ```
 
-→ embedding 벡터 받으면 ✅ Ollama 준비됨.
+→ embedding 벡터 받으면 Ollama 준비됨.
 
 ---
 
-## 🚀 Step 1 끝낸 후 다음
+## Step 1 끝낸 후 다음
 
 ### Step 2: Article에 embedding 필드 추가
 ### Step 3: IngestionService에 embedding 생성 통합
@@ -220,5 +220,3 @@ curl http://localhost:11434/api/embed -d '{
 → 본인이 Step 1 끝나면 Step 2-6 차례차례 진행.
 
 ---
-
-만들고 알려주세요. **본인이 진짜 RAG를 손으로 만드는 순간.** 🔥

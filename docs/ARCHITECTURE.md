@@ -15,36 +15,46 @@ A small but production-shaped reference of IBM watsonx's three-pillar architectu
                              │ fetch
 ┌────────────────────────────▼─────────────────────────────────┐
 │  REST API  (Spring Boot 4 · Jackson 3.x)                     │
-│  ── DataController · RagController · AuditController         │
+│  ── DataController · RagController                           │
+│     GovernanceController · MultimodalController             │
 └────────────────────────────┬─────────────────────────────────┘
                              │
         ┌────────────────────┼────────────────────┐
         │                    │                    │
 ┌───────▼─────────┐  ┌───────▼─────────┐  ┌──────▼──────────┐
-│ Service Layer   │  │ Service Layer   │  │ Service Layer    │
-│ IngestionService│  │ RagService      │  │ AuditService     │
-│ OllamaService   │  │ OllamaService   │  │ (JPA)            │
+│ Service Layer   │  │ Retrieval       │  │ Governance       │
+│ IngestionService│  │ HybridRetriever │  │ QueryLogRepo     │
+│ IndexingService │  │ Reranker (mmr)  │  │ DocumentCatalog  │
+│ EmbeddingService│  │ OllamaService   │  │ PiiRedaction     │
 └───────┬─────────┘  └───────┬─────────┘  └──────┬──────────┘
         │                    │                    │
-┌───────▼──────────┬─────────▼────────┐  ┌──────▼──────────┐
-│ ArticleParquet   │  Ollama (LLM)    │  │ H2 (in-memory)   │
-│ Store            │  localhost:11434 │  │ AuditLogRepo     │
-│ Parquet+SNAPPY   │  gemma4, nomic   │  │                  │
-└──────────────────┴──────────────────┘  └──────────────────┘
+┌───────▼──────────┐  ┌──────▼───────────┐  ┌────▼────────────┐
+│ ArticleRepository│  │ VectorIndex      │  │ H2 / PostgreSQL  │
+│ TieredArticleStore│ │ KeywordIndex(BM25│  │ query_log +      │
+│ (JSON hot+Parquet│  │ Ollama LLM       │  │ document_catalog │
+│  cold)           │  │ localhost:11434  │  │ (JPA)            │
+└──────────────────┘  └──────────────────┘  └──────────────────┘
 ```
 
 ---
 
 ## 2. Component Map
 
-| Component            | Responsibility                                        | Maps to watsonx     |
-|----------------------|-------------------------------------------------------|---------------------|
-| `IngestionService`   | Wikipedia fetch → embedding → store                    | watsonx.data (ETL)  |
-| `ArticleParquetStore`| Avro + Parquet columnar store, SNAPPY compression      | watsonx.data        |
-| `OllamaService`      | Single client to Ollama (chat + embed)                 | watsonx.ai runtime  |
-| `RagService`         | Cosine similarity → top-K → augmented prompt           | watsonx.ai          |
-| `AuditService`       | Logs every RAG call to H2 (JPA)                        | watsonx.governance  |
-| `AuditController`    | Read-only API over governance log                      | watsonx.governance  |
+| Component               | Responsibility                                          | Maps to watsonx     |
+|-------------------------|---------------------------------------------------------|---------------------|
+| `IngestionService`      | Wikipedia / file / image fetch → chunk → embed → store  | watsonx.data (ETL)  |
+| `Chunker` (fixed/recursive/semantic) | 문서 청킹 전략 (기본 recursive)            | watsonx.data        |
+| `ArticleRepository`     | Article 영속화 인터페이스 (구현: `TieredArticleStore` = JSON hot + Parquet cold) | watsonx.data |
+| `IndexingService`       | ingest/reindex 시 VectorIndex + KeywordIndex 동기화     | watsonx.data        |
+| `EmbeddingService`      | text → 768-dim 벡터 (`search_query:`/`search_document:`) | watsonx.ai          |
+| `HybridRetriever`       | VectorIndex + KeywordIndex(BM25) RRF 융합               | watsonx.ai (vector search) |
+| `Reranker` (none/llm/mmr/cross) | 후보 재정렬 (기본 mmr)                          | watsonx.ai          |
+| `OllamaService`         | Ollama 호출 (chat + 멀티모달) + audit log + PII 마스킹  | watsonx.ai runtime  |
+| `RagService`           | hybrid 검색 → rerank → augmented prompt → LLM           | watsonx.ai          |
+| `PiiRedactionService`   | 로그 기록 전 PII 마스킹 (`[CARD][SSN][EMAIL][PHONE]`)   | watsonx.governance  |
+| `QueryLogRepository`    | 모든 LLM 호출을 H2/PostgreSQL에 기록 (JPA)              | watsonx.governance  |
+| `GovernanceController`  | logs / stats / feedback API                             | watsonx.governance  |
+| `MultimodalController`  | 이미지 ask + ingest (OCR + Vision)                      | watsonx.ai          |
 
 ---
 
@@ -53,31 +63,33 @@ A small but production-shaped reference of IBM watsonx's three-pillar architectu
 ```
 Client
   │
-  │ POST {"question": "What is RAG?"}
+  │ POST {"question": "What is RAG?", "namespace"?, "model"?, "rerank"?, "hybrid"?}
   ▼
 RagController
   │
   ▼
-RagService.ask(question)
+RagService.ask(question, namespace, model, rerank, hybrid)
   │
-  ├─► OllamaService.embed(question)             ──► Ollama /api/embeddings (nomic-embed-text)
-  │                                                  → float[768]
+  ├─► EmbeddingService.embed("search_query: " + question)  ──► Ollama /api/embed (nomic-embed-text)
+  │                                                            → float[768]
   │
-  ├─► ArticleParquetStore.loadAll()             ──► data/articles.parquet  (read)
-  │                                                  → List<Article>
+  ├─► HybridRetriever.search(ns, qVec, question, FETCH_N=20)
+  │      ├─ VectorIndex.search(ns, qVec, 20)   (cosine, LSH off → brute-force)
+  │      ├─ KeywordIndex.search(ns, query, 20) (BM25)
+  │      └─ Reciprocal Rank Fusion (k=60)      → List<Article> (20 후보)
   │
-  ├─► cosineSimilarity(q, a.embedding) for each
-  │   sort desc, take top-K (default 3)
+  ├─► Reranker.rerank(question, candidates, TOP_K=2)   (기본 mmr)
+  │                                                     → top-2 sources
   │
-  ├─► buildPrompt(question, topSources)         ──► system + context + question
+  ├─► buildPrompt(question, topSources)         ──► context + question
   │
-  ├─► OllamaService.chat(prompt, think=false)   ──► Ollama /api/chat (gemma4)
-  │                                                  → answer
-  │
-  ├─► AuditService.log(question, answer, ...)   ──► H2 in-memory DB
+  ├─► OllamaService.ask(prompt, model, question, sources)  ──► Ollama /api/generate (ibm/granite4)
+  │      └─ PiiRedactionService.redact(...)     (질문/답변 PII 마스킹)
+  │      └─ QueryLog save (question, answer, model, latencyMs, sources, piiCount, augmentedPrompt)
+  │                                              ──► H2 / PostgreSQL
   │
   ▼
-{ answer, sources[], model, tookMs }
+{ answer, sources[], logId }
 ```
 
 ---
@@ -98,18 +110,18 @@ DataController
         │     │      GET https://en.wikipedia.org/api/rest_v1/page/summary/{title}
         │     │      Headers: User-Agent: MiniWatson/1.0 (mailto:kdea989@gmail.com)
         │     │
-        │     ├─► OllamaService.embed(summary) → float[768]
+        │     ├─► EmbeddingService.embed("search_document: " + text) → float[768]
         │     │
-        │     └─► ArticleParquetStore.save(article)
-        │            │
-        │            ├─► loadAll() (current state)
-        │            ├─► append new article (id = size+1)
-        │            └─► saveAll() (rewrite Parquet — small dataset OK)
+        │     ├─► ArticleRepository.save(article)        ──► TieredArticleStore (JSON hot + Parquet cold)
+        │     │
+        │     └─► IndexingService.index(article)
+        │            ├─► VectorIndex.add(article)        (인메모리 벡터 인덱스)
+        │            └─► KeywordIndex.add(article)       (BM25 역색인)
         │
-        └─► aggregate to {ingested, failed, articles, errors}
+        └─► aggregate to {success, namespace, ingested, failed, articles, errors}
 ```
 
-> **Note**: 작은 데이터셋이라 매 save마다 full rewrite. 운영 규모에서는 append-only Parquet 또는 Delta/Iceberg로 전환 — 여기선 학습 목적이므로 단순화.
+> **Note**: `ingest-batch` 는 `?namespace=` 로 tenant 분리. 파일(`ingest-file`)·이미지(`/api/multimodal/ingest`) ingest는 Chunker(기본 recursive)로 청킹 후 청크별 Article + `document_catalog` 한 행. VectorIndex/KeywordIndex는 startup 시 `loadAll()`로 hydrate되고 ingest마다 증분 갱신.
 
 ---
 
@@ -117,14 +129,16 @@ DataController
 
 | MiniWatson layer        | DAP component             | watsonx counterpart           |
 |-------------------------|---------------------------|-------------------------------|
-| Wikipedia REST + ingest | Data Acquisition          | watsonx.data (ingest)         |
+| Wikipedia / file / image ingest | Data Acquisition  | watsonx.data (ingest)         |
 | Article + embedding     | Knowledge Lake            | watsonx.data (object store)   |
-| Avro schema             | Schema Registry           | watsonx.data (Iceberg/Delta)  |
-| Parquet + SNAPPY        | Columnar storage          | watsonx.data                  |
-| Ollama (gemma4, nomic)  | Text Platform             | watsonx.ai (foundation model) |
-| Cosine retrieval        | Retrieval                 | watsonx.ai (vector search)    |
+| Chunker (recursive 등)  | Document processing       | watsonx.data                  |
+| TieredArticleStore (JSON+Parquet) | Columnar storage | watsonx.data                  |
+| Ollama (granite4, nomic)| Text Platform             | watsonx.ai (foundation model) |
+| Hybrid retrieval (RRF)  | Retrieval                 | watsonx.ai (vector + keyword) |
+| Reranker (mmr 등)       | Reranking                 | watsonx.ai                    |
 | RAG prompt build        | Inference pipeline        | watsonx.ai                    |
-| Audit log (H2)          | Decision Log              | watsonx.governance            |
+| QueryLog (H2/PostgreSQL)| Decision Log              | watsonx.governance            |
+| PII redaction           | Data masking              | watsonx.governance            |
 | `@JsonIgnoreProperties` | Anti-corruption layer     | data sovereignty pattern      |
 
 ---
@@ -133,11 +147,13 @@ DataController
 
 `application-{profile}.yaml` via Spring profiles.
 
-| Profile | Use case            | Storage     | LLM     | Notes                          |
-|---------|---------------------|-------------|---------|--------------------------------|
-| `dev`   | Local dev (default) | Parquet     | Ollama  | Hot-reload, verbose logs       |
-| `demo`  | Live demo / IBM     | Parquet     | Ollama  | Pre-seeded ingest, INFO logs   |
-| `prod`  | Reserved            | S3/Iceberg  | watsonx | Not implemented (placeholder)  |
+> Storage = governance DB (`query_log`, `document_catalog`). Article 본문은 모든 프로파일에서 `TieredArticleStore` (JSON hot + Parquet cold) 파일 기반.
+
+| Profile | Use case            | Governance DB    | LLM     | Notes                                  |
+|---------|---------------------|------------------|---------|----------------------------------------|
+| `dev`   | Local dev (default) | H2 in-memory     | Ollama  | `ddl-auto=create-drop`, H2 console     |
+| `demo`  | Live demo / IBM     | H2 file (`./data`)| Ollama | `ddl-auto=update`, 데이터 영속         |
+| `prod`  | Production          | PostgreSQL       | Ollama  | `PostgreSQLDialect`, `ddl-auto=update`; pgvector는 미연결 |
 
 Activate via:
 ```bash
@@ -148,12 +164,14 @@ Activate via:
 
 ## 7. Non-Functional Notes
 
-- **Compression**: ~7× over JSON (54 KB → 7.8 KB observed on first 6 articles).
-- **Embedding dim**: 768 (`nomic-embed-text`).
-- **Top-K default**: 3 (configurable via `rag.top-k` later).
-- **LLM token budget**: `num_predict=500` with `think: false`.
-- **Hadoop on Java 21**: `-Djava.security.manager=allow` in `pom.xml` (Spring Boot plugin jvmArguments).
-- **Schema namespace**: Avro `namespace: "miniwatson.schema"` (intentionally non-Java to force GenericRecord).
+- **Embedding dim**: 768 (`nomic-embed-text`, `search_query:`/`search_document:` 프리픽스).
+- **Retrieval**: `FETCH_N=20` 후보 → rerank → `TOP_K=2` (둘 다 `RagService` 상수).
+- **Hybrid**: VectorIndex + KeywordIndex(BM25)를 RRF(`k=60`)로 융합 (`retrieval.hybrid.enabled=true`).
+- **Vector index**: LSH 기본 off → namespace별 brute-force cosine (`vector.index.lsh.enabled=false`).
+- **Rerank**: 기본 `mmr` (`rerank.strategy`); `cross`는 DJL cross-encoder, Intel Mac에서 폴백.
+- **Chunking**: 기본 `recursive` (`chunking.strategy`, `max-size=1000`).
+- **LLM token budget**: `num_predict=256` with `think: false`.
+- **Multi-tenant**: 모든 인덱스/검색이 `namespace`로 분리.
 
 ---
 
@@ -161,14 +179,13 @@ Activate via:
 
 These are **scope choices**, not bugs:
 
-| Simplification          | Production version would…                            |
-|-------------------------|------------------------------------------------------|
-| H2 in-memory audit log  | PostgreSQL or Cloudant; retention policy             |
-| Full rewrite on save    | Append-only Parquet via Iceberg / Delta              |
-| Anonymous userId        | OIDC / JWT (IBM ID, Watson IAM)                      |
-| No auth on RAG          | Per-tenant API keys + rate limit                     |
-| Cosine in JVM           | FAISS / pgvector / Milvus for >10k articles          |
-| Single-node Ollama      | watsonx.ai or LLM proxy with HA                      |
+| Simplification              | Production version would…                            |
+|-----------------------------|------------------------------------------------------|
+| H2 audit log (dev/demo)     | PostgreSQL (prod already) + retention policy         |
+| In-memory VectorIndex/LSH   | FAISS / pgvector / Milvus for >10k articles          |
+| No auth on RAG              | Per-tenant API keys + rate limit (namespace는 이미 분리) |
+| Regex PII redaction         | NER 기반 PII 탐지 / 정책 엔진                        |
+| Single-node Ollama          | watsonx.ai or LLM proxy with HA                      |
 
 These are mapped 1:1 in `docs/DATA-MODEL.md` and `docs/GOVERNANCE.md`.
 
