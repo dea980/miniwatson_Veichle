@@ -58,18 +58,18 @@
 
 ## 4. Embedding 모델 / 차원
 
-(측정 예정 — 4개 모델 비교: granite-embedding 30m(384), granite-embedding 278m(768), nomic(768), mxbai(1024). [EMBEDDINGS.md](EMBEDDINGS.md) 참고.)
+측정 완료 — 4개 모델을 동일 코퍼스(35케이스)로 비교. **기본값 = granite-embedding:278m**(한+영 혼재 코퍼스서 recall 97%, 한국어 11/11). 상세·결과표는 [EMBEDDINGS.md](EMBEDDINGS.md) 7절.
 
-예상 가이드(측정 후 확정):
-
-| 상황 | 후보 | 이유(가설) |
+| 상황 | 후보 | 측정 결과 |
 |---|---|---|
-| 균형/기본 | 768-dim (nomic/granite-278m) | 품질·비용 sweet spot |
-| 속도·대량·엣지 | 384-dim (granite 30m) | 작고 빠름, recall 약간 손해 |
-| 품질 최우선 + 소량 | 1024-dim (mxbai) | 표현력↑, 단 저장 33%↑·연산↑ |
-| 다국어(한국어 등) | granite multilingual | 다국어 학습 |
+| 한국어+영어 혼재 (기본) | granite-embedding:278m (768, 다국어) | recall 97%, 한국어 만점. **승자** |
+| 영어 중심 균형 | nomic (768) | recall 94%, 한국어 1개 놓침 |
+| 속도·대량·엣지 | granite-embedding:30m (384) | recall 89%, 가장 작고 빠름 |
+| (비권장) | mxbai (1024) | recall 94% — 최대 차원인데 nomic과 동점. 비용만 큼 |
 
-주의: 임베더마다 prefix 규약이 다르다(nomic은 search_query/document 필수, granite는 불필요). 공정 비교하려면 모델별 prefix를 맞춰야 한다.
+핵심: **차원이 아니라 다국어 학습이 한국어 recall을 갈랐다.** mxbai(1024)가 granite-278m(768)에 짐. 영어 24케이스는 4종 거의 동점, 변별은 전적으로 한국어에서 발생.
+
+주의: 임베더마다 prefix 규약이 다르다(nomic은 search_query/document 필수, granite는 불필요 — 그래서 현재 기본값 granite-278m에선 prefix가 비어 있다). 공정 비교하려면 모델별 prefix를 맞춰야 한다. 분기는 EmbeddingService.prefixFor() 한 곳.
 
 ---
 

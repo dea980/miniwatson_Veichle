@@ -27,7 +27,7 @@ Three layers, each mapping to a watsonx component:
 │  ┌────────────────────────────────────────────────────┐ │
 │  │  AI Layer (watsonx.ai analog)                      │ │
 │  │  • Chat: multi-LLM, per-request (gemma/granite/..) │ │
-│  │  • Embeddings: 768-dim (nomic / granite-embedding) │ │
+│  │  • Embeddings: 768-dim (granite-embedding:278m)    │ │
 │  │  • Vision: image Q&A (llava / granite-vision)      │ │
 │  │  • OCR grounding: Tesseract (exact text/numbers)   │ │
 │  │  • RAG: chunk → embed → hybrid search → rerank     │ │
@@ -67,7 +67,7 @@ Three layers, each mapping to a watsonx component:
 | Framework | Spring Boot 4.0 | Enterprise standard, fast bootstrap |
 | LLM | Ollama (local) | Sovereign deployment, no API keys |
 | Chat model | ibm/granite4:latest (default) · multi-LLM | per-request model, whitelist-validated |
-| Embedding model | nomic-embed-text / granite-embedding / mxbai (compared) | 384/768/1024-dim, runs locally; harness in EMBEDDINGS.md (measuring) |
+| Embedding model | granite-embedding:278m (default) · nomic / 30m / mxbai compared | 768-dim 다국어 승자 (recall 97%, 한국어 11/11). 4종 비교는 EMBEDDINGS.md |
 | Vision model | llava / granite-vision | image Q&A + caption (multimodal) |
 | OCR | Tesseract (CLI) | exact text/number extraction for grounding |
 | Data format | Apache Parquet | Columnar + SNAPPY = 7× smaller than JSON |
@@ -97,7 +97,7 @@ java --version    # → openjdk 21+
 # 2. Ollama
 brew install ollama
 ollama pull ibm/granite4:latest  # chat (default)
-ollama pull nomic-embed-text   # 768-dim embeddings
+ollama pull granite-embedding:278m   # 768-dim embeddings (default, 다국어)
 ollama pull llava              # vision (multimodal Q&A / image ingest)
 
 # 3. OCR (for image grounding — exact text/numbers)
@@ -245,7 +245,7 @@ ollama:
 url: ${OLLAMA_URL:http://localhost:11434}
 chat-model: ${OLLAMA_CHAT_MODEL:ibm/granite4:latest}
 chat-models: ${OLLAMA_CHAT_MODELS:ibm/granite4:latest,gemma4}  # multi-LLM whitelist
-embed-model: ${OLLAMA_EMBED_MODEL:nomic-embed-text}
+embed-model: ${OLLAMA_EMBED_MODEL:granite-embedding:278m}  # 비교 승자 (EMBEDDINGS.md 7절)
 vision-model: ${OLLAMA_VISION_MODEL:llava:latest}                       # multimodal
 num-predict: ${OLLAMA_NUM_PREDICT:256}
 

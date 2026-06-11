@@ -14,7 +14,7 @@ flowchart TB
         RAG["RagService<br/>embed → hybrid → rerank → LLM"]
         HR["HybridRetriever<br/>vector + BM25 (RRF)"]
         RR["Reranker (interface)<br/>none / llm / mmr / cross"]
-        EMB["EmbeddingService<br/>nomic 768-dim"]
+        EMB["EmbeddingService<br/>granite-embedding:278m 768-dim"]
         OLL["OllamaService<br/>chat (multi-LLM) + vision"]
         OCR["OcrService<br/>Tesseract"]
     end

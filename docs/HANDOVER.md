@@ -70,7 +70,7 @@ User → POST /api/rag/ask {"question": "..."}
 | Gotcha | 조치 |
 |---|---|
 | `ollama serve` 가 별도 터미널에서 떠 있어야 함 (11434 포트) | `lsof -i :11434` 로 확인 |
-| `ibm/granite4:latest`, `nomic-embed-text` 모델 둘 다 `ollama pull` 필요 | `ollama list` 로 확인 |
+| `ibm/granite4:latest`, `granite-embedding:278m` 모델 둘 다 `ollama pull` 필요 | `ollama list` 로 확인 |
 | Java 21 (Hadoop SecurityManager 호환) 필요 | `pom.xml` 가 `-Djava.security.manager=allow` 자동 부여 |
 | `./mvnw spring-boot:run` 첫 실행은 의존성 다운로드 1~3분 | 정상 |
 
@@ -124,7 +124,7 @@ miniwatson/
 
 신규 SWE가 처음 받았을 때 확인하세요.
 
-- [ ] `ollama list` — `ibm/granite4:latest`, `nomic-embed-text` 둘 다 존재?
+- [ ] `ollama list` — `ibm/granite4:latest`, `granite-embedding:278m` 둘 다 존재?
 - [ ] `./mvnw clean compile` — 클린 빌드 성공?
 - [ ] `./mvnw spring-boot:run` 후 `curl http://localhost:8080/api/rag/models` 응답에 default/available 들어옴?
 - [ ] `curl -X POST "http://localhost:8080/api/data/ingest?title=RAG"` 성공? (Article JSON 반환)
@@ -169,7 +169,7 @@ miniwatson/
 |---|---|---|---|
 | Ollama daemon | `localhost:11434` | `OllamaService`, `EmbeddingService` | Ask/RAG/Ingest 전부 실패 |
 | ibm/granite4:latest (chat model) | `ollama pull ibm/granite4:latest` | `OllamaService.ask()` | RAG 답변 생성 실패 |
-| nomic-embed-text (embedding) | `ollama pull nomic-embed-text` | `EmbeddingService.embed()` | Ingest + RAG retrieval 실패 |
+| granite-embedding:278m (embedding) | `ollama pull granite-embedding:278m` | `EmbeddingService.embed()` | Ingest + RAG retrieval 실패 |
 | Wikipedia REST | `https://en.wikipedia.org/api/rest_v1/page/summary/{title}` | `IngestionService` | Ingest 실패 (기존 데이터는 OK) |
 | H2 DB | in-memory(dev) / file(demo) | governance audit log | 부팅 실패 |
 | Parquet file | `./data/articles.parquet` | 지식 베이스 | RAG `No articles in knowledge base` 에러 |
