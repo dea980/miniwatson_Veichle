@@ -19,7 +19,8 @@ flowchart TB
     end
 
     subgraph DATA["Data Layer (watsonx.data)"]
-        ING["IngestionService<br/>wiki / image / file"]
+        ING["IngestionService<br/>wiki / image / file (ext dispatch)"]
+        HWP["HwpExtractor<br/>HWP/HWPX -> text"]
         CHK["Chunker (interface)<br/>fixed / recursive / semantic"]
         IDX["IndexingService<br/>updates all indexes"]
         VEC["VectorIndex<br/>cosine, brute-force (LSH opt-in)"]
@@ -48,6 +49,8 @@ flowchart TB
     RAG --> OLL
     OLL --> PII --> QLOG
 
+    ING -->|".hwp / .hwpx"| HWP
+    ING -->|"image"| OCR
     ING --> CHK
     ING --> EMB
     ING --> IDX --> VEC & KW

@@ -21,6 +21,7 @@
 추가 고려:
 - `chunking.max-size` — 작은 문서를 비교할 땐 250, 실사용은 800~1000.
 - 긴 단일주제 문서는 청크가 많아도(예: 101청크) 검색이 잘 되지만, "문서 전체가 답"인 질문은 retrieval로 못 잡는다(아래 5절 참고).
+- 청킹 앞단의 포맷 추출(PDF/DOCX/HWP/이미지 등 -> 텍스트)은 [INGESTION-FORMATS.md](INGESTION-FORMATS.md).
 
 ---
 
@@ -57,7 +58,7 @@
 
 ## 4. Embedding 모델 / 차원
 
-(측정 예정 — 4개 모델 비교: granite-embedding 30m(384), granite-embedding 278m(768), nomic(768), mxbai(1024). EMBEDDINGS.md 참고.)
+(측정 예정 — 4개 모델 비교: granite-embedding 30m(384), granite-embedding 278m(768), nomic(768), mxbai(1024). [EMBEDDINGS.md](EMBEDDINGS.md) 참고.)
 
 예상 가이드(측정 후 확정):
 

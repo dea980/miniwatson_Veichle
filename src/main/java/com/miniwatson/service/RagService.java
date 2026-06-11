@@ -75,7 +75,7 @@ public class RagService {
 
         log.info("RAG question (ns={}, model={}): {}", ns, model == null ? "default" : model, question);
 
-        List<Float> questionEmbedding = embeddingService.embed("search_query: " + question);
+        List<Float> questionEmbedding = embeddingService.embedQuery(question);
         List<Article> candidates = hybridRetriever.search(ns, questionEmbedding, question, FETCH_N, hy);
         if (candidates.isEmpty()) throw new RuntimeException("No articles in knowledge base for namespace '" + ns + "'.");
         // Sub-linear retrieval via the in-memory vector index (LSH + exact fallback).

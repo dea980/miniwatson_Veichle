@@ -50,7 +50,7 @@ public class SemanticChunker implements Chunker{
         // 각문장 임베딩
         List<float[]> embs = new ArrayList<>();
         for (String s: sentences){
-            embs.add(toArray(embeddingService.embed("search_document: " + s)));
+            embs.add(toArray(embeddingService.embedDocument(s)));
 
         }
 

@@ -25,6 +25,8 @@ storage:
 
 server:
   port: 8080
+  error:
+    include-message: always
 
 ollama:
   url: ${OLLAMA_URL:http://localhost:11434}

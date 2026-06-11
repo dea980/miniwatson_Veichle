@@ -176,5 +176,140 @@
     "namespace": "IBM-blueprint-for-agentic-opeation",
     "expectAnswer": "Should not produce a confident invoice total — the invoice is not in this namespace",
     "note": "tenant isolation — invoice lives in 'default'; judge rewards graceful miss; no expected chunk"
+  },
+  {
+    "id": "ceo-agentic-growth",
+    "category": "discriminative-number",
+    "question": "In 2026, what percent of CEOs say agentic AI is primarily driving growth?",
+    "namespace": "IBM-ceo-study-2026",
+    "expectKeywords": ["10%"],
+    "expectAnswer": "In 2026 only 10% of CEOs say advanced (agentic) AI is primarily driving growth",
+    "note": "CEO study — rare number 10%"
+  },
+  {
+    "id": "ceo-ai-decisions-2030",
+    "category": "discriminative-number",
+    "question": "By 2030, what share of operational decisions do CEOs expect AI to make?",
+    "namespace": "IBM-ceo-study-2026",
+    "expectKeywords": ["48%"],
+    "expectAnswer": "CEOs expect AI to make 48% of operational decisions by 2030 (nearly double)",
+    "note": "CEO study — projected 48%"
+  },
+  {
+    "id": "ceo-caio-adoption",
+    "category": "discriminative-number",
+    "question": "What share of organizations had a Chief AI Officer in 2026?",
+    "namespace": "IBM-ceo-study-2026",
+    "expectKeywords": ["76%"],
+    "expectAnswer": "In 2026, 76% of organizations have a Chief AI Officer (CAIO), up from 26% in 2025",
+    "note": "CEO study — CAIO adoption 76%"
+  },
+  {
+    "id": "ceo-caio-influence",
+    "category": "specific-fact",
+    "question": "How many CEOs expect the CAIO's influence to increase by 2030?",
+    "namespace": "IBM-ceo-study-2026",
+    "expectKeywords": ["100%"],
+    "expectAnswer": "100% of these CEOs expect the influence of the CAIO to increase by 2030",
+    "note": "CEO study — 100%"
+  },
+  {
+    "id": "kr-bcg-code",
+    "category": "korean",
+    "question": "AI가 작성하는 코드의 비중은 얼마인가?",
+    "namespace": "kr-bcg",
+    "expectKeywords": ["30%"],
+    "expectAnswer": "코드의 30%는 AI가 작성한다",
+    "note": "한국어(html) — 다국어 임베딩 변별용"
+  },
+  {
+    "id": "kr-bcg-junior",
+    "category": "korean",
+    "question": "주니어 개발자 수요는 얼마나 줄었나?",
+    "namespace": "kr-bcg",
+    "expectKeywords": ["20%"],
+    "expectAnswer": "주니어 개발자 수요가 20% 줄었다",
+    "note": "한국어(html)"
+  },
+  {
+    "id": "kr-bcg-countries",
+    "category": "korean",
+    "question": "BCG 조사가 다룬 국가 수는?",
+    "namespace": "kr-bcg",
+    "expectKeywords": ["59"],
+    "expectAnswer": "BCG 조사는 59개국 데이터를 다룬다",
+    "note": "한국어(html)"
+  },
+  {
+    "id": "kr-hackathon-name",
+    "category": "korean",
+    "question": "창업 입지·업종 추천 플랫폼의 이름은?",
+    "namespace": "kr-hackathon",
+    "expectKeywords": ["Snowscape"],
+    "expectAnswer": "플랫폼 이름은 Snowscape다",
+    "note": "한국어(docx)"
+  },
+  {
+    "id": "kr-hackathon-llm",
+    "category": "korean",
+    "question": "이 프로젝트가 사용한 LLM 모델은?",
+    "namespace": "kr-hackathon",
+    "expectKeywords": ["mistral-large2"],
+    "expectAnswer": "Snowflake Cortex의 mistral-large2 모델을 사용했다",
+    "note": "한국어(docx) — 정확 토큰"
+  },
+  {
+    "id": "kr-medical-benchmark",
+    "category": "korean",
+    "question": "발표에서 소개한 의료 AI 벤치마크의 이름은?",
+    "namespace": "kr-medical",
+    "expectKeywords": ["AgentClinic"],
+    "expectAnswer": "AgentClinic이라는 멀티모달 에이전트 벤치마크다",
+    "note": "한국어+영어(pptx)"
+  },
+  {
+    "id": "kr-medical-bias",
+    "category": "korean",
+    "question": "진단 정확도에 영향을 주는 요인으로 분석한 것은?",
+    "namespace": "kr-medical",
+    "expectKeywords": ["Bias"],
+    "expectAnswer": "Bias(편향)가 진단 정확도에 미치는 영향을 분석했다",
+    "note": "한국어+영어(pptx)"
+  },
+  {
+    "id": "kr-hwp-return-days",
+    "category": "korean",
+    "question": "채용서류 반환은 청구 후 며칠 이내에 이뤄지나?",
+    "namespace": "kr-hwp",
+    "expectKeywords": ["14일"],
+    "expectAnswer": "사업장은 14일 이내에 채용서류를 반환해야 한다",
+    "note": "한국어(hwp) — hwplib 추출. MISS시 추출 텍스트 확인"
+  },
+  {
+    "id": "kr-hwp-law",
+    "category": "korean",
+    "question": "채용서류 반환 청구의 근거가 되는 법률은?",
+    "namespace": "kr-hwp",
+    "expectKeywords": ["채용절차"],
+    "expectAnswer": "채용절차의 공정화에 관한 법률에 근거한다",
+    "note": "한국어(hwp)"
+  },
+  {
+    "id": "kr-hwpx-ministry",
+    "category": "korean",
+    "question": "이 공무원 경력경쟁채용 공고를 낸 부처는?",
+    "namespace": "kr-hwpx",
+    "expectKeywords": ["문화체육관광부"],
+    "expectAnswer": "문화체육관광부가 낸 공고다",
+    "note": "한국어(hwpx) — PrvText 폴백 경유"
+  },
+  {
+    "id": "kr-hwpx-headcount",
+    "category": "korean",
+    "question": "임용예정 인원은 총 몇 명인가?",
+    "namespace": "kr-hwpx",
+    "expectKeywords": ["3명"],
+    "expectAnswer": "3개 직위, 총 3명을 임용 예정",
+    "note": "한국어(hwpx)"
   }
 ]

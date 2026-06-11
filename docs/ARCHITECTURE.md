@@ -42,7 +42,8 @@ A small but production-shaped reference of IBM watsonx's three-pillar architectu
 
 | Component               | Responsibility                                          | Maps to watsonx     |
 |-------------------------|---------------------------------------------------------|---------------------|
-| `IngestionService`      | Wikipedia / file / image fetch → chunk → embed → store  | watsonx.data (ETL)  |
+| `IngestionService`      | Wikipedia / file / image fetch → chunk → embed → store; `extractText`가 확장자로 추출기 분기 | watsonx.data (ETL)  |
+| `HwpExtractor`          | 한글 HWP/HWPX → text (hwplib/hwpxlib, HWPX는 PrvText 폴백) | watsonx.data        |
 | `Chunker` (fixed/recursive/semantic) | 문서 청킹 전략 (기본 recursive)            | watsonx.data        |
 | `ArticleRepository`     | Article 영속화 인터페이스 (구현: `TieredArticleStore` = JSON hot + Parquet cold) | watsonx.data |
 | `IndexingService`       | ingest/reindex 시 VectorIndex + KeywordIndex 동기화     | watsonx.data        |
@@ -170,6 +171,7 @@ Activate via:
 - **Vector index**: LSH 기본 off → namespace별 brute-force cosine (`vector.index.lsh.enabled=false`).
 - **Rerank**: 기본 `mmr` (`rerank.strategy`); `cross`는 DJL cross-encoder, Intel Mac에서 폴백.
 - **Chunking**: 기본 `recursive` (`chunking.strategy`, `max-size=1000`).
+- **Multi-format ingest**: `IngestionService.extractText`가 확장자로 분기 — Tika(PDF/DOCX/PPTX/XLSX/HTML), HWP/HWPX는 `HwpExtractor`(hwpxlib NPE 시 PrvText 폴백), 이미지는 OCR+Vision. 추출 이후 청킹/임베딩/인덱싱은 포맷 무관 (INGESTION-FORMATS.md).
 - **LLM token budget**: `num_predict=256` with `think: false`.
 - **Multi-tenant**: 모든 인덱스/검색이 `namespace`로 분리.
 

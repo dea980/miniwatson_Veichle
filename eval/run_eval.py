@@ -9,12 +9,17 @@ Two axes:
 Retrieval sweeps rerank x hybrid via the EVAL-ONLY request overrides, in one run,
 no restart. Answer quality uses an LLM (Ollama) to grade actual vs expected.
 
+두 갈래의 데이터:
+  - 비정형 텍스트 -> RAG retrieval/judge (golden.json)
+  - 정형 표(CSV)   -> text-to-SQL (golden_sql.json, /api/tabular)
+
 Usage:
-    python3 eval/run_eval.py             # retrieval recall sweep (default)
+    python3 eval/run_eval.py             # retrieval recall sweep (default, RAG)
     python3 eval/run_eval.py --judge     # + LLM-as-judge answer quality
+    python3 eval/run_eval.py --sql       # text-to-SQL track (tabular, golden_sql.json)
     API=http://localhost:8080 OLLAMA=http://localhost:11434 python3 eval/run_eval.py --judge
 """
-import json, os, sys, urllib.request
+import json, os, sys, urllib.request, urllib.parse
 
 API = os.environ.get("API", "http://localhost:8080")
 OLLAMA = os.environ.get("OLLAMA", "http://localhost:11434")
@@ -141,8 +146,59 @@ def judge_run(cases):
         print(f"\navg answer score: {total/counted:.2f} / 5  ({counted} graded)\n")
 
 
+def sql_load(table, path, header_row=0):
+    """표 파일을 DuckDB 테이블로 등록 (POST /api/tabular/load). xlsx는 header_row로 제목행 skip."""
+    url = (f"{API}/api/tabular/load?table={table}"
+           f"&path={urllib.parse.quote(path)}&headerRow={header_row}")
+    req = urllib.request.Request(url, method="POST")
+    with urllib.request.urlopen(req, timeout=120) as r:
+        return json.load(r)
+
+
+def sql_ask(table, question):
+    """질문 -> LLM SQL -> 실행 (POST /api/tabular/ask) -> {sql, columns, rows}."""
+    req = urllib.request.Request(
+        f"{API}/api/tabular/ask",
+        data=json.dumps({"table": table, "question": question}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=180) as r:
+        return json.load(r)
+
+
+def sql_run():
+    """text-to-SQL 트랙: 각 케이스의 표를 load하고 질문해 expect 값이 결과 행에 있는지 확인."""
+    path = os.path.join(HERE, "golden_sql.json")
+    if not os.path.exists(path):
+        print("\n(golden_sql.json 없음 — text-to-SQL 트랙 스킵)\n")
+        return
+    with open(path) as f:
+        cases = json.load(f)
+    print(f"\n=== Text-to-SQL ({len(cases)} cases) ===\n")
+    print(f"{'id':22} {'hit':>4}   expect | generated SQL")
+    print("-" * 78)
+    hits = 0
+    for c in cases:
+        try:
+            sql_load(c["table"], c["path"], c.get("headerRow", 0))
+            resp = sql_ask(c["table"], c["question"])
+            blob = json.dumps(resp.get("rows", []), default=str).lower()
+            ok = str(c["expect"]).lower() in blob
+            sql = (resp.get("sql", "") or "").replace("\n", " ")
+        except Exception as e:
+            ok, sql = False, f"ERR {e}"
+        hits += 1 if ok else 0
+        print(f"{c['id']:22} {('Y' if ok else 'N'):>4}   {c['expect']} | {sql[:48]}")
+    n = len(cases)
+    print(f"\nSQL recall: {hits}/{n} ({hits/n:.0%})\n")
+
+
 def main():
-    with open(os.path.join(HERE, "golden.json")) as f:
+    if "--sql" in sys.argv:               # 정형 표 트랙 (text-to-SQL)
+        sql_run()
+        return
+    with open(os.path.join(HERE, "golden.json")) as f:   # 비정형 RAG 트랙
         cases = json.load(f)
     recall_sweep(cases)
     if "--judge" in sys.argv:

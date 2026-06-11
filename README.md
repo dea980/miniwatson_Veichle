@@ -36,6 +36,7 @@ Three layers, each mapping to a watsonx component:
 │  ┌────────────────────────────────────────────────────┐ │
 │  │  Data Layer (watsonx.data analog)                  │ │
 │  │  • Ingest: Wikipedia / image (vision+OCR) / file   │ │
+│  │  • Multi-format: PDF/DOCX/PPTX/XLSX/HTML + HWP/HWPX │ │
 │  │  • Chunking: fixed / recursive / semantic          │ │
 │  │  • Multi-tenant namespaces + dedup + CRUD          │ │
 │  │  • Tiered: hot JSON → cold Parquet (compaction)    │ │
@@ -63,7 +64,7 @@ Three layers, each mapping to a watsonx component:
 | Framework | Spring Boot 4.0 | Enterprise standard, fast bootstrap |
 | LLM | Ollama (local) | Sovereign deployment, no API keys |
 | Chat model | ibm/granite4:latest (default) · multi-LLM | per-request model, whitelist-validated |
-| Embedding model | nomic-embed-text / granite-embedding | 768-dim, runs locally |
+| Embedding model | nomic-embed-text / granite-embedding / mxbai (compared) | 384/768/1024-dim, runs locally; harness in EMBEDDINGS.md (measuring) |
 | Vision model | llava / granite-vision | image Q&A + caption (multimodal) |
 | OCR | Tesseract (CLI) | exact text/number extraction for grounding |
 | Data format | Apache Parquet | Columnar + SNAPPY = 7× smaller than JSON |
@@ -169,15 +170,17 @@ curl -X POST http://localhost:8080/api/multimodal/ingest \
   -F "image=@invoice.png" -F "namespace=demo"
 ```
 
-### Upload a text/document file (any type via Apache Tika)
+### Upload a text/document file (Tika + Korean HWP/HWPX)
 
 ```bash
 curl -X POST http://localhost:8080/api/data/ingest-file \
   -F "file=@report.pdf" -F "namespace=demo"
 ```
 
-The file is text-extracted (Tika: PDF/docx/txt/csv/...), split into chunks, and
-each chunk stored as an Article (`title #1`, `#2`, ...). Returns the list of
+The file is text-extracted, split into chunks, and each chunk stored as an
+Article (`title #1`, `#2`, ...). Extraction branches by extension: Tika
+(PDF/DOCX/PPTX/XLSX/HTML/txt/md/csv) and HWP/HWPX via hwplib/hwpxlib (see
+[docs/INGESTION-FORMATS.md](docs/INGESTION-FORMATS.md)). Returns the list of
 created chunks. Chunk strategy/size via `chunking.*` config.
 
 ### Summarize an uploaded document
@@ -492,6 +495,8 @@ Notes from building this:
 - [x] 20 — Hybrid search (vector + BM25, RRF) with indexing split
 - [x] 21 — Eval harness (recall + LLM-as-judge), unit tests, user feedback loop
 - [x] 22 — PostgreSQL + pgvector container via Podman (prod profile, persistent governance storage)
+- [x] 23 — Korean HWP/HWPX ingest (hwplib/hwpxlib + PrvText fallback); extractText extension dispatch
+- [x] 24 — Embedding model comparison harness (384/768/1024-dim, prefix convention; methodology built, measuring)
 - [ ] PgVectorStore — vector search on pgvector (container ready; search still in-memory VectorIndex)
 - [ ] deployment notes (Docker + compose) — also verifies cross-encoder on Linux
 - [ ] tenant isolation enforcement / API auth
@@ -531,6 +536,8 @@ MIT
 | [docs/CHUNKING-TEST.md](docs/CHUNKING-TEST.md) | Step-by-step guide to reproduce the chunking comparison |
 | [docs/RERANKING.md](docs/RERANKING.md) | Two-stage retrieval, reranker strategies, before/after + platform findings |
 | [docs/HYBRID-SEARCH.md](docs/HYBRID-SEARCH.md) | Vector + BM25 hybrid retrieval, RRF fusion, indexing split, measured limits |
+| [docs/EMBEDDINGS.md](docs/EMBEDDINGS.md) | Embedding model comparison (384/768/1024-dim), prefix convention, measurement harness |
+| [docs/INGESTION-FORMATS.md](docs/INGESTION-FORMATS.md) | Multi-format ingest — Tika + Korean HWP/HWPX (PrvText fallback), extension dispatch |
 | [docs/EVALUATION.md](docs/EVALUATION.md) | Retrieval eval harness, rerank/hybrid sweep, findings (llm rerank can hurt) |
 | [docs/TESTING.md](docs/TESTING.md) | JUnit unit tests; how a test caught a Korean-phone PII gap |
 | [docs/VERIFICATION.md](docs/VERIFICATION.md) | How each feature was verified — unit / offline eval / curl / UI |

@@ -8,6 +8,7 @@ import com.miniwatson.data.WikipediaResponse;
 import com.miniwatson.governance.DocumentCatalog;
 import com.miniwatson.governance.DocumentCatalogRepository;
 import com.miniwatson.service.IndexingService;
+import com.miniwatson.service.HwpExtractor;
 
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -20,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.*;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.io.InputStream;
 
 import org.springframework.beans.factory.annotation.Value;
 
@@ -43,6 +45,7 @@ public class IngestionService {
     private final Chunker chunker;// 청킹 분리
     private final int maxSize;
     private final Tika tika = new Tika();
+    private final HwpExtractor hwpExtractor;
     private final DocumentCatalogRepository catalogRepo;
     private final String embedModel;
     //private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(IngestionService.class);
@@ -51,6 +54,7 @@ public class IngestionService {
                             IndexingService indexingService,
                             OllamaService ollamaService,
                             OcrService ocrService,
+                            HwpExtractor hwpExtractor,
                             Map<String, Chunker> chunkers,                         // 모든 Chunker 빈
                             DocumentCatalogRepository catalogRepo,
                             @Value("${chunking.strategy:recursive}") String strategy,
@@ -65,6 +69,7 @@ public class IngestionService {
         this.maxSize = maxSize;
         this.catalogRepo = catalogRepo;
         this.embedModel = embedModel;
+        this.hwpExtractor = hwpExtractor;
 
     }
 
@@ -114,7 +119,7 @@ public class IngestionService {
         article.setIngestedAt(LocalDateTime.now());
 
         String textToEmbed = response.getTitle() + ". " + response.getExtract();
-        article.setEmbedding(embeddingService.embed("search_document: " + textToEmbed));
+        article.setEmbedding(embeddingService.embedDocument(textToEmbed));
 
         Article saved = articleStore.save(article);
         indexingService.index(saved);
@@ -148,7 +153,7 @@ public class IngestionService {
         article.setSummary(combined);
         article.setUrl("image://" + title);
         article.setIngestedAt(LocalDateTime.now());
-        article.setEmbedding(embeddingService.embed("search_document: " + combined));
+        article.setEmbedding(embeddingService.embedDocument(combined));
 
         Article saved = articleStore.save(article);
         indexingService.index(saved);
@@ -158,18 +163,11 @@ public class IngestionService {
     /** 임의 파일(PDF/docx/txt/csv...)을 추출 → 청킹 → 청크별 Article 저장. */
     public List<Article> ingestText(MultipartFile file, String namespace) throws IOException {
         String ns = (namespace == null || namespace.isBlank()) ? DEFAULT_NS : namespace;
-
-        String content;
-        try {
-            content = tika.parseToString(file.getInputStream());
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to extract text from file: " + e.getMessage());
-        }
+        String filename = file.getOriginalFilename();
+        String content = extractText(file, filename);          // 확장자 분기 (HWP/HWPX/Tika) — 결과를 덮어쓰지 않는다
         if (content == null || content.isBlank()) {
             throw new RuntimeException("No extractable text in file");
         }
-
-        String filename = file.getOriginalFilename();
         String baseTitle = (filename == null || filename.isBlank())
                 ? "text-" + System.currentTimeMillis() : filename;
 
@@ -196,7 +194,7 @@ public class IngestionService {
             article.setSummary(c);
             article.setUrl("file://" + baseTitle + "#" + (i + 1));
             article.setIngestedAt(LocalDateTime.now());
-            article.setEmbedding(embeddingService.embed("search_document: " + c));
+            article.setEmbedding(embeddingService.embedDocument(c));
 
             Article s = articleStore.save(article);
             indexingService.index(s);
@@ -253,4 +251,24 @@ public class IngestionService {
         if (url.startsWith("file://")) return "file";
         return "wikipedia";
     }
+    /** 확장자 -> 추출기 라우팅. 순수 함수라 단위 테스트 가능 (IngestionServiceTest). */
+    enum SourceFormat { HWP, HWPX, TIKA }
+    static SourceFormat formatOf(String filename) {
+        String n = filename == null ? "" : filename.toLowerCase();
+        if (n.endsWith(".hwpx")) return SourceFormat.HWPX;   // .hwp보다 먼저 (접미사 포함관계)
+        if (n.endsWith(".hwp"))  return SourceFormat.HWP;
+        return SourceFormat.TIKA;                            // pdf/docx/pptx/xlsx/html/txt/md/csv...
+    }
+    private String extractText(MultipartFile file, String filename) {
+        try (InputStream in = file.getInputStream()) {
+            return switch (formatOf(filename)) {
+                case HWPX -> hwpExtractor.fromHwpx(in);
+                case HWP  -> hwpExtractor.fromHwp(in);
+                case TIKA -> tika.parseToString(in);         // pdf/docx/pptx/xlsx/html/txt/md
+            };
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to extract text from file: " + e.getMessage());
+        }
+    }
+
 }

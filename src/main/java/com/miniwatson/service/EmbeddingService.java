@@ -17,6 +17,22 @@ public class EmbeddingService {
     private String embedModel;
     private final RestTemplate restTemplate = new RestTemplate();
 
+    public List<Float> embedQuery(String text){
+        return embed(prefixFor(embedModel).q() + text);
+    }
+    public List<Float> embedDocument(String text){
+        return embed(prefixFor(embedModel).d() + text);
+    }
+    /** 모델명 -> prefix 규약. 순수 함수라 단위 테스트 가능 (EmbeddingServiceTest). */
+    static Prefix prefixFor(String model){
+        String m = model == null ? "" : model.toLowerCase();
+        if (m.startsWith("nomic"))             return new Prefix("search_query: ", "search_document: ");
+        if (m.startsWith("granite-embedding")) return new Prefix("", "");   // prefix 불필요
+        if (m.startsWith("mxbai"))             return new Prefix(
+                "Represent this sentence for searching relevant passages: ", "");
+        return new Prefix("", "");             // 기본: 무prefix (안전)
+    }
+    record Prefix(String q, String d) {}
     public List<Float> embed(String text) {
         EmbeddingRequest request = new EmbeddingRequest();
         request.setModel(embedModel);

@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
-@Component("recursive")               // 빈 이름
+@Component("recursive")
 public class RecursiveChunker implements Chunker {
 
     private static final String[] SEPARATORS = {"\n\n", "\n", ". ", " "};

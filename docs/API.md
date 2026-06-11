@@ -29,7 +29,10 @@
 4. [Multimodal](#4-multimodal)
    - `POST /api/multimodal/ask`
    - `POST /api/multimodal/ingest`
-5. [Health](#5-health)
+5. [Tabular (text-to-SQL)](#5-tabular-text-to-sql)
+   - `POST /api/tabular/load`
+   - `POST /api/tabular/ask`
+6. [Health](#6-health)
 
 ---
 
@@ -494,7 +497,57 @@ curl -X POST http://localhost:8080/api/multimodal/ingest \
 
 ---
 
-## 5. Health
+## 5. Tabular (text-to-SQL)
+
+Controller: `TabularController` — `@RequestMapping("/api/tabular")`. 표(CSV/XLSX)는 RAG가 아니라 DuckDB로 SQL 질의한다 — 집계(COUNT/AVG/SUM)는 벡터 RAG가 못 하는 영역. 상세: [TABULAR-SQL.md](TABULAR-SQL.md).
+
+### `POST /api/tabular/load`
+
+표 파일을 DuckDB 테이블로 등록 (CSV는 `read_csv_auto`, XLSX는 POI로 변환). 정부/기업 양식은 제목·안내행이 위에 있어 `headerRow`로 진짜 헤더부터 읽는다.
+
+**Request**
+```bash
+curl -X POST "http://localhost:8080/api/tabular/load?table=revenue&path=sample/quarterly-revenue-2025.csv"
+curl -X POST "http://localhost:8080/api/tabular/load?table=housing&path=sample/주택목록.xlsx&headerRow=6"
+```
+
+| Param     | In    | Type   | Required | Description                                       |
+|-----------|-------|--------|----------|---------------------------------------------------|
+| table     | query | string | Yes      | 테이블명 (`[A-Za-z_][A-Za-z0-9_]*`).              |
+| path      | query | string | Yes      | 서버측 파일 경로 (데모: `sample/`).               |
+| headerRow | query | int    | No       | xlsx 헤더 행 인덱스(0부터). 기본 0.               |
+
+**Response — 200 OK**
+```json
+{ "table": "revenue", "schema": "quarter VARCHAR\nrevenue_musd DOUBLE\nregion VARCHAR\nyoy_growth_pct BIGINT\n" }
+```
+
+### `POST /api/tabular/ask`
+
+질문 → LLM이 DuckDB SQL(SELECT) 생성 → 실행 → 결과. 생성된 SQL을 응답에 함께 돌려준다(투명성). 실패 시 `error` 포함.
+
+**Request**
+```bash
+curl -X POST http://localhost:8080/api/tabular/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"table":"revenue","question":"What was the Q3 revenue?"}'
+```
+
+| Field    | Type   | Required | Description                  |
+|----------|--------|----------|------------------------------|
+| table    | string | Yes      | `load`로 등록한 테이블 이름. |
+| question | string | Yes      | 자연어 질문.                 |
+
+**Response — 200 OK**
+```json
+{ "sql": "SELECT revenue_musd FROM revenue WHERE quarter = 'Q3'", "columns": ["revenue_musd"], "rows": [[24.1]] }
+```
+
+보안: 실행은 `SELECT`/`WITH`만 허용하고 `DROP/DELETE/UPDATE/INSERT/...` 등 위험 키워드는 차단한다.
+
+---
+
+## 6. Health
 
 ### `GET /actuator/health`
 

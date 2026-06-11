@@ -36,12 +36,49 @@ eval/
 | definition | 본문 깊숙한 정의를 정확히 끌어오는지 | pods |
 | reasoning | 패러프레이즈·부정·다중 사실 종합. 단순 매칭으로 안 되는 것 | rag-vs-finetune, negation-trap, multi-fact |
 | refusal | 근거가 없을 때 confident 오답 대신 "모른다"고 하는지(hallucination 억제). 테넌트 격리도 포함 | out-of-scope(프랑스 수도), wrong-namespace |
+| korean | 한국어 질의 -> 한국어 문서. 영어중심(nomic) vs 다국어(granite-278m) 임베딩 변별 축 | kr-bcg-code, kr-hackathon-llm, kr-medical-benchmark |
 
 핵심 원칙:
 - 일부러 어려운 유형(vocab-mismatch, reasoning, refusal)을 넣어 "쉬운 질문만 통과"하는 착시를 막는다.
 - 알려진 약점(5.4x 같은 ubiquitous-term)을 케이스로 박아 회귀를 추적한다.
 - refusal 케이스는 retrieval recall로는 평가할 수 없고(정답 청크가 없음) LLM-as-judge로만 의미가 있다 — "근거 없음"을 잘 말하는지가 점수.
 - 일부 expectKeywords(79%, 240 등)는 코퍼스에서 본 것 기반이나 100% 확신은 아니다. MISS가 나면 silos 사례처럼 "정답셋 오류 vs 진짜 검색 실패"를 먼저 가린다.
+
+### namespace별 커버리지 (RAG 트랙, 현재 35케이스)
+
+같은 정답셋이 영어 3개 + 한국어 5개 namespace에 걸쳐 있어, 포맷·언어별 검색 강도를 한 번에 본다. (표 데이터 csv/xlsx는 RAG가 아니라 SQL 트랙으로 분리.)
+
+| namespace | 케이스 | 소스(포맷) | 노리는 축 |
+|---|---|---|---|
+| default | 9 | Wikipedia + 송장(PNG OCR) | 영어 의미·정확토큰·OCR |
+| IBM-blueprint-for-agentic-opeation | 11 | IBM blueprint PDF | 영어 희귀숫자·정의·추론 (가장 어려움) |
+| IBM-ceo-study-2026 | 4 | IBM CEO study PDF | 영어 숫자 사실 (10/48/76/100%) |
+| kr-bcg | 3 | BCG 분석 (HTML) | 한국어 숫자 (30/20/59) |
+| kr-hackathon | 2 | 해커톤 (DOCX) | 한국어 정확토큰 (Snowscape, mistral-large2) |
+| kr-medical | 2 | 의료AI 발표 (PPTX) | 한국어+영어 (AgentClinic, Bias) |
+| kr-hwp | 2 | IBK 채용서류 (HWP) | 한국어 hwplib 추출 (14일, 채용절차) |
+| kr-hwpx | 2 | 문체부 채용공고 (HWPX) | 한국어 PrvText 폴백 (문화체육관광부, 3명) |
+
+한국어 11케이스는 임베딩 모델 비교([EMBEDDINGS.md](EMBEDDINGS.md))의 다국어 변별 축이다. nomic(영어 중심)에선 약하게, granite-embedding:278m(다국어)에선 강하게 나오는지로 "한국어 콘텐츠엔 어떤 임베더"를 측정한다. 포맷 다양성(PDF/HTML/DOCX/PPTX/PNG + 한글 HWP/HWPX)은 [INGESTION-FORMATS.md](INGESTION-FORMATS.md)가 어떻게 텍스트로 바뀌는지 다룬다.
+
+### text-to-SQL 트랙 (정형 표, golden_sql.json)
+
+표 데이터의 정밀·집계 질의는 RAG가 아니라 SQL로 채점한다(`run_eval.py --sql`). 각 케이스는 `{table, path, question, expect}` (xlsx는 제목행 skip용 `headerRow` 포함)이고, `/api/tabular/load` 후 `/ask`로 LLM이 만든 SQL을 실행해 `expect` 값이 결과 행에 있는지 본다.
+
+| id | 표(포맷) | 질문 유형 | expect |
+|---|---|---|---|
+| sql-revenue-q3 | revenue (CSV) | 정확값 조회 | 24.1 |
+| sql-revenue-avg | revenue (CSV) | 집계 AVG | 16 |
+| sql-revenue-total | revenue (CSV) | 집계 SUM | 83 |
+| sql-nasa-hazardous | nasa (CSV, 4687행) | 집계 COUNT | 755 |
+| sql-nasa-orbit | nasa (CSV) | 단일값 컬럼 | Earth |
+| sql-housing-count | housing (XLSX, 헤더 6행 skip) | 집계 COUNT | 103 |
+
+측정: **6/6 (100%)** — revenue(정확값/AVG/SUM) + nasa(COUNT 755 / 단일값 Earth) + housing.xlsx(COUNT 103, 헤더 6행 skip). `normalize_names`로 공백 컬럼 인용 문제를 제거하고 프롬프트에 샘플행을 줘 리터럴 정확도를 올린 뒤 6/6이 됐다(상세는 [TABULAR-SQL.md](TABULAR-SQL.md) 3절).
+
+집계(AVG/SUM/COUNT)는 벡터 RAG가 원천적으로 못 하는 영역이라 SQL 트랙으로 분리했다(왜·구조는 [TABULAR-SQL.md](TABULAR-SQL.md)). xlsx(kr-housing)도 `registerXlsx`(POI→임시 CSV) 추가로 이제 SQL 트랙에서 채점한다.
+
+순수 로직(청커·BM25·PII·임베딩 prefix·확장자 라우팅) 회귀는 golden.json이 아니라 JUnit 단위 테스트로 잡는다([TESTING.md](TESTING.md)). golden.json은 "검색 품질", golden_sql.json은 "표 SQL 정확성", JUnit은 "구현 정확성"으로 역할이 다르다.
 
 ## 3. 실행
 

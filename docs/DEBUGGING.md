@@ -118,6 +118,23 @@ public static class Desktop     { ... }   // static
 - 각 article은 try-catch로 격리되어 있어 한 건 실패해도 다음 진행 (`DataController.ingestBatch`).
 - 그래도 멈춘다면 Ollama embedding 호출이 hang일 가능성 — 4.4 참조.
 
+### 3.6 docx/pptx/xlsx ingest만 HTTP 500 — `NoSuchMethodError: UnsynchronizedByteArrayOutputStream.builder()`
+**증상**: `/api/data/ingest-file`로 OOXML(docx/pptx/xlsx)을 넣으면 500. 로그의 `Caused by`에:
+```
+java.lang.NoSuchMethodError: org/apache/commons/io/output/UnsynchronizedByteArrayOutputStream.builder()
+  at org.apache.poi.util.IOUtils...   (poi 5.2.5)
+```
+html/pdf/txt/md는 멀쩡한데 OOXML만 깨진다.
+
+**원인**: POI 5.2.5(OOXML 파서)는 commons-io >=2.12의 `builder()`를 호출한다. 그런데 **Hadoop(parquet 의존)이 transitive로 commons-io 2.8.0**을 끌어와 classpath에서 우선됐다 → `builder()`가 없어 NoSuchMethodError. POI를 안 쓰는 포맷(html/pdf/txt/md)은 영향 없음.
+
+**해결**: `pom.xml`에 **commons-io 2.18.0을 직접 의존성으로 고정**(직접 의존성이 transitive를 이긴다). 현재 박혀 있는지 확인:
+```bash
+grep -A2 'commons-io' pom.xml   # version 2.18.0
+```
+
+**교훈**: 500이 특정 포맷에만 나면 그 포맷 전용 파서의 transitive 의존성 충돌을 의심한다. `curl`로 status가 안 보이면 `server.error.include-message=always`나 앱 로그의 `Caused by`로 예외 클래스명을 먼저 본다. (`curl -s`는 HTTP 500에도 exit 0이라 스크립트가 성공으로 오인 — status 확인엔 `-f` 필요.)
+
 ---
 
 ## 4. LLM / Embedding
@@ -195,6 +212,9 @@ OLLAMA_NUM_PREDICT=1500 ./mvnw spring-boot:run
 
 ### 5.8 `application.yaml` 의 `OLLAMA_*` env override
 - 코드에 모델명/URL 박혀 있지 않음. 변경 시 `@Value` 키 일치 확인.
+
+### 5.9 `pom.xml` 의 `commons-io 2.18.0` 직접 의존성
+- 빼면 Hadoop의 transitive commons-io 2.8.0이 우선돼 POI(docx/pptx/xlsx)가 `NoSuchMethodError`로 깨짐 (3.6).
 
 ---
 

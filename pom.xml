@@ -138,6 +138,28 @@
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>
 		</dependency>
+		<dependency>
+			<groupId>kr.dogfoot</groupId>
+			<artifactId>hwplib</artifactId>
+			<version>1.1.8</version>     <!-- Maven Central 최신 확인 -->
+		</dependency>
+		<dependency>
+			<groupId>kr.dogfoot</groupId>
+			<artifactId>hwpxlib</artifactId>
+			<version>1.0.5</version>     <!-- 최신 확인 -->
+		</dependency>
+		<dependency>
+			<groupId>org.duckdb</groupId>
+			<artifactId>duckdb_jdbc</artifactId>
+			<version>1.3.1.0</version>   <!-- 표 text-to-SQL (watsonx.data 라이크하우스) -->
+		</dependency>
+		<!-- POI 5.2.5(docx/pptx/xlsx)가 commons-io >=2.12의 builder()를 호출하는데
+		     Hadoop(parquet)이 끌어온 2.8.0이 우선돼 NoSuchMethodError. 직접 고정해 override. -->
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+			<version>2.18.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>
