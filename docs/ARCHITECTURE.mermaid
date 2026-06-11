@@ -7,6 +7,7 @@ flowchart TB
         DC["DataController<br/>/data/ingest, /documents, /summarize, /index/stats"]
         MC["MultimodalController<br/>/multimodal/ask, /ingest"]
         GC["GovernanceController<br/>/governance/logs, /stats, /feedback"]
+        TC["TabularController<br/>/tabular/load, /ask"]
     end
 
     subgraph AI["AI Layer (watsonx.ai)"]
@@ -29,6 +30,7 @@ flowchart TB
         HOT["ArticleStore (JSON hot)"]
         COLD["ArticleParquetStore (cold)"]
         TIER["TieredArticleStore<br/>hot → cold compaction"]
+        SQL["TabularSqlService + TextToSqlService<br/>DuckDB text-to-SQL"]
     end
 
     subgraph GOV["Governance Layer (watsonx.governance)"]
@@ -37,8 +39,9 @@ flowchart TB
         PII["PiiRedactionService"]
     end
 
-    UI --> RC & DC & MC & GC
+    UI --> RC & DC & MC & GC & TC
     RC --> RAG
+    TC --> SQL
     DC --> ING
     MC --> OLL & OCR & ING
     GC --> QLOG & CAT

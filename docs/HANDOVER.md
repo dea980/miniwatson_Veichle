@@ -22,7 +22,7 @@
 **IBM watsonx의 3-layer 구조 (data · ai · governance) 를 Spring Boot + Ollama + Parquet 로 미니어처화한 로컬 RAG 시스템.**
 
 - **목적**: enterprise GenAI platform이 실제로 어떻게 동작하는지 코드로 이해.
-- **상태**: roadmap 1~22 (코어 + RAG 고도화 + governance + multimodal + Postgres prod) 완료. 배포 노트/PgVectorStore 진행 중. `roadmap` 참조 (README.md).
+- **상태**: roadmap 1~22 (코어 + RAG 고도화 + governance + multimodal + Postgres prod) 완료. 정형 표(CSV/XLSX)는 DuckDB text-to-SQL(`/api/tabular`)로 분리 — 비정형은 RAG, 집계는 SQL. 배포 노트/PgVectorStore 진행 중. `roadmap` 참조 (README.md).
 - **작성자**: Daeyeop Kim (`kdea989@gmail.com`)
 
 ---
@@ -92,8 +92,8 @@ miniwatson/
 │
 ├── src/main/java/com/miniwatson/
 │   ├── MiniwatsonApplication.java     ← Spring Boot 엔트리
-│   ├── controller/                    ← 4개 REST 컨트롤러 (Rag/Data/Multimodal/Governance)
-│   ├── service/                       ← 비즈니스 서비스 (~19: ingest/embed/ocr/retrieve/rerank/chunk)
+│   ├── controller/                    ← 5개 REST 컨트롤러 (Rag/Data/Multimodal/Governance/Tabular)
+│   ├── service/                       ← 비즈니스 서비스 (ingest/embed/ocr/retrieve/rerank/chunk + tabular SQL)
 │   ├── data/                          ← Article 도메인 + Parquet I/O
 │   ├── governance/                    ← QueryLog JPA entity + repo
 │   └── dto/                           ← Ollama/Embedding/Ask 요청/응답
@@ -183,7 +183,7 @@ miniwatson/
 - **상용 사용 의도 없음**: 학습용/포트폴리오.
 - **구현 완료**: vector index(in-memory), hybrid search(vector+BM25 RRF), reranking(none/llm/mmr/cross),
   chunking(fixed/recursive/semantic), multimodal(vision+OCR), PII redaction, governance stats/feedback,
-  multi-tenant namespacing, document catalog, eval harness, Postgres prod 프로필. (README roadmap 1~22 참조)
+  multi-tenant namespacing, document catalog, eval harness, tabular text-to-SQL(DuckDB), Postgres prod 프로필. (README roadmap 1~22 참조)
 - **벡터 검색 기본값은 brute-force cosine** — LSH는 `vector.index.lsh.enabled=true` 로 opt-in. 의도된 config 선택이지 미구현 아님.
 - **남은 gap**:
   - PgVectorStore — pgvector 컨테이너는 떠 있으나 벡터 검색은 아직 in-memory VectorIndex

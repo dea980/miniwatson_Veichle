@@ -17,6 +17,7 @@ A small but production-shaped reference of IBM watsonx's three-pillar architectu
 │  REST API  (Spring Boot 4 · Jackson 3.x)                     │
 │  ── DataController · RagController                           │
 │     GovernanceController · MultimodalController             │
+│     TabularController                                       │
 └────────────────────────────┬─────────────────────────────────┘
                              │
         ┌────────────────────┼────────────────────┐
@@ -56,6 +57,10 @@ A small but production-shaped reference of IBM watsonx's three-pillar architectu
 | `QueryLogRepository`    | 모든 LLM 호출을 H2/PostgreSQL에 기록 (JPA)              | watsonx.governance  |
 | `GovernanceController`  | logs / stats / feedback API                             | watsonx.governance  |
 | `MultimodalController`  | 이미지 ask + ingest (OCR + Vision)                      | watsonx.ai          |
+| `TabularController`     | 표(CSV/XLSX) load + 자연어 SQL 질의 (`/api/tabular/load`·`/ask`) | watsonx.data        |
+| `TabularSqlService` / `TextToSqlService` | DuckDB 임베디드 SQL 엔진 + 질문→SQL 생성/실행 (SELECT 전용 가드) | watsonx.data (text-to-SQL) |
+
+> **모달리티 분기**: 비정형 텍스트는 RAG(`/api/rag`, 벡터 검색)로, 정형 표(CSV/XLSX)는 SQL(`/api/tabular`, DuckDB)로 처리한다. COUNT/AVG/SUM 같은 집계는 벡터 RAG가 원천적으로 못 하므로 watsonx.data 라이크하우스 패턴(파일을 옮기지 않고 컬럼 엔진으로 SQL)으로 분리했다.
 
 ---
 

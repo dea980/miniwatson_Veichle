@@ -1,7 +1,9 @@
 # MiniWatson
 
 > A miniature watsonx-style platform — built end-to-end from scratch  
-> Spring Boot · Ollama · Parquet · 768-dim embeddings · RAG (chunking + reranking) · multimodal (vision + OCR) · multi-tenant · PII governance
+> Spring Boot · Ollama · Parquet · 768-dim embeddings · RAG (chunking + reranking) · multimodal (vision + OCR) · tabular text-to-SQL (DuckDB) · multi-tenant · PII governance
+
+> 정형 표(CSV/XLSX)는 DuckDB로 text-to-SQL — 집계는 SQL, 텍스트는 RAG.
 
 MiniWatson is a learning project that recreates IBM watsonx's 3-layer architecture
 (data · ai · governance) at a small scale. The goal: understand how enterprise
@@ -31,6 +33,7 @@ Three layers, each mapping to a watsonx component:
 │  │  • RAG: chunk → embed → hybrid search → rerank     │ │
 │  │  • Hybrid: vector + BM25 keyword (RRF fusion)      │ │
 │  │  • Reranking: none/llm/mmr/cross (pluggable)       │ │
+│  │  • Tabular: CSV/XLSX → text-to-SQL (DuckDB)        │ │
 │  └────────────────────────────────────────────────────┘ │
 │                                                         │
 │  ┌────────────────────────────────────────────────────┐ │
@@ -76,6 +79,7 @@ Three layers, each mapping to a watsonx component:
 | Chunking | fixed / recursive / semantic (pluggable) | recursive default; balance quality vs cost |
 | Reranking | none / llm / mmr / cross (pluggable) | two-stage: fetch top-N → rerank → top-K |
 | Cross-encoder | DJL + PyTorch + BGE-reranker | dedicated reranker model (Linux/Apple Silicon) |
+| Tabular SQL | DuckDB (embedded, in-memory) | text-to-SQL over CSV/XLSX; aggregation RAG can't do |
 | Database | H2 (in-memory) | Zero config for governance audit |
 | Build | Maven | pom.xml + spring-boot-maven-plugin |
 | Frontend | Plain HTML + JS | No framework lock-in, instant load |
@@ -297,7 +301,8 @@ miniwatson/
 │   │   ├── RagController.java            # POST /api/rag/ask · GET /api/rag/models
 │   │   ├── DataController.java           # /api/data/* (ingest, file, delete, stats)
 │   │   ├── MultimodalController.java     # /api/multimodal/ask · /ingest (vision)
-│   │   └── GovernanceController.java     # /api/governance/logs · /stats · POST /feedback
+│   │   ├── GovernanceController.java     # /api/governance/logs · /stats · POST /feedback
+│   │   └── TabularController.java        # POST /api/tabular/load · /ask (DuckDB text-to-SQL)
 │   ├── service/
 │   │   ├── OllamaService.java            # Chat (multi-LLM) + vision (images)
 │   │   ├── EmbeddingService.java         # Embed: 768-dim
@@ -538,6 +543,7 @@ MIT
 | [docs/HYBRID-SEARCH.md](docs/HYBRID-SEARCH.md) | Vector + BM25 hybrid retrieval, RRF fusion, indexing split, measured limits |
 | [docs/EMBEDDINGS.md](docs/EMBEDDINGS.md) | Embedding model comparison (384/768/1024-dim), prefix convention, measurement harness |
 | [docs/INGESTION-FORMATS.md](docs/INGESTION-FORMATS.md) | Multi-format ingest — Tika + Korean HWP/HWPX (PrvText fallback), extension dispatch |
+| [docs/TABULAR-SQL.md](docs/TABULAR-SQL.md) | Tabular text-to-SQL over CSV/XLSX with DuckDB — aggregation path RAG can't do, SELECT-only guard |
 | [docs/EVALUATION.md](docs/EVALUATION.md) | Retrieval eval harness, rerank/hybrid sweep, findings (llm rerank can hurt) |
 | [docs/TESTING.md](docs/TESTING.md) | JUnit unit tests; how a test caught a Korean-phone PII gap |
 | [docs/VERIFICATION.md](docs/VERIFICATION.md) | How each feature was verified — unit / offline eval / curl / UI |

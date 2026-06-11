@@ -9,8 +9,8 @@
 | Package | 책임 | 파일 |
 |---|---|---|
 | `com.miniwatson` | Spring Boot 부트스트랩 | `MiniwatsonApplication.java` |
-| `com.miniwatson.controller` | HTTP presentation | `RagController`, `DataController`, `GovernanceController`, `MultimodalController` |
-| `com.miniwatson.service` | 비즈니스 로직 (AI + ingestion + RAG + retrieval) | `OllamaService`, `EmbeddingService`, `IngestionService`, `RagService`, `HybridRetriever`, `IndexingService`, `Chunker`(fixed/recursive/semantic), `Reranker`(none/llm/mmr/cross), `OcrService` |
+| `com.miniwatson.controller` | HTTP presentation | `RagController`, `DataController`, `GovernanceController`, `MultimodalController`, `TabularController` |
+| `com.miniwatson.service` | 비즈니스 로직 (AI + ingestion + RAG + retrieval + tabular SQL) | `OllamaService`, `EmbeddingService`, `IngestionService`, `RagService`, `HybridRetriever`, `IndexingService`, `Chunker`(fixed/recursive/semantic), `Reranker`(none/llm/mmr/cross), `OcrService`, `TabularSqlService`, `TextToSqlService` |
 | `com.miniwatson.data` | 도메인 + 영속화 + 인덱스 | `Article`, `WikipediaResponse`, `ArticleRepository`(인터페이스) / `TieredArticleStore`(@Primary), `ArticleStore`(JSON hot), `ArticleParquetStore`(Parquet cold), `VectorStore`/`VectorIndex`, `KeywordIndex` |
 | `com.miniwatson.governance` | audit + 카탈로그 + PII | `QueryLog`, `QueryLogRepository`, `DocumentCatalog`, `DocumentCatalogRepository`, `PiiRedactionService` |
 | `com.miniwatson.dto` | 외부 API 요청/응답 모델 | `AskRequest`, `OllamaRequest`, `OllamaResponse`, `EmbeddingRequest`, `EmbeddingResponse` |
@@ -19,7 +19,7 @@
 
 ## 1. Controllers
 
-> 컨트롤러는 4개: `RagController` · `DataController` · `GovernanceController` · `MultimodalController`. 별도 Hello/Ask 컨트롤러나 `/api/hello`·`/api/version`·`/api/ask` 엔드포인트는 없다.
+> 컨트롤러는 5개: `RagController` · `DataController` · `GovernanceController` · `MultimodalController` · `TabularController`. 별도 Hello/Ask 컨트롤러나 `/api/hello`·`/api/version`·`/api/ask` 엔드포인트는 없다.
 
 ### 1.1 RagController
 - **URL**: `POST /api/rag/ask`, `GET /api/rag/models`
@@ -64,6 +64,12 @@
 - **`/logs`**: `List<QueryLog>` (JSON, 정렬 없음 — `findAll()` 기본 순서).
 - **`/stats`**: 카드/차트용 집계 — `totalCalls`, `avgLatencyMs`, `totalPii`, `totalDocs`, `byModel[]`, `bySourceType[]`, `feedback[]`.
 - **`/feedback`**: body `{ id, value }` → 해당 `QueryLog.feedback` 업데이트 ("up"/"down").
+
+### 1.5 TabularController
+- **URL**: `POST /api/tabular/load`, `POST /api/tabular/ask`
+- **`/load`**: params `table`, `path`, `headerRow?`(기본 0) → `.xlsx` 면 `registerXlsx`(POI, headerRow부터), 그 외는 `registerCsv`(DuckDB `read_csv_auto`) → `{ table, schema }`.
+- **`/ask`**: body `{ table, question }` → `TextToSqlService.ask()` (질문+스키마+샘플 → LLM이 DuckDB SQL 생성 → 실행) → `{ sql, columns, rows }`(에러 시 `{ sql, error, rows:[] }`).
+- **경로 분리**: 비정형 텍스트는 `/api/rag`(벡터 RAG), 정형 표(CSV/XLSX)는 `/api/tabular`(DuckDB text-to-SQL). COUNT/AVG/SUM/필터 집계는 벡터 RAG가 못 해 SQL로 분리 — watsonx.data 라이크하우스 패턴(파일을 옮기지 않고 컬럼 엔진으로 SQL).
 
 ---
 
@@ -233,6 +239,17 @@ public List<Article> search(String ns, List<Float> qVec, String queryText, int t
 
 ### 2.9 OcrService
 **역할**: 이미지 bytes → 임시 PNG → `tesseract <file> stdout` 실행 → 추출 텍스트. 멀티모달 ingest/ask에서 정확한 숫자/텍스트 grounding 용. 실패 시 빈 문자열 반환.
+
+### 2.10 TabularSqlService
+**역할**: 표 파일을 DuckDB(임베디드, 인메모리 `jdbc:duckdb:`)로 그 자리에서 질의 — watsonx.data 라이크하우스 패턴(파일을 옮기지 않고 컬럼 엔진으로 SQL).
+- `registerCsv(table, path)`: `CREATE OR REPLACE TABLE ... AS SELECT * FROM read_csv_auto(path, normalize_names=true)` (zero-ETL, 공백 컬럼명 정규화).
+- `registerXlsx(table, path, headerRow)`: Apache POI로 `headerRow`부터 읽어 임시 CSV로 변환 후 `registerCsv` 합류 (정부/기업 양식의 상단 안내행 스킵). DuckDB excel 확장(네트워크) 대신 오프라인 POI.
+- `schema(table)` / `sample(table, n)`: `DESCRIBE` + 샘플 행 → LLM 컨텍스트.
+- `runSelect(sql)`: `requireReadOnly` 가드(SELECT/WITH로 시작 + DROP/DELETE/UPDATE/INSERT 등 금지 키워드 차단)를 통과한 쿼리만 실행, 최대 100행. `safeIdent` 로 테이블명 검증.
+
+### 2.11 TextToSqlService
+**역할**: 질문 + 스키마 + 샘플 행 → LLM이 DuckDB SQL(SELECT)을 생성 → `runSelect` 실행. 벡터 RAG가 못 하는 집계/필터/카운트를 SQL로 정확히 답한다.
+- `ask(table, question)`: 프롬프트(스키마/샘플/공백 컬럼 인용 지시) → `OllamaService.ask`(기본 granite4, 감사 로그 자동) → `cleanSql`(코드펜스/설명/세미콜론 제거) → 실행. 잘못된 SQL은 500 대신 `{ sql, error, rows:[] }` 로 진단 가능하게 반환.
 
 ---
 
