@@ -1,7 +1,6 @@
 package com.miniwatson.service;
 
 import com.miniwatson.data.Article;
-import com.miniwatson.data.VectorIndex;
 import com.miniwatson.data.VectorStore;
 import org.springframework.stereotype.Service;
 import com.miniwatson.data.KeywordIndex;
@@ -13,7 +12,7 @@ public class IndexingService {
     private final VectorStore vectorIndex;
     private final KeywordIndex keywordIndex;
 
-    public IndexingService(VectorIndex vectorIndex, KeywordIndex keywordIndex){
+    public IndexingService(VectorStore vectorIndex, KeywordIndex keywordIndex){   // 인터페이스 주입: memory/pgvector 어느 구현이든 받음
         this.vectorIndex = vectorIndex;
         this.keywordIndex =keywordIndex;
     }

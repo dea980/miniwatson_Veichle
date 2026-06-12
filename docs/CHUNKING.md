@@ -74,6 +74,35 @@ chunking:
   max-size: 1000         # 비교 테스트 시 250 등으로 낮춰 작은 문서도 쪼개 본다
 ```
 
+### 2.5 약어 확장 (청크 보정, AcronymExpander)
+
+청킹을 아무리 잘해도 못 푸는 retrieval 실패가 있다. eval의 ceo-caio-adoption이 그 예다.
+
+문제: 질의는 "What share of organizations had a **Chief AI Officer** in 2026?"인데, 정답 청크(76% 들어있는)는 원문이 "the role of the **CAIO** has become critical. In 2026, 76% of organizations have someone in this position"이라 **숫자 옆엔 약어 CAIO만 있고 정식명 "Chief AI Officer"는 없다.** 정식명은 ~2000자 앞 다른 청크에 있다. 그래서 질의가 정식명으로 물으면 정식명 토큰이 많은 정의 청크(숫자 없는)가 이기고, 숫자 청크는 후보에 못 든다. 청크 경계·overlap·크기로는 안 풀린다(정식명과 숫자가 구조적으로 다른 청크).
+
+해결: 문서 전체에서 "Full Name (ACRO)" 정의를 스캔해 약어->정식명 맵을 만들고, 청크에 약어만 있고 정식명이 없으면 정식명을 꼬리에 주입한다. 76% 청크에 "Chief AI Officer (CAIO)"가 붙어 질의와 같은 어휘 공간으로 들어온다.
+
+```
+원문 정의:  "...the Chief AI Officer (CAIO) leads..."   -> glossary{CAIO: Chief AI Officer}
+76% 청크:   "...CAIO ... 76% ... someone in this position"
+보정 후:    "...CAIO ... 76% ... someone in this position\nChief AI Officer (CAIO)"
+```
+
+설계 결정:
+
+- 비용 0. LLM 호출 없이 순수 문자열(정규식)만. recursive 청킹의 "비용 0" 철학과 일치. 대안인 Contextual Retrieval(청크마다 LLM이 맥락 생성)은 범용·강력하지만 적재 시 청크당 LLM 호출이 든다. ceo-caio는 약어 불일치가 정확한 원인이라 결정적·무료 기법으로 정조준했다.
+- 정의는 문서 전체에서 빌드. 청크는 부분만 보므로(정의가 다른 청크에 있음) buildGlossary는 청크가 아니라 content 전체를 받는다.
+- 오탐 억제. 약어 첫 글자 == 정식명 첫 글자일 때만 채택. "Foo Bar (XYZ)"처럼 안 맞으면 버린다.
+- 저장본 = 임베딩본. 보정 텍스트를 임베딩하고 같은 텍스트를 저장한다. "임베딩한 것 != 보여주는 것"을 피해야 감사 추적이 깨끗하다(governance).
+- 토글. `chunking.expand-acronyms`로 끄고 켤 수 있어 A/B 측정이 가능하다(hybrid.enabled와 같은 패턴).
+
+```yaml
+chunking:
+  expand-acronyms: true   # false로 끄면 보정 전후 recall 비교
+```
+
+한계: "Full Name (ACRO)" 정의 패턴이 문서에 명시돼 있을 때만 동작한다. 약어가 정의 없이 등장하거나, 불일치가 약어가 아니라 동의어/의역(paraphrase)이면 못 잡는다. 그 경우가 핵심이 되면 Contextual Retrieval로 escalate한다([DECISIONS.md](DECISIONS.md) 4절).
+
 ## 3. 저장 형태
 
 문서 1개 -> 청크 N개 -> Article N개. title에 번호를 붙인다.

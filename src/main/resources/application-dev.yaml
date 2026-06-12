@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:miniwatson
+    url: jdbc:h2:mem:miniwatson;DB_CLOSE_DELAY=-1   # 마지막 커넥션 닫혀도 in-mem DB 유지(JVM 수명). 없으면 유휴 시 테이블 증발("database is empty")
     driver-class-name: org.h2.Driver
     username: sa
     password: ""

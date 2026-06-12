@@ -181,6 +181,34 @@ OLLAMA_NUM_PREDICT=1500 ./mvnw spring-boot:run
 - Ollama가 모델을 첫 호출에서 download/load 하느라 첫 요청 latency 큼. 두 번째부터 정상.
 - `ollama pull nomic-embed-text` 수동 실행으로 미리 받아두기.
 
+### 4.6 `vector.store=pgvector`로 켜니 context 기동 실패 (전략 패턴 누수)
+증상:
+```
+APPLICATION FAILED TO START
+Parameter 0 of constructor in com.miniwatson.service.IndexingService
+  required a bean of type 'com.miniwatson.data.VectorIndex' that could not be found.
+```
+- 원인: `VectorStore`를 두 구현(VectorIndex/PgVectorStore)으로 만들고 `@ConditionalOnProperty`로 상호 배타시켰는데, `IndexingService` 생성자만 **구체 타입 `VectorIndex`**를 주입받고 있었다. pgvector 모드로 VectorIndex가 꺼지자 그 빈을 못 찾아 기동 실패. (HybridRetriever는 인터페이스 `VectorStore`로 받아 멀쩡했다.)
+- 해결: IndexingService 생성자 파라미터를 `VectorStore`로 변경(필드는 이미 인터페이스였음). 한 단어.
+- 교훈: **전략 패턴은 주입을 전부 인터페이스로 받아야 완성된다.** 구체 타입 주입이 한 곳이라도 남으면 구현 교체 시 거기서 깨진다. 컴파일·단위테스트로는 안 잡히고(빈 와이어링은 런타임 결정), **프로필을 바꿔 실제 기동해야** 드러난다 — pgvector 라이브 검증이 이 누수를 잡았다. 점검: `grep -rn "VectorIndex " src/main` 으로 구체 타입 주입이 더 없는지 확인.
+
+### 4.7 H2 in-memory 테이블 증발 — `Table "QUERY_LOG" not found (this database is empty)`
+증상: `/api/rag/ask`가 검색은 되는데 감사로그 저장 단계에서 500. `query_log` 테이블이 없다고 나온다.
+- 원인: dev 프로필의 H2 URL이 `jdbc:h2:mem:miniwatson`(닫힘 지연 옵션 없음)이었다. H2 in-memory DB는 **마지막 커넥션이 닫히면 스키마째 소멸**한다. `ddl-auto=create-drop`이 기동 시 테이블을 만들지만, 유휴 시 커넥션 풀이 비면 DB가 증발 → 다음 요청에서 "database is empty".
+- 왜 pgvector 모드에서 터졌나: PgVectorStore가 기동 시 442건을 postgres에 동기 적재하느라 **시작이 길어져**, 그 사이 H2 유휴 커넥션이 닫히고 in-mem DB가 소멸했다. 메모리 모드는 기동 직후 바로 eval이 돌아(커넥션 따뜻) 우연히 안 터졌을 뿐 — 잠복 버그였다.
+- 해결: URL에 `;DB_CLOSE_DELAY=-1` 추가 → in-mem DB가 JVM 수명 동안 유지된다.
+  ```yaml
+  url: jdbc:h2:mem:miniwatson;DB_CLOSE_DELAY=-1
+  ```
+- 교훈: H2 mem은 데모 편의지만 커넥션 수명에 묶여 깨지기 쉽다. **기동이 길어지는 변경(대량 하이드레이션 등)이 잠복 타이밍 버그를 깨운다.** 영속이 필요하면 `DB_CLOSE_DELAY=-1` 또는 파일 모드.
+
+### 4.8 pgvector recall이 인메모리보다 낮음 — 재구성 Article의 `id` 누락 → RRF 붕괴
+증상: 같은 코퍼스·임베더·쿼리인데 pgvector 26/35, 인메모리 35/35. 벡터·정밀도·라운드트립·좀비 다 배제했는데도 차이.
+- 원인: `HybridRetriever.rrf()`가 후보를 `Article.id`로 식별(`byId.put(a.getId(), ...)`, `score.merge(a.getId(), ...)`). PgVectorStore가 행에서 재구성한 Article이 `id`를 안 채움 → primitive `long` 기본값 **0** → pg 후보 전부 `id=0` 한 키로 붕괴 → 벡터 순위 소실. 인메모리는 원본 Article(진짜 id)이라 무사.
+- 단서가 헷갈렸던 이유: 검색(`<=>`)은 정확하고 벡터도 동일해서 "retrieval은 맞는데 결과가 다른" 모순. double 재정렬을 넣어도 변화 없던 게 결정적 힌트였다(RRF가 리스트 순서를 0으로 뭉개니 앞단 재정렬이 무효).
+- 해결: `article_vectors`에 `article_id` 컬럼 추가, 적재 시 원본 id 저장 / 검색 시 `a.setId(rs.getLong("article_id"))` 복원 → RRF 키가 keyword 인덱스와 매칭 → **35/35 회복**.
+- 교훈: **DB 행에서 도메인 객체를 재구성할 땐 식별 키를 반드시 복원하라.** 안 그러면 검색은 맞아도 후처리(RRF·dedup·조인)가 조용히 깨진다. 단위테스트로 안 잡히고 통합 경로에서만 드러난다. 디버깅은 "그럴듯한 원인"이 아니라 **측정으로 하나씩 배제해 남은 것**을 따라가라.
+
 ---
 
 ## 5. Landmines — Don't Touch Without Reading

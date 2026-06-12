@@ -4,6 +4,7 @@ import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -39,6 +40,8 @@ import java.util.stream.Collectors;
  * per {@code namespace} so tenants never see each other's vectors.
  */
 @Component
+// vector.store=memory(기본) 일 때만 활성. pgvector 선택 시 PgVectorStore가 대신 뜬다(빈 충돌 방지).
+@ConditionalOnProperty(name = "vector.store", havingValue = "memory", matchIfMissing = true)
 public class VectorIndex implements VectorStore{
 
     private static final Logger log = LoggerFactory.getLogger(VectorIndex.class);

@@ -15,6 +15,7 @@ retrieval:
 chunking:
   strategy: recursive    # fixed | recursive | semantic
   max-size: 1000
+  expand-acronyms: true  # 약어->정식명 주입(CAIO->Chief AI Officer). false로 A/B 비교. 근거 docs/CHUNKING.md
 
 rerank:
   strategy: mmr          # none | llm | mmr | cross  (mmr 기본: eval recall 100%, cross는 맥에서 폴백)
@@ -37,9 +38,16 @@ ollama:
   num-predict: ${OLLAMA_NUM_PREDICT:256}
 
 vector:
+  store: ${VECTOR_STORE:memory}   # memory(인메모리 LSH/brute) | pgvector(영속). 근거 docs/PGVECTOR.md
   index:
     lsh:
       enabled: false
+
+# pgvector 연결 (vector.store=pgvector 일 때만 사용). docker-compose.yml의 값과 일치.
+pgvector:
+  url: ${PGVECTOR_URL:jdbc:postgresql://localhost:5433/miniwatson}
+  user: ${PGVECTOR_USER:miniwatson}
+  password: ${PGVECTOR_PASSWORD:miniwatson}
 
 eval:
   overrides:

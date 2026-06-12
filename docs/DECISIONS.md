@@ -75,14 +75,16 @@
 
 ## 5. Vector Store (인메모리 vs pgvector)
 
-벡터 검색 저장소. VectorStore 인터페이스로 추상화.
+벡터 검색 저장소. VectorStore 인터페이스로 추상화. 두 구현체를 `vector.store` 설정으로 스위치(상호 배타 @ConditionalOnProperty) — 호출부 무변경. 상세는 [PGVECTOR.md](PGVECTOR.md).
 
 | 상황 | 추천 | 이유 |
 |---|---|---|
-| 개발/소량/차원 실험 | InMemory (LSH/brute-force) | 차원 무관, 즉시. 단 재시작 시 재인덱싱 |
-| 영속성·대규모·운영 | pgvector | 디스크 영속, 재시작 후 재인덱싱 불필요, 수십만+ 확장. 단 차원 고정(vector(768)) |
+| 개발/소량/차원 실험 | InMemory (VectorIndex, LSH/brute-force) | 차원 무관, 즉시. 단 재시작 시 재인덱싱 |
+| 영속성·대규모·운영 | pgvector (PgVectorStore, HNSW) | 디스크 영속, 재시작 후 재인덱싱 불필요, 수십만+ 확장. 단 차원 고정(vector(768)) |
 
 LSH vs brute-force: 코퍼스가 작으면(수백~수천) brute-force가 항상 정확하고 충분히 빠르다. LSH는 수만+에서 속도를 위해 정확도(recall)를 희생하는 ANN.
+
+차원 고정이 이관 경로를 정한다: pgvector는 vector(768)라 768 임베더(granite-278m/nomic)만 적재된다. 그래서 임베딩 4종 비교(384/768/1024)는 인메모리에서 하고, 승자(granite-278m, 768)만 pgvector로 운영 검증한다 — 비교의 유연성은 인메모리, 운영 영속성은 pgvector로 역할 분담.
 
 ---
 

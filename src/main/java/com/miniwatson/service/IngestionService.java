@@ -44,6 +44,7 @@ public class IngestionService {
     private final ArticleRepository articleStore;
     private final Chunker chunker;// 청킹 분리
     private final int maxSize;
+    private final boolean expandAcronyms;   // 약어->정식명 주입 토글 (A/B·거버넌스)
     private final Tika tika = new Tika();
     private final HwpExtractor hwpExtractor;
     private final DocumentCatalogRepository catalogRepo;
@@ -59,6 +60,7 @@ public class IngestionService {
                             DocumentCatalogRepository catalogRepo,
                             @Value("${chunking.strategy:recursive}") String strategy,
                             @Value("${chunking.max-size:1000}") int maxSize,
+                            @Value("${chunking.expand-acronyms:true}") boolean expandAcronyms,
                             @Value("${ollama.embed-model:nomic-embed-text}") String embedModel) {
         this.articleStore = articleStore;
         this.embeddingService = embeddingService;
@@ -67,6 +69,7 @@ public class IngestionService {
         this.ocrService = ocrService;
         this.chunker = chunkers.getOrDefault(strategy, chunkers.get("recursive"));
         this.maxSize = maxSize;
+        this.expandAcronyms = expandAcronyms;
         this.catalogRepo = catalogRepo;
         this.embedModel = embedModel;
         this.hwpExtractor = hwpExtractor;
@@ -184,14 +187,17 @@ public class IngestionService {
         }
 
         List<String> chunks = chunker.chunk(content, maxSize); // 분리된 청커 사용
+        // 약어 정의는 전체 문서에서 1회 수집(정의가 숫자 청크와 다른 청크에 있을 수 있음)
+        Map<String, String> glossary = expandAcronyms
+                ? AcronymExpander.buildGlossary(content) : Map.of();
         List<Article> saved = new ArrayList<>();
 
         for (int i = 0; i < chunks.size(); i++) {
-            String c = chunks.get(i);
+            String c = AcronymExpander.expand(chunks.get(i), glossary);   // 약어->정식명 보정
             Article article = new Article();
             article.setNamespace(ns);
             article.setTitle(baseTitle + " #" + (i + 1));
-            article.setSummary(c);
+            article.setSummary(c);                              // 저장본 = 임베딩본 (감사 추적 일관성)
             article.setUrl("file://" + baseTitle + "#" + (i + 1));
             article.setIngestedAt(LocalDateTime.now());
             article.setEmbedding(embeddingService.embedDocument(c));
