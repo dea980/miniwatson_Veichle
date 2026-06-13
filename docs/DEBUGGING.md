@@ -209,6 +209,22 @@ Parameter 0 of constructor in com.miniwatson.service.IndexingService
 - 해결: `article_vectors`에 `article_id` 컬럼 추가, 적재 시 원본 id 저장 / 검색 시 `a.setId(rs.getLong("article_id"))` 복원 → RRF 키가 keyword 인덱스와 매칭 → **35/35 회복**.
 - 교훈: **DB 행에서 도메인 객체를 재구성할 땐 식별 키를 반드시 복원하라.** 안 그러면 검색은 맞아도 후처리(RRF·dedup·조인)가 조용히 깨진다. 단위테스트로 안 잡히고 통합 경로에서만 드러난다. 디버깅은 "그럴듯한 원인"이 아니라 **측정으로 하나씩 배제해 남은 것**을 따라가라.
 
+### 4.9 좀비 JVM — "코드 고쳤는데 측정값이 미동도 없다"
+증상: pgvector 디버깅 중 ef_search·double 재정렬 등 뭘 바꿔도 recall이 **한 글자도 안 변함**(계속 26/35). 몇 시간을 코드에서 헤맸는데 원인은 코드가 아니었다.
+- 원인: `pkill -f spring-boot`가 spring-boot-maven-plugin이 **fork한 앱 JVM**을 놓쳐, 옛 코드의 앱이 8080을 잡고 계속 응답. 새로 띄운 줄 알았지만 측정은 좀비에게 갔다.
+- 확정법: 빌드 마커 로그(예: init에 `log.info("BUILD-MARKER ...")`)를 박고 기동 로그에 뜨는지 본다. 소스=1, 컴파일된 .class=1(`grep -a -c MARKER target/.../X.class`)인데 **런타임 로그에만 없으면 좀비**.
+- 해결: `pkill -9 -f java` + `jps`로 잔여 JVM 0 확인 + `lsof -nP -iTCP:8080 -sTCP:LISTEN` 비었는지 확인 후 재기동.
+- 교훈: **"코드를 바꿨는데 결과가 미동도 없으면, 거의 항상 그 코드가 안 떠 있는 것."** 측정 전에 "최신 코드가 실제로 로드됐나"를 마커로 증명하라. (macOS `strings`는 .class의 `0xCAFEBABE`를 Mach-O fat 매직으로 오인해 깨지니 `grep -a` 사용.)
+
+### 4.10 CI/빌드 함정 — 로컬·문서엔 안 보이고 CI에서만 터지는 것들
+"내 머신에선 되는데"의 전형. 모두 fresh 체크아웃/빌드에서만 드러난다.
+
+1. **`.gitignore`의 `data/`(앵커 없음)가 소스 패키지까지 무시.** 루트 런타임 `data/`만 막으려던 패턴이 **`src/.../com/miniwatson/data/`(자바 패키지)도 매칭** → 나중에 만든 `VectorStore.java`·`KeywordIndex.java`·`PgVectorStore.java`가 **커밋 자체가 안 됨** → CI `cannot find symbol`. 로컬은 디스크 파일로 컴파일돼 안 들킴. 해결: `/data/`로 **루트 앵커**. 점검: `git ls-files src/main/.../data/ | grep VectorStore`.
+2. **Dockerfile 인라인 `#` 주석.** Dockerfile은 인라인 주석 미지원 — `COPY --from=build /app/app.jar app.jar  # 한글주석`에서 주석 단어가 **인자로 먹혀**, 에러 `"/이슈": not found`(한글 "이슈"가 경로로 둔갑). `RUN`은 셸이라 `#` OK지만 `COPY/EXPOSE/FROM`은 아님. 해결: **주석은 자기 줄로만**.
+3. **`mvnw` 실행권한.** CI/Docker에서 `./mvnw`가 `Permission denied`(exit 126). 해결: `git update-index --chmod=+x mvnw` 또는 스크립트에 `chmod +x mvnw`.
+
+교훈: 단위테스트 green ≠ CI green. **CI는 "추적 안 된 소스·빌드 환경·권한"을 잡는 또 다른 방어선**이다 — 로컬 성공이 CI를 보장하지 않는다.
+
 ---
 
 ## 5. Landmines — Don't Touch Without Reading

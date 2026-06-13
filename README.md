@@ -39,7 +39,7 @@ Three layers, each mapping to a watsonx component:
 │  ┌────────────────────────────────────────────────────┐ │
 │  │  Data Layer (watsonx.data analog)                  │ │
 │  │  • Ingest: Wikipedia / image (vision+OCR) / file   │ │
-│  │  • Multi-format: PDF/DOCX/PPTX/XLSX/HTML + HWP/HWPX │ │
+│  │  • Multi-format: PDF/DOCX/PPTX/XLSX/HTML + HWP/HWPX│ │
 │  │  • Chunking: fixed / recursive / semantic          │ │
 │  │  • Multi-tenant namespaces + dedup + CRUD          │ │
 │  │  • Tiered: hot JSON → cold Parquet (compaction)    │ │
