@@ -15,7 +15,15 @@ public class EmbeddingService {
 //    private final String EMBED_MODEL = "nomic-embed-text";
     @Value("${ollama.embed-model}")
     private String embedModel;
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = buildTimeoutRestTemplate();
+
+    /** 임베딩 호출 무한대기 방지. 연결 5s/읽기 30s(임베딩은 빠름). */
+    private static RestTemplate buildTimeoutRestTemplate() {
+        var f = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        f.setConnectTimeout(java.time.Duration.ofSeconds(5));
+        f.setReadTimeout(java.time.Duration.ofSeconds(30));
+        return new RestTemplate(f);
+    }
 
     public List<Float> embedQuery(String text){
         return embed(prefixFor(embedModel).q() + text);

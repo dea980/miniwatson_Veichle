@@ -34,9 +34,17 @@ public class OllamaService {
     private int numPredict;
     private Long lastQueryLogId;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate = buildTimeoutRestTemplate();
     private final QueryLogRepository queryLogRepository;
     private final PiiRedactionService piiRedactionService;
+
+    /** 타임아웃 없는 RestTemplate은 Ollama가 멈추면 요청이 무한대기 → 가용성 구멍. 연결 5s/읽기 120s. */
+    private static RestTemplate buildTimeoutRestTemplate() {
+        var f = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        f.setConnectTimeout(java.time.Duration.ofSeconds(5));     // 연결 5s
+        f.setReadTimeout(java.time.Duration.ofSeconds(120));      // LLM 생성은 길 수 있어 120s (무한대기는 막음)
+        return new RestTemplate(f);
+    }
 
     public OllamaService(QueryLogRepository queryLogRepository, PiiRedactionService piiRedactionService) {
 

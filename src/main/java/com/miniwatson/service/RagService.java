@@ -92,7 +92,14 @@ public class RagService {
         if (candidates.isEmpty()) throw new RuntimeException("No articles in knowledge base for namespace '" + ns + "'.");
         // Sub-linear retrieval via the in-memory vector index (LSH + exact fallback).
         //List<Article> topArticles = vectorIndex.search(ns, questionEmbedding, TOP_K);
-        List<Article> topArticles = rr.rerank(question, candidates, TOP_K);   // 재정렬
+        // rerank 실패(예: llm rerank의 Ollama 타임아웃)해도 검색은 살린다 — 벡터/하이브리드 후보 top-K로 fallback.
+        List<Article> topArticles;
+        try {
+            topArticles = rr.rerank(question, candidates, TOP_K);   // 재정렬
+        } catch (Exception e) {
+            log.warn("[rerank] 실패 — 후보 top-{}로 fallback: {}", TOP_K, e.getMessage());
+            topArticles = candidates.size() > TOP_K ? candidates.subList(0, TOP_K) : candidates;
+        }
 
         if (topArticles.isEmpty()) {
             throw new RuntimeException("No articles in knowledge base for namespace '" + ns + "'.");
