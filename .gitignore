@@ -35,13 +35,8 @@ build/
 
 omc/data/
 
-# runtime state
-data/
-.DS_Store
-*.crc
-
-# runtime state
-data/
+# runtime state — 루트의 런타임 데이터만. '/'로 앵커해야 소스 패키지 com/.../data 를 안 잡음!
+/data/
 .DS_Store
 *.crc
 
