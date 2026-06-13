@@ -28,6 +28,23 @@ docker run -p 8080:8080 \
 
 주의: `-Djava.security.manager=allow`가 ENTRYPOINT에 박혀 있다(Java 21 + Hadoop/parquet 호환). 빼면 기동 실패.
 
+### Oracle Cloud Always Free (ARM) 풀스택 배포 — $0
+
+Ollama까지 포함한 풀스택을 영구 무료로 띄울 수 있는 유일한 현실해. ARM Ampere A1(최대 4 OCPU/24GB)이 무료라 app+postgres+ollama가 다 돌아간다.
+
+1. **인스턴스**: VM.Standard.A1.Flex(ARM, Ubuntu 22.04/24.04), 4 OCPU/24GB. SSH 키 등록. (A1 용량 부족 뜨면 리전/AD 바꿔 재시도)
+2. **네트워크 2겹**: VCN 보안목록에 8080 ingress 규칙 + **OS iptables도 열어야 함**(Oracle Ubuntu 이미지는 기본 차단):
+   ```bash
+   sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 8080 -j ACCEPT
+   sudo netfilter-persistent save
+   ```
+3. **Docker 설치**: `curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER` (재로그인)
+4. **배포 파일**: `git clone` 후 `cp .env.example .env`, `DB_PASSWORD` 채움.
+5. **기동**: `docker compose -f docker-compose.prod.yml up -d` — 첫 실행은 ollama-init가 모델(수 GB) pull, ARM이라 시간 걸림(`logs -f`로 확인).
+6. **접속**: `http://<퍼블릭IP>:8080`.
+
+전제: ① CI가 **멀티아치(arm64 포함)** 이미지를 푸시했어야 함(ci.yml `platforms: linux/amd64,linux/arm64`). ② GHCR 패키지가 **public**이어야 `docker compose pull`이 인증 없이 됨(아니면 VM에서 `docker login ghcr.io`). DJL/PyTorch 크로스인코더는 ARM Linux 네이티브가 없을 수 있어 cross rerank는 폴백될 수 있음(mmr 기본이라 무관).
+
 ## 2. 재임베딩 파이프라인 (임베딩 모델 교체 시)
 
 **임베딩 모델은 KB 불변 속성**이다. 모델을 바꾸면(예: granite-278m → 다른 768) 질의 벡터와 저장 벡터가 다른 공간이 돼 검색이 깨진다. 따라서 모델 교체 = **전 벡터 재임베딩**.
