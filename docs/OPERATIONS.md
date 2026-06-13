@@ -12,7 +12,7 @@
 | demo | H2 file | 인메모리 | (선택) | 영속 데모 |
 | prod | Postgres + pgvector | pgvector | on | 운영 |
 
-컨테이너 이미지: 멀티스테이지 `Dockerfile`(maven 빌드 → Semeru JRE 실행). CI가 main에서 GHCR/GitLab Registry로 빌드·푸시.
+컨테이너 이미지: 멀티스테이지 `Dockerfile`(maven 빌드 → Semeru JRE 실행). GitHub Actions가 main에서 멀티아치 이미지를 GHCR로 빌드·푸시(GitLab CI는 테스트 게이트만, 이미지 빌드는 추후).
 
 운영 기동(env 주입 — 시크릿은 yaml에 커밋 안 함):
 ```bash

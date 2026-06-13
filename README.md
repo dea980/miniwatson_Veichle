@@ -83,7 +83,7 @@ Three layers, each mapping to a watsonx component:
 | Tabular SQL | DuckDB (embedded, in-memory) | text-to-SQL over CSV/XLSX; aggregation RAG can't do |
 | Database | H2 (in-memory) | Zero config for governance audit |
 | Security | API key / JWT 인증 + 테넌트 격리 강제 | namespace를 코드로 강제(authN/authZ 분리, A/B/C 3안). SECURITY.md |
-| CI/CD | GitHub Actions + GitLab CI + Docker | push에 `./mvnw test` 게이트 → 이미지 빌드·푸시 |
+| CI/CD | GitHub Actions + GitLab CI + Docker | 양쪽 `./mvnw test` 게이트(이식성). 이미지 빌드·푸시(GHCR)는 GitHub만, GitLab은 테스트 게이트 |
 | Build | Maven | pom.xml + spring-boot-maven-plugin |
 | Frontend | Plain HTML + JS | No framework lock-in, instant load |
 
@@ -93,6 +93,7 @@ Three layers, each mapping to a watsonx component:
 
 | 문서 | 내용 |
 |---|---|
+| [CASE-STUDY.md](docs/CASE-STUDY.md) | 인터뷰용 정리 — watsonx 3층 매핑, 핵심 결정, 어려웠던 버그, 결과 |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 컴포넌트·데이터 흐름 |
 | [SECURITY.md](docs/SECURITY.md) | 위협모델 · 인증 A/B/C · 테넌트 격리 · 설계결정 |
 | [PGVECTOR.md](docs/PGVECTOR.md) | pgvector 이관 · HNSW · 인메모리 패리티 |
@@ -524,7 +525,7 @@ Notes from building this:
 - [x] 25 — PgVectorStore — pgvector(HNSW) 영속 vector store, 인메모리 패리티 35/35 (RRF id 붕괴 버그 해결)
 - [x] 26 — 청킹 개선: 약어 확장(CAIO→Chief AI Officer)으로 구조적 miss 회복 → 35/35
 - [x] 27 — 멀티테넌트 보안: API key/JWT 인증(A/B/C 3안) + 테넌트 격리 강제 (authN/authZ 분리)
-- [x] 28 — CI/CD: GitHub Actions + GitLab CI 게이트(./mvnw test) + Docker 이미지 빌드·푸시(GHCR)
+- [x] 28 — CI/CD: GitHub Actions + GitLab CI 양쪽 테스트 게이트(./mvnw test, 이식성). 이미지 빌드·푸시(멀티아치 GHCR)는 GitHub Actions
 - [x] 29 — 운영 하드닝: 감사 fail-open · Ollama 타임아웃 · rerank fallback · OPERATIONS.md
 ### 추후 (Backlog — 보류)
 
