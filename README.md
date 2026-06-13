@@ -1,5 +1,9 @@
 # MiniWatson
 
+[![CI](https://github.com/dea980/miniwatson/actions/workflows/ci.yml/badge.svg)](https://github.com/dea980/miniwatson/actions/workflows/ci.yml)
+[![GitLab pipeline](https://gitlab.com/kdea989/miniwatson/badges/main/pipeline.svg)](https://gitlab.com/kdea989/miniwatson/-/pipelines)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
+
 > A miniature watsonx-style platform — built end-to-end from scratch  
 > Spring Boot · Ollama · Parquet · 768-dim embeddings · RAG (chunking + reranking) · multimodal (vision + OCR) · tabular text-to-SQL (DuckDB) · multi-tenant · PII governance
 
@@ -8,6 +12,10 @@
 MiniWatson is a learning project that recreates IBM watsonx's 3-layer architecture
 (data · ai · governance) at a small scale. The goal: understand how enterprise
 GenAI platforms work by building one — not by reading about it.
+
+![MiniWatson dashboard — RAG answer with grounded sources, multi-LLM select, and a governance audit trail](docs/miniwatson_final_demo_UI_Knowledgebase.png)
+
+> 답변마다 출처(grounding)가 붙고, 모든 LLM 호출이 감사 로그에 남는다 — RAG와 거버넌스를 한 화면에서.
 
 ---
 
