@@ -520,10 +520,15 @@ Notes from building this:
 - [x] 21 — Eval harness (recall + LLM-as-judge), unit tests, user feedback loop
 - [x] 22 — PostgreSQL + pgvector container via Podman (prod profile, persistent governance storage)
 - [x] 23 — Korean HWP/HWPX ingest (hwplib/hwpxlib + PrvText fallback); extractText extension dispatch
-- [x] 24 — Embedding model comparison harness (384/768/1024-dim, prefix convention; methodology built, measuring)
-- [ ] PgVectorStore — vector search on pgvector (container ready; search still in-memory VectorIndex)
-- [ ] deployment notes (Docker + compose) — also verifies cross-encoder on Linux
-- [ ] tenant isolation enforcement / API auth
+- [x] 24 — Embedding model comparison (384/768/1024-dim, 4종; 승자 granite-embedding:278m, recall 97% / 한국어 11/11)
+- [x] 25 — PgVectorStore — pgvector(HNSW) 영속 vector store, 인메모리 패리티 35/35 (RRF id 붕괴 버그 해결)
+- [x] 26 — 청킹 개선: 약어 확장(CAIO→Chief AI Officer)으로 구조적 miss 회복 → 35/35
+- [x] 27 — 멀티테넌트 보안: API key/JWT 인증(A/B/C 3안) + 테넌트 격리 강제 (authN/authZ 분리)
+- [x] 28 — CI/CD: GitHub Actions + GitLab CI 게이트(./mvnw test) + Docker 이미지 빌드·푸시(GHCR)
+- [x] 29 — 운영 하드닝: 감사 fail-open · Ollama 타임아웃 · rerank fallback · OPERATIONS.md
+- [ ] 30 — 라이브 배포 (VPS docker-compose, 또는 IBM Cloud Code Engine + watsonx.ai 스왑)
+- [ ] 31 — 보안 Tier 2: 프롬프트 인젝션 방어 · PII 커버리지 · TLS/레이트리밋
+- [ ] 32 — 평가 심화(RAGAS류 답변품질) · 관측성(metrics/health/tracing)
 
 ---
 
