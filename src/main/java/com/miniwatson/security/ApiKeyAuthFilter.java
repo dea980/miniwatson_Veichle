@@ -30,6 +30,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
             throws ServletException, IOException {
         String key = req.getHeader(HEADER);
+        if (key != null && key.isBlank()) key = null;   // 빈 헤더는 키 없음 취급
         Set<String> allowed = (key == null) ? null : lookup(key);
         if (allowed == null) {                          // 없음/모름 → 401 (fail-closed)
             res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "missing or invalid API key");
@@ -43,11 +44,12 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         }
     }
 
-    /** 상수시간 비교 — 어느 키가 맞았는지 타이밍으로 못 흘리게 끝까지 순회. */
+    /** 상수시간 비교 — 어느 키가 맞았는지 타이밍으로 못 흘리게 끝까지 순회. 빈 설정 키는 스킵. */
     private Set<String> lookup(String presented) {
         byte[] p = presented.getBytes(StandardCharsets.UTF_8);
         Set<String> match = null;
         for (String k : props.getApiKeys().keySet()) {
+            if (k.isBlank()) continue;                                   // 빈 설정 키 무시
             if (MessageDigest.isEqual(k.getBytes(StandardCharsets.UTF_8), p))
                 match = props.namespacesFor(k);
         }

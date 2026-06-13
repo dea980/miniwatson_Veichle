@@ -35,6 +35,13 @@ public class RagService {
 
     @Value("${eval.overrides.enabled:false}")
     private boolean evalOverrides;
+
+    /** 운영 오설정 방지: 오버라이드가 켜져 있으면 기동 시 크게 경고(외부가 검색 전략 변경 가능, T2). */
+    @jakarta.annotation.PostConstruct
+    void warnIfEvalOverridesOn() {
+        if (evalOverrides)
+            log.warn("[SECURITY] eval.overrides.enabled=true — 외부 요청이 rerank/hybrid 전략을 바꿀 수 있음. 평가 전용, 운영에선 false.");
+    }
     public RagService(EmbeddingService embeddingService,
                       HybridRetriever hybridRetriever,
                       OllamaService ollamaService,
