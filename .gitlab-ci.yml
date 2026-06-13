@@ -1,7 +1,8 @@
-# GitLab CI — GitHub Actions(.github/workflows/ci.yml)와 동일 게이트(./mvnw test) + 이미지 빌드.
+# GitLab CI — GitHub Actions(.github/workflows/ci.yml)와 동일 게이트(./mvnw test).
+# 이식성 증명: 같은 단위테스트가 GitHub/GitLab 양쪽에서 동일하게 돈다.
+# 이미지 빌드/배포(build-image, DinD + registry)는 추후 — 라이브 배포 단계에서 추가.
 stages:
   - test
-  - build
 
 unit-test:
   stage: test
@@ -18,17 +19,3 @@ unit-test:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_COMMIT_BRANCH == "main"'
-
-# CD: main 에서만 이미지 빌드→GitLab Container Registry 푸시 (실제 배포는 인프라 측)
-build-image:
-  stage: build
-  image: docker:27
-  services:
-    - docker:27-dind
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
-  script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - docker build -t "$CI_REGISTRY_IMAGE:latest" -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" .
-    - docker push "$CI_REGISTRY_IMAGE:latest"
-    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
