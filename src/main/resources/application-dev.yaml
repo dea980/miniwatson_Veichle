@@ -22,3 +22,4 @@ security:
   api-keys:
     dev-all: "*"                        # 전체 권한(데모/관리)
     acme: "default,kr-bcg"              # 예시 테넌트
+  jwt-secret: ${JWT_SECRET:demo-hs256-secret-key-min-32-bytes-long!!}

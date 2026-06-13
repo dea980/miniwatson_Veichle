@@ -14,6 +14,8 @@ import java.util.Set;
 
 /** A안: X-API-Key → 허용 namespace. 인증만 담당(격리는 TenantAccessChecker). */
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "security.mode", havingValue = "apikey-filter", matchIfMissing = true)
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     private static final String HEADER = "X-API-Key";

@@ -54,6 +54,7 @@ eval:
     enabled: ${EVAL_OVERRIDES:true} # dev/demo = true , prod = false
 
 security:
+  mode: ${SECURITY_MODE:apikey-filter}
   enabled: ${SECURITY_ENABLED:false}   # dev 기본 off → eval 그대로 동작
   api-keys:
     dev-all: "*"                        # 전체 권한(데모/관리)
