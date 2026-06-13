@@ -75,14 +75,32 @@ Three layers, each mapping to a watsonx component:
 | Storage | Tiered (JSON hot → Parquet cold) | cheap appends + columnar compaction |
 | Catalog | H2 document_catalog (mirror) | SQL-queryable KB metadata; catalog/data split |
 | Retrieval | In-memory vector index (brute-force default, LSH opt-in) | exact cosine by default; LSH for sub-linear approximate kNN |
+| Vector store | In-memory ↔ pgvector (`vector.store` 스위치) | 영속·확장은 pgvector(HNSW), 차원실험은 인메모리. 인메모리 패리티 35/35. PGVECTOR.md |
 | Hybrid search | Vector + BM25 keyword, RRF fusion | lexical recall for exact tokens (IDs, codes) |
 | Chunking | fixed / recursive / semantic (pluggable) | recursive default; balance quality vs cost |
 | Reranking | none / llm / mmr / cross (pluggable) | two-stage: fetch top-N → rerank → top-K |
 | Cross-encoder | DJL + PyTorch + BGE-reranker | dedicated reranker model (Linux/Apple Silicon) |
 | Tabular SQL | DuckDB (embedded, in-memory) | text-to-SQL over CSV/XLSX; aggregation RAG can't do |
 | Database | H2 (in-memory) | Zero config for governance audit |
+| Security | API key / JWT 인증 + 테넌트 격리 강제 | namespace를 코드로 강제(authN/authZ 분리, A/B/C 3안). SECURITY.md |
+| CI/CD | GitHub Actions + GitLab CI + Docker | push에 `./mvnw test` 게이트 → 이미지 빌드·푸시 |
 | Build | Maven | pom.xml + spring-boot-maven-plugin |
 | Frontend | Plain HTML + JS | No framework lock-in, instant load |
+
+---
+
+## Docs
+
+| 문서 | 내용 |
+|---|---|
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 컴포넌트·데이터 흐름 |
+| [SECURITY.md](docs/SECURITY.md) | 위협모델 · 인증 A/B/C · 테넌트 격리 · 설계결정 |
+| [PGVECTOR.md](docs/PGVECTOR.md) | pgvector 이관 · HNSW · 인메모리 패리티 |
+| [EMBEDDINGS.md](docs/EMBEDDINGS.md) | 임베딩 4종 비교 (승자 granite-278m) |
+| [CHUNKING.md](docs/CHUNKING.md) | 청킹 전략 + 약어 확장 |
+| [EVALUATION.md](docs/EVALUATION.md) | 골든셋 recall + text-to-SQL |
+| [DEBUGGING.md](docs/DEBUGGING.md) | 실전 트러블슈팅 |
+| [DECISIONS.md](docs/DECISIONS.md) | 기술 선택 결정 가이드 |
 
 ---
 
