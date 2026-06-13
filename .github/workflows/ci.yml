@@ -22,7 +22,7 @@ jobs:
       # 53개 단위테스트 = CI 게이트. 외부 의존(Ollama/pgvector) 없이 도는 것만 돌린다.
       # (golden.json eval·B/C 라이브·pgvector recall은 Ollama/서비스 필요 → 별도 nightly/수동)
       - name: Unit tests
-        run: ./mvnw -B -ntp test
+        run: chmod +x mvnw && ./mvnw -B -ntp test
 
   # CD: 테스트 통과 + main 에서만 이미지 빌드→GHCR 푸시 (실제 배포는 인프라 측)
   build-image:

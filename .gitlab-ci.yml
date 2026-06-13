@@ -13,6 +13,7 @@ unit-test:
     paths:
       - .m2/repository/                     # 의존성 캐시(빌드 가속)
   script:
+    - chmod +x mvnw
     - ./mvnw -B -ntp test                   # 53개 단위테스트 게이트
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'

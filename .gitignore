@@ -52,3 +52,13 @@ run-hotspot.log
 .fuse_hidden*
 *.log
 run*.log
+
+# IBM Semeru / OpenJ9 JVM 진단 덤프 (pkill -9 등으로 생성 — 레포에 넣지 않음)
+javacore.*
+Snap.*
+jitdump.*
+core.*
+*.trc
+*.dmp
+*.phd
+heapdump.*

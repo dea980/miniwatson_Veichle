@@ -18,6 +18,8 @@ import java.util.Map;
 @Service
 public class OllamaService {
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(OllamaService.class);
+
     @Value("${ollama.url}")
     private String ollamaUrl;
 
@@ -135,8 +137,15 @@ public class OllamaService {
         log.setLatencyMs(latency);
         log.setPiiCount(rq.count() + ra.count());
         log.setSources(sources);
-        QueryLog saved = queryLogRepository.save(log);   // 반환값을 saved에 받고
-        this.lastQueryLogId = saved.getId();             // 그 id를 필드에 저장
+        // 감사 로그는 fail-open: 저장 실패가 사용자 답변을 막으면 안 된다(거버넌스가 가용성을 죽이면 안 됨).
+        // 오늘 겪은 H2 'table not found'가 정확히 이 save에서 터져 RAG 응답까지 500 났던 자리.
+        try {
+            QueryLog saved = queryLogRepository.save(log);
+            this.lastQueryLogId = saved.getId();
+        } catch (Exception e) {
+            this.lastQueryLogId = null;
+            LOG.warn("[audit] query_log 저장 실패 — 답변은 반환(fail-open): {}", e.getMessage());
+        }
         return answer;
     }
 }
