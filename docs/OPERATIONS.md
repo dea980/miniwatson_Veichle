@@ -63,7 +63,7 @@ Ollama까지 포함한 풀스택을 영구 무료로 띄울 수 있는 유일한
 
 ## 4. CI/CD
 
-- 게이트 = `./mvnw test`(53 단위테스트, 외부 의존 0). GitHub Actions + GitLab CI 양쪽. main에서 Docker 이미지 빌드·푸시.
+- 게이트 = `./mvnw test`(53 단위테스트, 외부 의존 0). GitHub Actions + GitLab CI 양쪽 초록(같은 테스트, 이식성 증명). 이미지 빌드·푸시(멀티아치 GHCR)는 GitHub 쪽 main 한정. GitLab은 테스트 게이트만(빌드/배포는 추후).
 - eval(golden)·B/C 라이브·pgvector recall은 Ollama/postgres/기동 앱 필요 → 기본 CI 밖(nightly/수동).
 - 한계: 단위테스트는 순수 로직 회귀만 잡는다. 통합 버그(RRF id·pgvector·H2)는 통합테스트(서비스 필요) 영역.
 

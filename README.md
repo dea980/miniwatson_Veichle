@@ -526,9 +526,13 @@ Notes from building this:
 - [x] 27 — 멀티테넌트 보안: API key/JWT 인증(A/B/C 3안) + 테넌트 격리 강제 (authN/authZ 분리)
 - [x] 28 — CI/CD: GitHub Actions + GitLab CI 게이트(./mvnw test) + Docker 이미지 빌드·푸시(GHCR)
 - [x] 29 — 운영 하드닝: 감사 fail-open · Ollama 타임아웃 · rerank fallback · OPERATIONS.md
+### 추후 (Backlog — 보류)
+
+핵심 플랫폼(data/ai/governance) + 보안 + CI는 완성. 아래는 운영·심화 영역으로, 배포 산출물(docker-compose.prod, 멀티아치 CI, Oracle 가이드)은 준비됐으나 라이브 비용/시간 대비 우선순위를 미뤘다.
+
 - [ ] 30 — 라이브 배포 (VPS docker-compose, 또는 IBM Cloud Code Engine + watsonx.ai 스왑)
-- [ ] 31 — 보안 Tier 2: 프롬프트 인젝션 방어 · PII 커버리지 · TLS/레이트리밋
-- [ ] 32 — 평가 심화(RAGAS류 답변품질) · 관측성(metrics/health/tracing)
+- [ ] 31 — 보안 Tier 2: 프롬프트 인젝션 방어, PII 커버리지 확대, TLS/레이트리밋
+- [ ] 32 — 평가 심화(RAGAS류 답변품질), 관측성(metrics/health/tracing)
 
 ---
 
