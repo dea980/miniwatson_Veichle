@@ -101,6 +101,7 @@ Three layers, each mapping to a watsonx component:
 | [EVALUATION.md](docs/EVALUATION.md) | 골든셋 recall + text-to-SQL |
 | [DEBUGGING.md](docs/DEBUGGING.md) | 실전 트러블슈팅 |
 | [DECISIONS.md](docs/DECISIONS.md) | 기술 선택 결정 가이드 |
+| [OPERATIONS.md](docs/OPERATIONS.md) | 배포 · 재임베딩 · 가용성 · 장애 런북 · 프로덕션 체크리스트 |
 
 ---
 
