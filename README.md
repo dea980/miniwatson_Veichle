@@ -101,7 +101,6 @@ Three layers, each mapping to a watsonx component:
 
 | 문서 | 내용 |
 |---|---|
-| [CASE-STUDY.md](docs/CASE-STUDY.md) | 인터뷰용 정리 — watsonx 3층 매핑, 핵심 결정, 어려웠던 버그, 결과 |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 컴포넌트·데이터 흐름 |
 | [SECURITY.md](docs/SECURITY.md) | 위협모델 · 인증 A/B/C · 테넌트 격리 · 설계결정 |
 | [PGVECTOR.md](docs/PGVECTOR.md) | pgvector 이관 · HNSW · 인메모리 패리티 |

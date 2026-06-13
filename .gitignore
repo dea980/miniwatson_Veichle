@@ -43,6 +43,13 @@ docs/LINKEDIN-POST.md
 # 시크릿 — 절대 커밋 금지
 .env
 
+# 개인/포트폴리오 메타 — 로컬 보관, 공개 repo 제외 (인터뷰 정리·링크드인 자료)
+docs/CASE-STUDY.md
+docs/LINKEDIN-POST.md
+docs/card1_architecture.png
+docs/card4_results.png
+docs/assets/linkedin/
+
 .fuse_hidden*
 
 run.log
