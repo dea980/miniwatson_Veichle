@@ -9,6 +9,7 @@ import com.miniwatson.governance.DocumentCatalog;
 import com.miniwatson.governance.DocumentCatalogRepository;
 import com.miniwatson.service.IndexingService;
 import com.miniwatson.service.HwpExtractor;
+import com.miniwatson.security.TenantAccessChecker;
 
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -49,6 +50,7 @@ public class IngestionService {
     private final HwpExtractor hwpExtractor;
     private final DocumentCatalogRepository catalogRepo;
     private final String embedModel;
+    private final TenantAccessChecker accessChecker;   // 테넌트 격리 강제(적재도)
     //private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(IngestionService.class);
     public IngestionService(ArticleRepository articleStore,
                             EmbeddingService embeddingService,
@@ -56,6 +58,7 @@ public class IngestionService {
                             OllamaService ollamaService,
                             OcrService ocrService,
                             HwpExtractor hwpExtractor,
+                            TenantAccessChecker accessChecker,
                             Map<String, Chunker> chunkers,                         // 모든 Chunker 빈
                             DocumentCatalogRepository catalogRepo,
                             @Value("${chunking.strategy:recursive}") String strategy,
@@ -73,6 +76,7 @@ public class IngestionService {
         this.catalogRepo = catalogRepo;
         this.embedModel = embedModel;
         this.hwpExtractor = hwpExtractor;
+        this.accessChecker = accessChecker;
 
     }
 
@@ -83,6 +87,7 @@ public class IngestionService {
 
     public Article ingest(String title, String namespace) throws IOException {
         String ns = (namespace == null || namespace.isBlank()) ? DEFAULT_NS : namespace;
+        accessChecker.check(ns);   // 격리: 이 namespace에 적재 권한 있는지
 
         // 입력 "Vector_database" -> 저장 제목 "Vector database" 와 맞추기 위해 정규화
         String normalized = title.replace('_', ' ').trim();
@@ -134,6 +139,7 @@ public class IngestionService {
      */
     public Article ingestImage(MultipartFile image, String namespace, String visionModel) throws IOException {
         String ns = (namespace == null || namespace.isBlank()) ? DEFAULT_NS : namespace;
+        accessChecker.check(ns);   // 격리: 이미지 적재 권한
         byte[] bytes = image.getBytes();
         String base64 = Base64.getEncoder().encodeToString(bytes);
 
@@ -166,6 +172,7 @@ public class IngestionService {
     /** 임의 파일(PDF/docx/txt/csv...)을 추출 → 청킹 → 청크별 Article 저장. */
     public List<Article> ingestText(MultipartFile file, String namespace) throws IOException {
         String ns = (namespace == null || namespace.isBlank()) ? DEFAULT_NS : namespace;
+        accessChecker.check(ns);   // 격리: 파일 적재 권한
         String filename = file.getOriginalFilename();
         String content = extractText(file, filename);          // 확장자 분기 (HWP/HWPX/Tika) — 결과를 덮어쓰지 않는다
         if (content == null || content.isBlank()) {

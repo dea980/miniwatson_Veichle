@@ -16,3 +16,9 @@ spring:
 storage:
   tier:
     threshold: 500
+
+security:
+  enabled: ${SECURITY_ENABLED:true}   # dev 기본 off → eval 그대로 동작
+  api-keys:
+    dev-all: "*"                        # 전체 권한(데모/관리)
+    acme:    "default,kr-bcg"           # 예시 테넌트

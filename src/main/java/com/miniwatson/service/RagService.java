@@ -2,6 +2,7 @@ package com.miniwatson.service;
 
 import com.miniwatson.data.Article;
 import com.miniwatson.data.VectorIndex;
+import com.miniwatson.security.TenantAccessChecker;
 import com.miniwatson.service.HybridRetriever;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +24,7 @@ public class RagService {
     // private final VectorIndex vectorIndex;
     private final HybridRetriever hybridRetriever;
     private final OllamaService ollamaService;
+    private final TenantAccessChecker accessChecker;   // 테넌트 격리 강제
 
     private static final int TOP_K = 2; // LLM 에 최종 전달
     private static final int FETCH_N = 20;   // rerank 후보군 (1차 검색)
@@ -37,11 +39,13 @@ public class RagService {
                       HybridRetriever hybridRetriever,
                       OllamaService ollamaService,
                       Map<String, Reranker> rerankers,                        // 추가
+                      TenantAccessChecker accessChecker,
                       @Value("${rerank.strategy:mmr}") String strategy) {
         this.embeddingService = embeddingService;
         this.hybridRetriever = hybridRetriever;
         this.ollamaService = ollamaService;
         this.rerankers = rerankers;
+        this.accessChecker = accessChecker;
         this.reranker = rerankers.getOrDefault(strategy, rerankers.get("mmr")); // 알 수 없는 키면 mmr 폴백 (eval 최선)
     }
 
@@ -63,6 +67,7 @@ public class RagService {
      */
     public RagResult ask(String question, String namespace, String model, String rerankOverride, Boolean hybridOverride) throws IOException {
         String ns = (namespace == null || namespace.isBlank()) ? DEFAULT_NS : namespace;
+        accessChecker.check(ns);   // 격리 강제: 이 호출자가 ns 접근 가능한지 (보안 off면 통과)
         // 평가를 위한 게이트
         Reranker rr = reranker;
         Boolean hy = null;

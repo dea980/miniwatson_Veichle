@@ -52,3 +52,9 @@ pgvector:
 eval:
   overrides:
     enabled: ${EVAL_OVERRIDES:true} # dev/demo = true , prod = false
+
+security:
+  enabled: ${SECURITY_ENABLED:false}   # dev 기본 off → eval 그대로 동작
+  api-keys:
+    dev-all: "*"                        # 전체 권한(데모/관리)
+    acme:    "default,kr-bcg"           # 예시 테넌트
