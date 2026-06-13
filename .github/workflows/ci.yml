@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Semeru)
+        uses: actions/setup-java@v4
+        with:
+          distribution: semeru      # IBM Semeru OpenJ9 — 프로젝트와 동일 (temurin으로 바꿔도 컴파일됨)
+          java-version: '21'
+          cache: maven
+
+      # 53개 단위테스트 = CI 게이트. 외부 의존(Ollama/pgvector) 없이 도는 것만 돌린다.
+      # (golden.json eval·B/C 라이브·pgvector recall은 Ollama/서비스 필요 → 별도 nightly/수동)
+      - name: Unit tests
+        run: ./mvnw -B -ntp test
+
+  # CD: 테스트 통과 + main 에서만 이미지 빌드→GHCR 푸시 (실제 배포는 인프라 측)
+  build-image:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ github.sha }}

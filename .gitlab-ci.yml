@@ -1,0 +1,33 @@
+# GitLab CI — GitHub Actions(.github/workflows/ci.yml)와 동일 게이트(./mvnw test) + 이미지 빌드.
+stages:
+  - test
+  - build
+
+unit-test:
+  stage: test
+  image: maven:3.9-eclipse-temurin-21      # maven+JDK21 내장. IBM이면 ibm-semeru-runtimes:open-21-jdk
+  variables:
+    MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - .m2/repository/                     # 의존성 캐시(빌드 가속)
+  script:
+    - ./mvnw -B -ntp test                   # 53개 단위테스트 게이트
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# CD: main 에서만 이미지 빌드→GitLab Container Registry 푸시 (실제 배포는 인프라 측)
+build-image:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker build -t "$CI_REGISTRY_IMAGE:latest" -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" .
+    - docker push "$CI_REGISTRY_IMAGE:latest"
+    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
