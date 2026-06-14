@@ -103,6 +103,7 @@ Three layers, each mapping to a watsonx component:
 |---|---|
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 컴포넌트·데이터 흐름 |
 | [SECURITY.md](docs/SECURITY.md) | 위협모델 · 인증 A/B/C · 테넌트 격리 · 설계결정 |
+| [RAG-LANDSCAPE.md](docs/RAG-LANDSCAPE.md) | RAG 종류(Naive/Advanced/Modular, RAPTOR/CRAG/GraphRAG 등) · 로컬 구현 가능성 · MiniWatson 현황 · 로드맵 |
 | [PGVECTOR.md](docs/PGVECTOR.md) | pgvector 이관 · HNSW · 인메모리 패리티 |
 | [EMBEDDINGS.md](docs/EMBEDDINGS.md) | 임베딩 4종 비교 (승자 granite-278m) |
 | [CHUNKING.md](docs/CHUNKING.md) | 청킹 전략 + 약어 확장 |
