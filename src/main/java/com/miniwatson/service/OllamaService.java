@@ -1,5 +1,6 @@
 package com.miniwatson.service;
 
+import com.miniwatson.governance.ModelRegistry;
 import com.miniwatson.governance.PiiRedactionService;
 import com.miniwatson.governance.QueryLog;
 import com.miniwatson.governance.QueryLogRepository;
@@ -27,6 +28,7 @@ public class OllamaService implements LlmClient {
     private final QueryLogRepository queryLogRepository;
     private final PiiRedactionService piiRedactionService;
     private final MeterRegistry meterRegistry;
+    private final ModelRegistry modelRegistry;
 
     // 주의: 인스턴스 필드라 동시 요청에서 경합 가능(원본 동작 유지). 정확성은 향후 ThreadLocal/반환값으로 개선.
     private Long lastQueryLogId;
@@ -34,11 +36,13 @@ public class OllamaService implements LlmClient {
     public OllamaService(OllamaLlmClient delegate,
                          QueryLogRepository queryLogRepository,
                          PiiRedactionService piiRedactionService,
-                         MeterRegistry meterRegistry) {
+                         MeterRegistry meterRegistry,
+                         ModelRegistry modelRegistry) {
         this.delegate = delegate;
         this.queryLogRepository = queryLogRepository;
         this.piiRedactionService = piiRedactionService;
         this.meterRegistry = meterRegistry;
+        this.modelRegistry = modelRegistry;
     }
 
     public Long lastQueryLogId() { return lastQueryLogId; }
@@ -107,6 +111,7 @@ public class OllamaService implements LlmClient {
         log.setLatencyMs(latencyMs);
         log.setPiiCount(rq.count() + ra.count());
         log.setSources(sources);
+        log.setModelConfig(modelRegistry.fingerprint());   // 모델/설정 지문(재현성·드리프트 귀인)
         try {
             QueryLog saved = queryLogRepository.save(log);
             this.lastQueryLogId = saved.getId();

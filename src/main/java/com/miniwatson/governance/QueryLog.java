@@ -33,6 +33,9 @@ public class QueryLog {
     @Lob
     private String augmentedPrompt;
 
+    // 모델/설정 지문 (ModelRegistry.fingerprint) — 어떤 구성으로 생성됐는지. model(실제 모델)과 보완.
+    private String modelConfig;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

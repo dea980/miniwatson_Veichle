@@ -1,6 +1,7 @@
 package com.miniwatson.controller;
 
 import com.miniwatson.governance.DocumentCatalogRepository;
+import com.miniwatson.governance.ModelRegistry;
 import com.miniwatson.governance.QueryLog;
 import com.miniwatson.governance.QueryLogRepository;
 import org.springframework.web.bind.annotation.*;
@@ -19,10 +20,23 @@ public class GovernanceController {
 
     private final DocumentCatalogRepository catalogRepo;;
 
+    private final ModelRegistry modelRegistry;
+
     public GovernanceController(QueryLogRepository queryLogRepository,
-                                DocumentCatalogRepository catalogRepo){
+                                DocumentCatalogRepository catalogRepo,
+                                ModelRegistry modelRegistry){
         this.queryLogRepository = queryLogRepository;
         this.catalogRepo = catalogRepo;
+        this.modelRegistry = modelRegistry;
+    }
+
+    // 현재 모델/설정 지문 — 지금 이 서비스가 어떤 구성으로 답하는지.
+    @GetMapping("/model-version")
+    public Map<String, Object> modelVersion() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("fingerprint", modelRegistry.fingerprint());
+        out.put("hash", modelRegistry.hash());
+        return out;
     }
     // ahems Q&A 로그 반환
     @GetMapping("/logs")
