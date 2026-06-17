@@ -30,7 +30,7 @@ Three layers, each mapping to a watsonx component:
 └─────────────────────────┬───────────────────────────────┘
 │ REST · JSON
 ┌─────────────────────────▼───────────────────────────────┐
-│  Backend: Spring Boot 4 · Java 21 (IBM Semeru)          │
+│  Backend: Spring Boot 4 · Java 21 (Temurin/HotSpot)     │
 │                                                         │
 │  ┌────────────────────────────────────────────────────┐ │
 │  │  AI Layer (watsonx.ai analog)                      │ │
@@ -71,9 +71,9 @@ Three layers, each mapping to a watsonx component:
 
 | Layer | Choice | Why |
 |---|---|---|
-| Language | Java 21 (IBM Semeru) | Lower memory footprint than HotSpot |
+| Language | Java 21 (Temurin/HotSpot) | OpenJ9는 요청 처리 중 walkStackFrames 크래시로 회피. HOTSPOT-RUNTIME.md |
 | Framework | Spring Boot 4.0 | Enterprise standard, fast bootstrap |
-| LLM | Ollama (local) | Sovereign deployment, no API keys |
+| LLM | Ollama (local) 기본, 제공자 교체 가능 | 자체호스팅(키 불필요), LlmClient 추상화로 watsonx/Bedrock 등 설정 교체. LLM-ABSTRACTION.md |
 | Chat model | ibm/granite4:latest (default) · multi-LLM | per-request model, whitelist-validated |
 | Embedding model | granite-embedding:278m (default) · nomic / 30m / mxbai compared | 768-dim 다국어 승자 (recall 97%, 한국어 11/11). 4종 비교는 EMBEDDINGS.md |
 | Vision model | llava / granite-vision | image Q&A + caption (multimodal) |
@@ -111,6 +111,10 @@ Three layers, each mapping to a watsonx component:
 | [DEBUGGING.md](docs/DEBUGGING.md) | 실전 트러블슈팅 |
 | [DECISIONS.md](docs/DECISIONS.md) | 기술 선택 결정 가이드 |
 | [OPERATIONS.md](docs/OPERATIONS.md) | 배포 · 재임베딩 · 가용성 · 장애 런북 · 프로덕션 체크리스트 |
+| [CLOUD-DEPLOYMENT.md](docs/CLOUD-DEPLOYMENT.md) | 벤더 중립 배포(추론 제공자/호스트 교체), Phase 0 |
+| [HOTSPOT-RUNTIME.md](docs/HOTSPOT-RUNTIME.md) | OpenJ9 크래시에서 HotSpot 전환 근거와 절차 |
+| [LLM-ABSTRACTION.md](docs/LLM-ABSTRACTION.md) | LlmClient/EmbeddingClient 추상화, 거버넌스 분리 |
+| [CICD.md](docs/CICD.md) | CI/CD 파이프라인 현황과 갭 |
 
 ---
 
@@ -119,7 +123,7 @@ Three layers, each mapping to a watsonx component:
 ### Prerequisites
 
 ```bash
-# 1. Java 21 (IBM Semeru recommended)
+# 1. Java 21 (Temurin/HotSpot recommended)
 java --version    # → openjdk 21+
 
 # 2. Ollama
