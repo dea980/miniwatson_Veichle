@@ -6,9 +6,11 @@ import com.miniwatson.governance.QueryLogRepository;
 import com.miniwatson.service.llm.LlmClient;
 import com.miniwatson.service.llm.OllamaLlmClient;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 거버넌스 래퍼 — 추론 자체는 OllamaLlmClient(순수 제공자)에 위임하고,
@@ -24,16 +26,19 @@ public class OllamaService implements LlmClient {
     private final OllamaLlmClient delegate;
     private final QueryLogRepository queryLogRepository;
     private final PiiRedactionService piiRedactionService;
+    private final MeterRegistry meterRegistry;
 
     // 주의: 인스턴스 필드라 동시 요청에서 경합 가능(원본 동작 유지). 정확성은 향후 ThreadLocal/반환값으로 개선.
     private Long lastQueryLogId;
 
     public OllamaService(OllamaLlmClient delegate,
                          QueryLogRepository queryLogRepository,
-                         PiiRedactionService piiRedactionService) {
+                         PiiRedactionService piiRedactionService,
+                         MeterRegistry meterRegistry) {
         this.delegate = delegate;
         this.queryLogRepository = queryLogRepository;
         this.piiRedactionService = piiRedactionService;
+        this.meterRegistry = meterRegistry;
     }
 
     public Long lastQueryLogId() { return lastQueryLogId; }
@@ -62,7 +67,7 @@ public class OllamaService implements LlmClient {
         long start = System.currentTimeMillis();
         String answer = delegate.ask(prompt, model, userQuestion, sources);
         long latency = System.currentTimeMillis() - start;
-        audit(prompt, effectiveModel(model), userQuestion, sources, answer, latency);
+        audit(prompt, effectiveModel(model), userQuestion, sources, answer, latency, "chat");
         return answer;
     }
 
@@ -71,7 +76,7 @@ public class OllamaService implements LlmClient {
         long start = System.currentTimeMillis();
         String answer = delegate.askWithImages(prompt, visionModel, base64Images);
         long latency = System.currentTimeMillis() - start;
-        audit(prompt, effectiveModel(visionModel), prompt, null, answer, latency);
+        audit(prompt, effectiveModel(visionModel), prompt, null, answer, latency, "vision");
         return answer;
     }
 
@@ -84,9 +89,15 @@ public class OllamaService implements LlmClient {
      * 거버넌스: 감사 로그 남기기 전에 PII 마스킹.
      * fail-open: 저장 실패가 사용자 답변을 막으면 안 된다(거버넌스가 가용성을 죽이면 안 됨).
      */
-    private void audit(String prompt, String model, String userQuestion, String sources, String answer, long latencyMs) {
+    private void audit(String prompt, String model, String userQuestion, String sources, String answer, long latencyMs, String type) {
         PiiRedactionService.Redaction rq = piiRedactionService.redact(userQuestion);
         PiiRedactionService.Redaction ra = piiRedactionService.redact(answer);
+        int pii = rq.count() + ra.count();
+
+        // 운영 메트릭 (Prometheus): 모델/유형별 지연 히스토그램 + 호출수 + PII 마스킹 건수.
+        meterRegistry.timer("miniwatson.llm.latency", "model", model, "type", type).record(latencyMs, TimeUnit.MILLISECONDS);
+        meterRegistry.counter("miniwatson.llm.calls", "model", model, "type", type).increment();
+        if (pii > 0) meterRegistry.counter("miniwatson.pii.redacted", "type", type).increment(pii);
 
         QueryLog log = new QueryLog();
         log.setAugmentedPrompt(prompt);

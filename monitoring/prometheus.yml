@@ -1,0 +1,9 @@
+# Prometheus 스크레이프 설정. app의 Actuator Prometheus 엔드포인트를 긁는다.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: miniwatson
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['app:8080']   # docker-compose 내부 네트워크의 app 서비스

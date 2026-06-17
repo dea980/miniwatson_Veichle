@@ -59,3 +59,20 @@ security:
   api-keys:
     dev-all: "*"                        # 전체 권한(데모/관리)
     acme:    "default,kr-bcg"           # 예시 테넌트
+
+# 운영 모니터링 — Actuator + Prometheus. /actuator/prometheus 를 Prometheus가 스크레이프.
+# 주의: actuator는 /api/** 가 아니라 ApiKeyAuthFilter를 안 탄다 → 운영에선 리버스 프록시에서 외부 차단(내부망 Prometheus만 접근). SECURITY.md 7절.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: miniwatson
+    distribution:
+      percentiles-histogram:
+        miniwatson.llm.latency: true     # p50/p95/p99 히스토그램 버킷 (Prometheus histogram_quantile)

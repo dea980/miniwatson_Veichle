@@ -168,6 +168,17 @@
 			<artifactId>commons-io</artifactId>
 			<version>2.18.0</version>
 		</dependency>
+
+		<!-- 운영 모니터링: Actuator + Prometheus 레지스트리. /actuator/prometheus 노출. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+			<scope>runtime</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

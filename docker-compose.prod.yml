@@ -72,7 +72,31 @@ services:
       - appdata:/app/data           # parquet 콜드스토어 영속 (재시작에도 적재본 유지)
     restart: unless-stopped
 
+  # 운영 모니터링: app의 /actuator/prometheus를 스크레이프.
+  prometheus:
+    image: prom/prometheus:latest
+    depends_on:
+      - app
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    # 외부 미노출(내부망에서 app:8080 스크레이프). 디버그가 필요하면 9090 publish.
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}   # .env로 교체 권장
+    volumes:
+      - grafana:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
 volumes:
   pgdata:
   ollama:
   appdata:
+  grafana:

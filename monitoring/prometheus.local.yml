@@ -1,0 +1,10 @@
+# 로컬 개발용 스크레이프 설정.
+# 앱은 호스트에서 ./mvnw spring-boot:run (8080)으로 돌고, 컨테이너 Prometheus가 호스트를 긁는다.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: miniwatson-local
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['host.docker.internal:8080']   # macOS/Windows Docker Desktop에서 호스트 접근
