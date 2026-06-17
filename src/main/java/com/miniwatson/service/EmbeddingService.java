@@ -6,8 +6,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import java.util.List;
+import com.miniwatson.service.llm.EmbeddingClient;
 @Service
-public class EmbeddingService {
+public class EmbeddingService implements EmbeddingClient {
 //    private final String OllAMA_EMBED_URL = "http://localhost:11434/api/embed";
     @Value("${ollama.url}")
     private String ollamaUrl;
@@ -25,9 +26,11 @@ public class EmbeddingService {
         return new RestTemplate(f);
     }
 
+    @Override
     public List<Float> embedQuery(String text){
         return embed(prefixFor(embedModel).q() + text);
     }
+    @Override
     public List<Float> embedDocument(String text){
         return embed(prefixFor(embedModel).d() + text);
     }
@@ -41,6 +44,7 @@ public class EmbeddingService {
         return new Prefix("", "");             // 기본: 무prefix (안전)
     }
     record Prefix(String q, String d) {}
+    @Override
     public List<Float> embed(String text) {
         EmbeddingRequest request = new EmbeddingRequest();
         request.setModel(embedModel);

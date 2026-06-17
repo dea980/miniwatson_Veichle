@@ -1,139 +1,90 @@
 package com.miniwatson.service;
 
-import com.miniwatson.dto.OllamaRequest;
-import com.miniwatson.dto.OllamaResponse;
 import com.miniwatson.governance.PiiRedactionService;
-
 import com.miniwatson.governance.QueryLog;
 import com.miniwatson.governance.QueryLogRepository;
+import com.miniwatson.service.llm.LlmClient;
+import com.miniwatson.service.llm.OllamaLlmClient;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
+/**
+ * 거버넌스 래퍼 — 추론 자체는 OllamaLlmClient(순수 제공자)에 위임하고,
+ * 이 클래스는 PII 마스킹 + 감사 로그(query_log)만 책임진다.
+ * 호출처는 이 클래스를 그대로 주입받으므로(변경 없음), 제공자 교체는 delegate만 바꾸면 된다.
+ * (이름을 GovernanceLlmClient 등으로 바꾸는 정리는 Step 3에서 호출처 타입 교체와 함께.)
+ */
 @Service
-public class OllamaService {
+public class OllamaService implements LlmClient {
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(OllamaService.class);
 
-    @Value("${ollama.url}")
-    private String ollamaUrl;
-
-    /** Default chat model when the caller doesn't specify one. */
-    @Value("${ollama.chat-model}")
-    private String defaultModel;
-
-    /** Comma-separated whitelist of selectable chat models (multi-LLM). */
-    @Value("${ollama.chat-models:}")
-    private String chatModelsCsv;
-    @Value("${ollama.num-predict}")
-    private int numPredict;
-    private Long lastQueryLogId;
-
-    private final RestTemplate restTemplate = buildTimeoutRestTemplate();
+    private final OllamaLlmClient delegate;
     private final QueryLogRepository queryLogRepository;
     private final PiiRedactionService piiRedactionService;
 
-    /** 타임아웃 없는 RestTemplate은 Ollama가 멈추면 요청이 무한대기 → 가용성 구멍. 연결 5s/읽기 120s. */
-    private static RestTemplate buildTimeoutRestTemplate() {
-        var f = new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        f.setConnectTimeout(java.time.Duration.ofSeconds(5));     // 연결 5s
-        f.setReadTimeout(java.time.Duration.ofSeconds(120));      // LLM 생성은 길 수 있어 120s (무한대기는 막음)
-        return new RestTemplate(f);
-    }
+    // 주의: 인스턴스 필드라 동시 요청에서 경합 가능(원본 동작 유지). 정확성은 향후 ThreadLocal/반환값으로 개선.
+    private Long lastQueryLogId;
 
-    public OllamaService(QueryLogRepository queryLogRepository, PiiRedactionService piiRedactionService) {
-
+    public OllamaService(OllamaLlmClient delegate,
+                         QueryLogRepository queryLogRepository,
+                         PiiRedactionService piiRedactionService) {
+        this.delegate = delegate;
         this.queryLogRepository = queryLogRepository;
         this.piiRedactionService = piiRedactionService;
     }
+
     public Long lastQueryLogId() { return lastQueryLogId; }
-    /** Available chat models = configured whitelist, always including the default. */
-    public List<String> availableModels() {
-        List<String> models = new ArrayList<>();
-        models.add(defaultModel);
-        if (chatModelsCsv != null && !chatModelsCsv.isBlank()) {
-            for (String m : chatModelsCsv.split(",")) {
-                String t = m.trim();
-                if (!t.isEmpty() && !models.contains(t)) {
-                    models.add(t);
-                }
-            }
-        }
-        return models;
-    }
 
-    public String defaultModel() {
-        return defaultModel;
-    }
+    @Override
+    public List<String> availableModels() { return delegate.availableModels(); }
 
-    /** Resolve + validate a requested model against the whitelist. */
-    private String resolveModel(String requested) {
-        if (requested == null || requested.isBlank()) {
-            return defaultModel;
-        }
-        List<String> allowed = availableModels();
-        if (!allowed.contains(requested)) {
-            throw new IllegalArgumentException(
-                    "Model '" + requested + "' is not allowed. Available: " + allowed);
-        }
-        return requested;
-    }
+    @Override
+    public String defaultModel() { return delegate.defaultModel(); }
 
     /** Text chat with the default model. */
     public String ask(String question) {
         return ask(question, null);
     }
 
-    public String ask(String prompt, String model){
+    public String ask(String prompt, String model) {
         return ask(prompt, model, prompt);
     }
-    /** Text chat with a caller-chosen model (validated against the whitelist). */
 
-    public String ask(String prompt, String model, String userQuestion){
-        return generate(prompt, resolveModel(model), null, userQuestion, null);
+    public String ask(String prompt, String model, String userQuestion) {
+        return ask(prompt, model, userQuestion, null);
     }
-    public String ask(String prompt, String model, String userQuestion, String sources){
-        return generate(prompt, resolveModel(model), null, userQuestion, sources);
+
+    @Override
+    public String ask(String prompt, String model, String userQuestion, String sources) {
+        long start = System.currentTimeMillis();
+        String answer = delegate.ask(prompt, model, userQuestion, sources);
+        long latency = System.currentTimeMillis() - start;
+        audit(prompt, effectiveModel(model), userQuestion, sources, answer, latency);
+        return answer;
     }
-    /**
-     * Multimodal chat: send a prompt plus base64-encoded images to a vision model.
-     * The model is used as-is (vision models live outside the chat whitelist).
-     */
+
+    @Override
     public String askWithImages(String prompt, String visionModel, List<String> base64Images) {
-        String m = (visionModel == null || visionModel.isBlank()) ? defaultModel : visionModel;
-        return generate(prompt, m, base64Images, prompt, null);
+        long start = System.currentTimeMillis();
+        String answer = delegate.askWithImages(prompt, visionModel, base64Images);
+        long latency = System.currentTimeMillis() - start;
+        audit(prompt, effectiveModel(visionModel), prompt, null, answer, latency);
+        return answer;
     }
 
-    /** Core Ollama /api/generate call + governance audit logging. */
-    private String generate(String prompt, String model, List<String> images, String userQuestion, String sources) {
-        long startTime = System.currentTimeMillis();
+    /** null/blank 모델은 기본 모델로 본다(로그에 실제 사용 모델을 남기기 위함). */
+    private String effectiveModel(String model) {
+        return (model == null || model.isBlank()) ? delegate.defaultModel() : model;
+    }
 
-        OllamaRequest request = new OllamaRequest();
-        request.setModel(model);
-        request.setPrompt(prompt);
-        request.setStream(false);
-        request.setThink(false);
-        request.setOptions(Map.of("num_predict", numPredict));
-        request.setKeepAlive("10m");                 // ← 여기로 (호출 전, 별도 줄)
-        if (images != null && !images.isEmpty()) {
-            request.setImages(images);
-        }
-
-        OllamaResponse response = restTemplate.postForObject(
-                ollamaUrl + "/api/generate",
-                request,
-                OllamaResponse.class
-        );
-
-        long latency = System.currentTimeMillis() - startTime;
-        String answer = (response != null) ? response.getResponse() : "Error: no response";
-
-        //거버넌스 : 감사 로그 남기기전에 PPI 마스킹
+    /**
+     * 거버넌스: 감사 로그 남기기 전에 PII 마스킹.
+     * fail-open: 저장 실패가 사용자 답변을 막으면 안 된다(거버넌스가 가용성을 죽이면 안 됨).
+     */
+    private void audit(String prompt, String model, String userQuestion, String sources, String answer, long latencyMs) {
         PiiRedactionService.Redaction rq = piiRedactionService.redact(userQuestion);
         PiiRedactionService.Redaction ra = piiRedactionService.redact(answer);
 
@@ -142,11 +93,9 @@ public class OllamaService {
         log.setQuestion(rq.text());
         log.setAnswer(ra.text());
         log.setModel(model);
-        log.setLatencyMs(latency);
+        log.setLatencyMs(latencyMs);
         log.setPiiCount(rq.count() + ra.count());
         log.setSources(sources);
-        // 감사 로그는 fail-open: 저장 실패가 사용자 답변을 막으면 안 된다(거버넌스가 가용성을 죽이면 안 됨).
-        // 오늘 겪은 H2 'table not found'가 정확히 이 save에서 터져 RAG 응답까지 500 났던 자리.
         try {
             QueryLog saved = queryLogRepository.save(log);
             this.lastQueryLogId = saved.getId();
@@ -154,6 +103,5 @@ public class OllamaService {
             this.lastQueryLogId = null;
             LOG.warn("[audit] query_log 저장 실패 — 답변은 반환(fail-open): {}", e.getMessage());
         }
-        return answer;
     }
 }

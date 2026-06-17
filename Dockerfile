@@ -7,8 +7,10 @@ COPY . .
 # 테스트는 CI 게이트에서 이미 돌렸으므로 skip. 실행 jar을 고정 이름으로 복사(COPY 글롭 회피).
 RUN chmod +x mvnw && ./mvnw -B -ntp -DskipTests package && cp target/*.jar app.jar
 
-# ---- run stage: Semeru JRE에서 실행 ----
-FROM ibm-semeru-runtimes:open-21-jre
+# ---- run stage: HotSpot(Temurin) JRE에서 실행 ----
+# OpenJ9(Semeru)는 요청 처리 중 walkStackFrames SIGSEGV로 반복 크래시(docs/HOTSPOT-RUNTIME.md).
+# HotSpot으로 전환해 회피. 근거: gpf/abort javacore 6건 + run-hotspot.log 크래시 0건.
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /app/app.jar app.jar
 EXPOSE 8080

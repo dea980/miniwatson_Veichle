@@ -12,10 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 21 (Semeru)
+      - name: Set up JDK 21 (Temurin/HotSpot)
         uses: actions/setup-java@v4
         with:
-          distribution: semeru      # IBM Semeru OpenJ9 — 프로젝트와 동일 (temurin으로 바꿔도 컴파일됨)
+          distribution: temurin     # 배포 런타임과 일치(Dockerfile이 eclipse-temurin:21-jre). Semeru는 walkStackFrames 크래시(docs/HOTSPOT-RUNTIME.md)로 회피.
           java-version: '21'
           cache: maven
 

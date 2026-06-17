@@ -173,3 +173,39 @@ SECURITY_ENABLED=true SECURITY_MODE=jwt ...
 - A 방식은 키 회전·폐기를 직접 구현해야 하며 표준 프레임워크의 검증된 방어가 빠진다 → 운영은 B/C로.
 - 프롬프트 인젝션은 완전 차단이 어렵다(검색 콘텐츠는 신뢰 불가 입력) — 시스템 프롬프트 경계·출력 검증으로 완화.
 - 본 문서의 통제는 적용 진행 중이며, 각 항목 구현 시 이 표를 갱신한다.
+
+## 7. 배포 시 보안 적용 (프로파일 기본값 + 체크리스트)
+
+배포 맥락은 [CLOUD-DEPLOYMENT.md](CLOUD-DEPLOYMENT.md). 보안은 코드가 아니라 프로파일과 환경변수로 켜진다.
+
+### 7.1 프로파일별 기본값
+
+| 항목 | dev | demo | prod |
+|---|---|---|---|
+| security.enabled | false | true | true(`SECURITY_ENABLED`) |
+| security.mode | apikey-filter | apikey-filter | apikey-filter(JWT 전환 가능) |
+| eval.overrides.enabled | true | true | false |
+| security.api-keys | 예시 키 | 예시 키 | {} (비어있음) |
+
+dev에서 `security.enabled=false`인 이유는 eval과 UI를 인증 없이 돌리기 위함이다. 즉 로컬에서 API 키 없이 `/api/**`가 열리는 건 정상이며, 보안이 빠진 게 아니라 dev라 꺼둔 상태다.
+
+### 7.2 배포 전 체크리스트 (왜)
+
+- `SECURITY_ENABLED=true` — 공개 URL에서 인증 강제. (docker-compose.prod.yml이 prod 프로파일로 자동 적용)
+- **API 키 주입 필수** — prod는 `api-keys: {}`라 키를 안 넣으면 모든 `/api/**`가 401이다(fail-closed라 안전하지만 동작 안 함). `SPRING_APPLICATION_JSON` 또는 `SECURITY_APIKEYS_<KEY>=ns1,ns2` 환경변수로 주입. 키는 시크릿이므로 `.env`(커밋 금지)로만.
+- `eval.overrides.enabled=false` — 외부 요청이 rerank/hybrid 전략을 바꾸지 못하게(prod 자동). dev 프로파일로 공개 배포하지 말 것.
+- **노출 표면 잠금** — `/h2-console`, `/swagger-ui`, actuator는 현재 열려 있다. 운영에선 인증 뒤로 두거나 차단.
+- **TLS** — 8080을 그대로 노출하지 말고 리버스 프록시(Caddy/Nginx) + HTTPS. 평문 API 키가 망에 흐르지 않게.
+- **키 저장과 회전** — 데모는 config 맵이지만 운영은 해시 저장 + 회전/폐기 절차. 정적 키는 유출 시 영구 노출.
+- **감사에 주체 연결** — query_log에 호출 주체(테넌트/키 id)를 남겨 인증과 감사를 잇는다(현재는 질의/답변/PII만 기록).
+
+### 7.3 배포 검증
+
+```bash
+# 인증 강제 확인: 키 없으면 401
+curl -s -o /dev/null -w "%{http_code}\n" https://<도메인>/api/rag/ask -X POST -H 'Content-Type: application/json' -d '{"question":"x"}'
+# 기대: 401
+
+# 유효 키 + 허용 namespace: 200, 권한 밖 namespace: 403
+curl -s -H "X-API-Key: <key>" ... # 200 / 403 대조
+```
