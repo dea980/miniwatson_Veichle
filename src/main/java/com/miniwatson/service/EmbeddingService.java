@@ -7,7 +7,9 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import java.util.List;
 import com.miniwatson.service.llm.EmbeddingClient;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 @Service
+@ConditionalOnProperty(name = "llm.provider", havingValue = "ollama", matchIfMissing = true)
 public class EmbeddingService implements EmbeddingClient {
 //    private final String OllAMA_EMBED_URL = "http://localhost:11434/api/embed";
     @Value("${ollama.url}")

@@ -2,6 +2,7 @@ package com.miniwatson.service;
 
 
 import org.springframework.stereotype.Component;
+import com.miniwatson.service.llm.EmbeddingClient;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -9,7 +10,7 @@ import java.util.Collections;
 @Component("semantic")
 public class SemanticChunker implements Chunker{
 
-    private final EmbeddingService embeddingService;
+    private final EmbeddingClient embeddingService;
 
     private float[] toArray(List<Float> v) {
         float[] a = new float[v.size()];
@@ -36,7 +37,7 @@ public class SemanticChunker implements Chunker{
         return sorted.get(idx);
     }
 
-    public SemanticChunker(EmbeddingService embeddingService){
+    public SemanticChunker(EmbeddingClient embeddingService){
         this.embeddingService = embeddingService;
     }
 

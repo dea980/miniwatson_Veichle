@@ -48,6 +48,7 @@ watsonx:
   project-id: ${WATSONX_PROJECT_ID:}
   model: ${WATSONX_MODEL:ibm/granite-3-8b-instruct}
   models: ${WATSONX_MODELS:ibm/granite-3-8b-instruct}
+  embed-model: ${WATSONX_EMBED_MODEL:ibm/granite-embedding-278m-multilingual}   # 768차원 = 현재와 동일
   num-predict: ${WATSONX_NUM_PREDICT:256}
 
 vector:

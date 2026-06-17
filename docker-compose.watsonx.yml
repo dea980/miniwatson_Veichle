@@ -1,0 +1,81 @@
+# 배포용 — watsonx 모드 (LLM/임베딩을 IBM watsonx.ai로, Ollama 없음).
+# 박스엔 앱 + pgvector + 모니터링만 → 작은 무료 박스(Oracle Always Free 등)에 적합.
+#
+# 선행:
+#   1) docs/WATSONX-SETUP.md로 .env에 WATSONX_* + LLM_PROVIDER=watsonx 채움
+#   2) 코드를 push해서 CI가 watsonx 포함 이미지를 GHCR에 빌드(패키지 public)
+#   3) docker compose -f docker-compose.watsonx.yml up -d
+#
+# Ollama가 없으므로 첫 기동이 빠르고 RAM 요구가 작다(앱 JVM + pgvector만).
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: miniwatson
+      POSTGRES_USER: miniwatson
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?.env에 DB_PASSWORD 필요}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U miniwatson -d miniwatson"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    image: ghcr.io/dea980/miniwatson:latest   # watsonx 코드 포함 이미지(CI가 main에서 빌드). public이어야 pull됨
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DATABASE_URL: jdbc:postgresql://postgres:5432/miniwatson
+      DB_USER: miniwatson
+      DB_PASSWORD: ${DB_PASSWORD:?.env에 DB_PASSWORD 필요}
+      VECTOR_STORE: pgvector
+      PGVECTOR_URL: jdbc:postgresql://postgres:5432/miniwatson
+      PGVECTOR_USER: miniwatson
+      PGVECTOR_PASSWORD: ${DB_PASSWORD:?.env에 DB_PASSWORD 필요}
+      # 추론 제공자 = watsonx (Ollama 미사용)
+      LLM_PROVIDER: watsonx
+      WATSONX_URL: ${WATSONX_URL:-https://us-south.ml.cloud.ibm.com}
+      WATSONX_API_KEY: ${WATSONX_API_KEY:?.env에 WATSONX_API_KEY 필요}
+      WATSONX_PROJECT_ID: ${WATSONX_PROJECT_ID:?.env에 WATSONX_PROJECT_ID 필요}
+      WATSONX_MODEL: ${WATSONX_MODEL:-ibm/granite-3-8b-instruct}
+      WATSONX_EMBED_MODEL: ${WATSONX_EMBED_MODEL:-ibm/granite-embedding-278m-multilingual}
+      # 데모면 false(UI 그냥 열림), 공개 운영이면 true + API 키 주입(SECURITY.md 7절)
+      SECURITY_ENABLED: ${SECURITY_ENABLED:-false}
+      SECURITY_MODE: ${SECURITY_MODE:-apikey-filter}
+    ports:
+      - "8080:8080"
+    volumes:
+      - appdata:/app/data           # parquet 콜드스토어 영속
+    restart: unless-stopped
+
+  # 운영 모니터링
+  prometheus:
+    image: prom/prometheus:latest
+    depends_on:
+      - app
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  appdata:
+  grafana:

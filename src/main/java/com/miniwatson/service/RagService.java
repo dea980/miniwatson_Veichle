@@ -4,6 +4,7 @@ import com.miniwatson.data.Article;
 import com.miniwatson.data.VectorIndex;
 import com.miniwatson.security.TenantAccessChecker;
 import com.miniwatson.service.HybridRetriever;
+import com.miniwatson.service.llm.EmbeddingClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -20,7 +21,7 @@ public class RagService {
 
     private static final Logger log = LoggerFactory.getLogger(RagService.class);
 
-    private final EmbeddingService embeddingService;
+    private final EmbeddingClient embeddingService;
     // private final VectorIndex vectorIndex;
     private final HybridRetriever hybridRetriever;
     private final OllamaService ollamaService;
@@ -42,7 +43,7 @@ public class RagService {
         if (evalOverrides)
             log.warn("[SECURITY] eval.overrides.enabled=true — 외부 요청이 rerank/hybrid 전략을 바꿀 수 있음. 평가 전용, 운영에선 false.");
     }
-    public RagService(EmbeddingService embeddingService,
+    public RagService(EmbeddingClient embeddingService,
                       HybridRetriever hybridRetriever,
                       OllamaService ollamaService,
                       Map<String, Reranker> rerankers,                        // 추가

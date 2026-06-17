@@ -10,6 +10,7 @@ import com.miniwatson.governance.DocumentCatalogRepository;
 import com.miniwatson.service.IndexingService;
 import com.miniwatson.service.HwpExtractor;
 import com.miniwatson.security.TenantAccessChecker;
+import com.miniwatson.service.llm.EmbeddingClient;
 
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -37,7 +38,7 @@ public class IngestionService {
     private static final String DEFAULT_NS = "default";
     private final RestTemplate restTemplate = new RestTemplate();
 
-    private final EmbeddingService embeddingService;
+    private final EmbeddingClient embeddingService;
     // private final VectorIndex vectorIndex;
     private final IndexingService indexingService;
     private final OllamaService ollamaService;   // 멀티모달: 비전 모델로 이미지 캡션 생성
@@ -53,7 +54,7 @@ public class IngestionService {
     private final TenantAccessChecker accessChecker;   // 테넌트 격리 강제(적재도)
     //private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(IngestionService.class);
     public IngestionService(ArticleRepository articleStore,
-                            EmbeddingService embeddingService,
+                            EmbeddingClient embeddingService,
                             IndexingService indexingService,
                             OllamaService ollamaService,
                             OcrService ocrService,
