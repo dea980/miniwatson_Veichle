@@ -37,6 +37,19 @@ ollama:
   embed-model: ${OLLAMA_EMBED_MODEL:granite-embedding:278m}  # 비교 승자: 한+영 코퍼스서 recall 97%(한국어 11/11). 근거 docs/EMBEDDINGS.md 7절
   num-predict: ${OLLAMA_NUM_PREDICT:256}
 
+# 추론 제공자 선택 — 활성 제공자 1개만 빈으로 뜬다(@ConditionalOnProperty). LLM-ABSTRACTION.md
+llm:
+  provider: ${LLM_PROVIDER:ollama}   # ollama | watsonx | vertex | bedrock | azure
+
+# watsonx.ai (llm.provider=watsonx 일 때만 사용). 키/프로젝트는 .env로 주입(커밋 금지).
+watsonx:
+  url: ${WATSONX_URL:https://us-south.ml.cloud.ibm.com}
+  api-key: ${WATSONX_API_KEY:}
+  project-id: ${WATSONX_PROJECT_ID:}
+  model: ${WATSONX_MODEL:ibm/granite-3-8b-instruct}
+  models: ${WATSONX_MODELS:ibm/granite-3-8b-instruct}
+  num-predict: ${WATSONX_NUM_PREDICT:256}
+
 vector:
   store: ${VECTOR_STORE:memory}   # memory(인메모리 LSH/brute) | pgvector(영속). 근거 docs/PGVECTOR.md
   index:

@@ -5,7 +5,7 @@ import com.miniwatson.governance.PiiRedactionService;
 import com.miniwatson.governance.QueryLog;
 import com.miniwatson.governance.QueryLogRepository;
 import com.miniwatson.service.llm.LlmClient;
-import com.miniwatson.service.llm.OllamaLlmClient;
+import com.miniwatson.service.llm.RawLlmProvider;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
@@ -24,7 +24,7 @@ public class OllamaService implements LlmClient {
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(OllamaService.class);
 
-    private final OllamaLlmClient delegate;
+    private final RawLlmProvider delegate;   // 활성 제공자(ollama/watsonx/...) — llm.provider로 선택
     private final QueryLogRepository queryLogRepository;
     private final PiiRedactionService piiRedactionService;
     private final MeterRegistry meterRegistry;
@@ -33,7 +33,7 @@ public class OllamaService implements LlmClient {
     // 주의: 인스턴스 필드라 동시 요청에서 경합 가능(원본 동작 유지). 정확성은 향후 ThreadLocal/반환값으로 개선.
     private Long lastQueryLogId;
 
-    public OllamaService(OllamaLlmClient delegate,
+    public OllamaService(RawLlmProvider delegate,
                          QueryLogRepository queryLogRepository,
                          PiiRedactionService piiRedactionService,
                          MeterRegistry meterRegistry,

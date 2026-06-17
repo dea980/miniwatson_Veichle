@@ -4,6 +4,7 @@ import com.miniwatson.dto.OllamaRequest;
 import com.miniwatson.dto.OllamaResponse;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
@@ -17,7 +18,8 @@ import java.util.Map;
  * 향후 WatsonxLlmClient 등으로 교체할 때 이 클래스 자리에 같은 인터페이스 구현체를 넣으면 된다.
  */
 @Component
-public class OllamaLlmClient implements LlmClient {
+@ConditionalOnProperty(name = "llm.provider", havingValue = "ollama", matchIfMissing = true)
+public class OllamaLlmClient implements RawLlmProvider {
 
     @Value("${ollama.url}")
     private String ollamaUrl;
