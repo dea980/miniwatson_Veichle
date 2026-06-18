@@ -1,6 +1,6 @@
 # MiniWatson — Architecture
 
-A small but production-shaped reference of IBM watsonx's three-pillar architecture (**data · ai · governance**), built end-to-end on a laptop.
+A small but production-shaped reference of IBM watsonx's three-pillar architecture (**data, ai, governance**), built end-to-end on a laptop.
 
 ---
 
@@ -57,7 +57,7 @@ A small but production-shaped reference of IBM watsonx's three-pillar architectu
 | `QueryLogRepository`    | 모든 LLM 호출을 H2/PostgreSQL에 기록 (JPA)              | watsonx.governance  |
 | `GovernanceController`  | logs / stats / feedback API                             | watsonx.governance  |
 | `MultimodalController`  | 이미지 ask + ingest (OCR + Vision)                      | watsonx.ai          |
-| `TabularController`     | 표(CSV/XLSX) load + 자연어 SQL 질의 (`/api/tabular/load`·`/ask`) | watsonx.data        |
+| `TabularController`     | 표(CSV/XLSX) load + 자연어 SQL 질의 (`/api/tabular/load`, `/ask`) | watsonx.data        |
 | `TabularSqlService` / `TextToSqlService` | DuckDB 임베디드 SQL 엔진 + 질문→SQL 생성/실행 (SELECT 전용 가드) | watsonx.data (text-to-SQL) |
 
 > **모달리티 분기**: 비정형 텍스트는 RAG(`/api/rag`, 벡터 검색)로, 정형 표(CSV/XLSX)는 SQL(`/api/tabular`, DuckDB)로 처리한다. COUNT/AVG/SUM 같은 집계는 벡터 RAG가 원천적으로 못 하므로 watsonx.data 라이크하우스 패턴(파일을 옮기지 않고 컬럼 엔진으로 SQL)으로 분리했다.
@@ -127,7 +127,7 @@ DataController
         └─► aggregate to {success, namespace, ingested, failed, articles, errors}
 ```
 
-> **Note**: `ingest-batch` 는 `?namespace=` 로 tenant 분리. 파일(`ingest-file`)·이미지(`/api/multimodal/ingest`) ingest는 Chunker(기본 recursive)로 청킹 후 청크별 Article + `document_catalog` 한 행. VectorIndex/KeywordIndex는 startup 시 `loadAll()`로 hydrate되고 ingest마다 증분 갱신.
+> **Note**: `ingest-batch` 는 `?namespace=` 로 tenant 분리. 파일(`ingest-file`)과 이미지(`/api/multimodal/ingest`) ingest는 Chunker(기본 recursive)로 청킹 후 청크별 Article + `document_catalog` 한 행. VectorIndex/KeywordIndex는 startup 시 `loadAll()`로 hydrate되고 ingest마다 증분 갱신.
 
 ---
 
@@ -200,7 +200,7 @@ These are mapped 1:1 in `docs/DATA-MODEL.md` and `docs/GOVERNANCE.md`.
 
 ## 9. Why This Architecture (after IBM interview)
 
-1. **Three-pillar parity** — data · ai · governance, mirroring watsonx.
+1. **Three-pillar parity** — data, ai, governance, mirroring watsonx.
 2. **Anti-corruption** — Wikipedia DTO은 internal Article로 격리 (`@JsonIgnoreProperties`).
 3. **Auditable by default** — 모든 RAG 호출이 governance log에 남음.
 4. **Sovereign by design** — 모든 컴포넌트 localhost, 외부 SaaS 의존성 0.

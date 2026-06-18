@@ -1,6 +1,6 @@
 # MiniWatson — Software Design Specification (SDS)
 
-> 패키지별 · 클래스별 명세. 코드를 수정하기 전에 해당 섹션을 먼저 확인하세요.
+> 패키지별, 클래스별 명세. 코드를 수정하기 전에 해당 섹션을 먼저 확인하세요.
 
 ---
 
@@ -19,13 +19,13 @@
 
 ## 1. Controllers
 
-> 컨트롤러는 5개: `RagController` · `DataController` · `GovernanceController` · `MultimodalController` · `TabularController`. 별도 Hello/Ask 컨트롤러나 `/api/hello`·`/api/version`·`/api/ask` 엔드포인트는 없다.
+> 컨트롤러는 5개: `RagController`, `DataController`, `GovernanceController`, `MultimodalController`, `TabularController`. 별도 Hello/Ask 컨트롤러나 `/api/hello`, `/api/version`, `/api/ask` 엔드포인트는 없다.
 
 ### 1.1 RagController
 - **URL**: `POST /api/rag/ask`, `GET /api/rag/models`
 - **request body** (`/ask`): `AskRequest { question, namespace?, model?, rerank?, hybrid? }`
   - `namespace` (없으면 `"default"`), `model` (없으면 서버 기본 모델)
-  - `rerank` · `hybrid` 은 **EVAL-ONLY** 오버라이드 (`eval.overrides.enabled` 켜진 dev/demo에서만 적용)
+  - `rerank` 와 `hybrid` 은 **EVAL-ONLY** 오버라이드 (`eval.overrides.enabled` 켜진 dev/demo에서만 적용)
 - **response** (`/ask`): `RagService.RagResult { answer, sources[], logId }`
 - **흐름**: `ragService.ask(question, namespace, model, rerank, hybrid)` 위임.
 - **`GET /models`**: `{ "default": ..., "available": [...] }` — 멀티 LLM 선택용 화이트리스트.
@@ -158,7 +158,7 @@ indexingService.index(saved);                        // VectorIndex + KeywordInd
 return saved;
 ```
 
-**진입점**: `ingest(title)`(default ns) · `ingest(title, namespace)` · `ingestText(file, ns)`(파일 청킹) · `ingestImage(image, ns, model)`(멀티모달). 단건 ingest는 namespace 내 제목 중복 시 기존 Article 반환(dedupe).
+**진입점**: `ingest(title)`(default ns), `ingest(title, namespace)`, `ingestText(file, ns)`(파일 청킹), `ingestImage(image, ns, model)`(멀티모달). 단건 ingest는 namespace 내 제목 중복 시 기존 Article 반환(dedupe).
 
 **embedding 입력 텍스트**: `"search_document: {title}. {summary}"`. 질의는 `"search_query: …"` 프리픽스 (nomic 비대칭 임베딩). 프리픽스/포맷 변경 시 기존 articles 전체 재임베딩 필요.
 
@@ -223,13 +223,13 @@ public List<Article> search(String ns, List<Float> qVec, String queryText, int t
 
 ### 2.6 Reranker (전략 빈)
 - 인터페이스: `List<Article> rerank(String question, List<Article> candidates, int topK)`.
-- 빈 이름 = 설정 키: `none`(NoopReranker) · `llm`(LlmReranker) · `mmr`(MmrReranker) · `cross`(CrossEncoderReranker).
+- 빈 이름 = 설정 키: `none`(NoopReranker), `llm`(LlmReranker), `mmr`(MmrReranker), `cross`(CrossEncoderReranker).
 - `rerank.strategy` (기본 **mmr**)로 선택. `RagService` 가 `Map<String,Reranker>` 주입받아 키로 고름 (없으면 `llm` 폴백).
 - `mmr`: 관련도 vs 다양성 (LAMBDA=0.6). `cross`: DJL `BAAI/bge-reranker-base` cross-encoder, 모델 로드 실패(예: Intel Mac) 시 상위 topK로 폴백.
 
 ### 2.7 Chunker (전략 빈)
 - 인터페이스: `List<String> chunk(String text, int maxSize)`.
-- 빈 이름: `fixed`(FixedChunker) · `recursive`(RecursiveChunker) · `semantic`(SemanticChunker).
+- 빈 이름: `fixed`(FixedChunker), `recursive`(RecursiveChunker), `semantic`(SemanticChunker).
 - `chunking.strategy` (기본 **recursive**), `chunking.max-size` (기본 1000)으로 선택. `IngestionService.ingestText()` 에서 사용.
 
 ### 2.8 IndexingService

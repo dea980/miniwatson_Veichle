@@ -94,7 +94,7 @@ SECURITY_ENABLED=true ./mvnw spring-boot:run
 # 키 없이 호출 → 401
 curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:8080/api/rag/ask -H 'Content-Type: application/json' -d '{"question":"x"}'
 ```
-기대: 401(fail-closed). 키 주입/테넌트 격리는 SECURITY.md 3·7절.
+기대: 401(fail-closed). 키 주입/테넌트 격리는 SECURITY.md 3절과 7절.
 
 ---
 

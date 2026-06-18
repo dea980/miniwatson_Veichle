@@ -185,7 +185,7 @@ Parquet 자체는 강한 호환성을 가지나, 본 프로젝트의 `ArticlePar
 |---|---|
 | dev | `create-drop` — 매번 클린, 신경 X |
 | demo | `update` — JPA가 ALTER TABLE 자동. column 추가 OK, 삭제는 수동 |
-| prod | `update` (현재) — JPA가 테이블/컬럼 자동 생성·추가. 운영 안정화 후 `validate` + Flyway/Liquibase 전환 권장 |
+| prod | `update` (현재) — JPA가 테이블/컬럼 자동 생성, 추가. 운영 안정화 후 `validate` + Flyway/Liquibase 전환 권장 |
 
 prod 진입 전에 반드시 마이그레이션 도구 도입할 것 (현재 미설치, ddl-auto=update로 부팅).
 
@@ -231,7 +231,7 @@ prod 진입 전에 반드시 마이그레이션 도구 도입할 것 (현재 미
 
 본 프로젝트는 학습용으로 다음을 가정하지 않음:
 - 사용자 식별 정보 (login, IP, session) **수집 안 함**.
-- `QueryLog` 는 사용자 식별 정보를 담지 않음 (question/answer/model/latency + provenance·PII 카운트).
+- `QueryLog` 는 사용자 식별 정보를 담지 않음 (question/answer/model/latency + provenance와 PII 카운트).
 - 단, **사용자가 질문에 PII를 직접 넣으면** governance log에 남음. 운영 환경 적용 전 mask/scrub 레이어 필요.
 
 이미 구현된 governance 컬럼 (확장 아님 — 현재 존재):

@@ -78,7 +78,7 @@ chunking:
 
 청킹을 아무리 잘해도 못 푸는 retrieval 실패가 있다. eval의 ceo-caio-adoption이 그 예다.
 
-문제: 질의는 "What share of organizations had a **Chief AI Officer** in 2026?"인데, 정답 청크(76% 들어있는)는 원문이 "the role of the **CAIO** has become critical. In 2026, 76% of organizations have someone in this position"이라 **숫자 옆엔 약어 CAIO만 있고 정식명 "Chief AI Officer"는 없다.** 정식명은 ~2000자 앞 다른 청크에 있다. 그래서 질의가 정식명으로 물으면 정식명 토큰이 많은 정의 청크(숫자 없는)가 이기고, 숫자 청크는 후보에 못 든다. 청크 경계·overlap·크기로는 안 풀린다(정식명과 숫자가 구조적으로 다른 청크).
+문제: 질의는 "What share of organizations had a **Chief AI Officer** in 2026?"인데, 정답 청크(76% 들어있는)는 원문이 "the role of the **CAIO** has become critical. In 2026, 76% of organizations have someone in this position"이라 **숫자 옆엔 약어 CAIO만 있고 정식명 "Chief AI Officer"는 없다.** 정식명은 ~2000자 앞 다른 청크에 있다. 그래서 질의가 정식명으로 물으면 정식명 토큰이 많은 정의 청크(숫자 없는)가 이기고, 숫자 청크는 후보에 못 든다. 청크 경계, overlap, 크기로는 안 풀린다(정식명과 숫자가 구조적으로 다른 청크).
 
 해결: 문서 전체에서 "Full Name (ACRO)" 정의를 스캔해 약어->정식명 맵을 만들고, 청크에 약어만 있고 정식명이 없으면 정식명을 꼬리에 주입한다. 76% 청크에 "Chief AI Officer (CAIO)"가 붙어 질의와 같은 어휘 공간으로 들어온다.
 
@@ -90,7 +90,7 @@ chunking:
 
 설계 결정:
 
-- 비용 0. LLM 호출 없이 순수 문자열(정규식)만. recursive 청킹의 "비용 0" 철학과 일치. 대안인 Contextual Retrieval(청크마다 LLM이 맥락 생성)은 범용·강력하지만 적재 시 청크당 LLM 호출이 든다. ceo-caio는 약어 불일치가 정확한 원인이라 결정적·무료 기법으로 정조준했다.
+- 비용 0. LLM 호출 없이 순수 문자열(정규식)만. recursive 청킹의 "비용 0" 철학과 일치. 대안인 Contextual Retrieval(청크마다 LLM이 맥락 생성)은 범용적이고 강력하지만 적재 시 청크당 LLM 호출이 든다. ceo-caio는 약어 불일치가 정확한 원인이라 결정적이고 무료인 기법으로 정조준했다.
 - 정의는 문서 전체에서 빌드. 청크는 부분만 보므로(정의가 다른 청크에 있음) buildGlossary는 청크가 아니라 content 전체를 받는다.
 - 오탐 억제. 약어 첫 글자 == 정식명 첫 글자일 때만 채택. "Foo Bar (XYZ)"처럼 안 맞으면 버린다.
 - 저장본 = 임베딩본. 보정 텍스트를 임베딩하고 같은 텍스트를 저장한다. "임베딩한 것 != 보여주는 것"을 피해야 감사 추적이 깨끗하다(governance).

@@ -1,11 +1,11 @@
 # ml/ — Vehicle ML 사이드카
 
 Java 앱(오케스트레이션, 거버넌스)과 분리된 Python ML 워크스페이스.
-파인튜닝·경량화 후 모델을 **Ollama(GGUF) 또는 vLLM**로 서빙 → Java가 `llm.provider`로 호출.
+파인튜닝과 경량화 후 모델을 **Ollama(GGUF) 또는 vLLM**로 서빙 → Java가 `llm.provider`로 호출.
 
 ## 확정 스택 (GPU 없음 / 온디바이스)
 
-- **Base 모델**: `Qwen2.5-1.5B-Instruct` (Apache-2.0, 한국어 양호, 로컬 학습·추론 현실적)
+- **Base 모델**: `Qwen2.5-1.5B-Instruct` (Apache-2.0, 한국어 양호, 로컬 학습과 추론 현실적)
 - **파인튜닝**: LoRA / QLoRA
   - Apple Silicon → **MLX-LM LoRA** (맥 GPU/Metal, NVIDIA 불필요)
   - Intel/그 외 → 학습 런만 무료 Colab(T4), 추론은 로컬

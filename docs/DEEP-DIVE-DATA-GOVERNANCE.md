@@ -44,7 +44,7 @@ flowchart TB
 ```
 
 핵심 한 줄: **거버넌스 로깅은 `RagService`가 아니라 `OllamaService.generate()` 안에서
-일어난다.** LLM을 때리는 모든 경로(RAG ask · 이미지 캡션 · 파일 요약)가 자동으로
+일어난다.** LLM을 때리는 모든 경로(RAG ask, 이미지 캡션, 파일 요약)가 자동으로
 `query_log`에 남는다. 이건 장점(빠짐없는 감사)이자 함정(4.1).
 
 ---
@@ -108,7 +108,7 @@ question
 
 | 클래스 | 역할 |
 |---|---|
-| `QueryLog` (`@Entity`, `query_log`) | 감사 레코드: question·answer·model·latencyMs·piiCount·augmentedPrompt·createdAt |
+| `QueryLog` (`@Entity`, `query_log`) | 감사 레코드: question, answer, model, latencyMs, piiCount, augmentedPrompt, createdAt |
 | `QueryLogRepository` | `JpaRepository<QueryLog, Long>` (CRUD 자동) |
 | `PiiRedactionService` | 정규식 마스킹: `[CARD] [SSN] [EMAIL] [PHONE]`, 마스킹 건수 반환 |
 | `GovernanceController` | `GET /api/governance/logs` (전체 반환) |
@@ -139,7 +139,7 @@ sequenceDiagram
 > 의도적 단순화가 아니라 **실제로 손봐야 할 항목**들. 우선순위 순.
 
 ### 4.1 [High] `augmentedPrompt`가 마스킹 없이 저장된다 (PII 누수)
-`OllamaService.generate()`는 `question`·`answer`는 redact하지만
+`OllamaService.generate()`는 `question`과 `answer`는 redact하지만
 `log.setAugmentedPrompt(prompt)`로 **원본 프롬프트를 그대로** 저장한다. 프롬프트엔 사용자
 질문(=PII 가능)이 포함되므로, 마스킹된 `question` 옆 칸에 PII가 평문으로 남는다.
 → 5.1에서 수정.
@@ -150,13 +150,13 @@ sequenceDiagram
 다 끝났는데도 사용자에게 500이 나간다. → 5.2.
 
 ### 4.3 [Med] 로깅이 RAG/비-RAG를 구분 못 한다 (의미 혼선)
-로깅이 `OllamaService`에 있어서 RAG ask뿐 아니라 **이미지 캡션·파일 요약**까지 같은
+로깅이 `OllamaService`에 있어서 RAG ask뿐 아니라 **이미지 캡션과 파일 요약**까지 같은
 `query_log`에 섞인다. 요약 호출의 `question`은 `"summarize: <파일명>"`. 감사 대시보드에서
 "사용자 질문"과 "내부 LLM 호출"이 분간되지 않는다. → 5.3 (`source`/`endpoint` 필드 추가).
 
 ### 4.4 [Med] 핵심 거버넌스 필드 누락
 `GOVERNANCE.md` 스키마엔 `userId · endpoint · sourceCount`가 있으나 실제 `QueryLog`엔 없다.
-"누가(주체)·어느 경로·어떤 출처로" 답했는지가 빠져 있어 provenance/lineage가 불완전.
+"누가(주체), 어느 경로로, 어떤 출처로" 답했는지가 빠져 있어 provenance/lineage가 불완전.
 
 ### 4.5 [Low] Read API가 문서보다 빈약
 문서는 `?endpoint=`, `?model=` 필터와 `/{id}` 조회를 약속하지만 실제는
@@ -164,7 +164,7 @@ sequenceDiagram
 
 ### 4.6 [Low] 동시성/스레드 안전성 없음 (Data)
 `TieredArticleStore.save`와 `ArticleStore.save`는 `loadAll → 수정 → saveAll` 비원자적
-시퀀스. 동시 ingest 시 lost update·id 중복·JSON 손상 가능. 데모 단일 스레드 가정.
+시퀀스. 동시 ingest 시 lost update, id 중복, JSON 손상 가능. 데모 단일 스레드 가정.
 
 ### 4.7 [Low] 우→소 결합: 프레젠테이션 annotation이 영속성에 누수 (Data)
 `Article`이 (1) 스토리지 모델 (2) API 응답 DTO를 겸해, `@JsonProperty(WRITE_ONLY)`가
@@ -211,7 +211,7 @@ private Integer sourceCount; // RAG 검색 소스 개수
 private String userId;       // 인증 도입 전 "anonymous"
 ```
 `generate(...)` 시그니처에 `source`/`endpoint`/`sourceCount`를 받도록 확장하거나,
-간단히는 별도 `record AuditContext(...)`를 넘긴다. 호출부(RagService·DataController)에서 설정.
+간단히는 별도 `record AuditContext(...)`를 넘긴다. 호출부(RagService와 DataController)에서 설정.
 
 ### 5.4 Read API 보강 (4.5)
 ```java

@@ -245,7 +245,7 @@ These are documented gaps, not silent omissions. Production version would add ea
 
 ## 10. PII 마스킹 (민감정보 자동 가림) — 구현됨
 
-감사 로그는 질문·프롬프트·답변을 그대로 쌓는다. 거기에 이메일·전화번호·주민번호·
+감사 로그는 질문, 프롬프트, 답변을 그대로 쌓는다. 거기에 이메일, 전화번호, 주민번호,
 카드번호 같은 **개인식별정보(PII)** 가 섞이면, 로그 자체가 유출 위험이 된다.
 그래서 **로그에 저장되기 직전** 단계에서 PII를 마스킹한다. 이것이
 watsonx.governance가 강조하는 "민감정보 보호 + 감사 가능성"의 소규모 구현이다.
@@ -289,7 +289,7 @@ piiCount: 1
 
 ### 한계 (정직하게)
 
-- **정규식 기반**이라 정형 PII만 잡는다. 이름·주소 같은 **비정형 PII**는 못 잡는다
+- **정규식 기반**이라 정형 PII만 잡는다. 이름이나 주소 같은 **비정형 PII**는 못 잡는다
   → 프로덕션은 NER(개체명 인식) 모델이나 Presidio 같은 전용 엔진을 결합해야 한다.
 - 카드/전화 패턴은 **오탐(false positive)** 가능 (예: 13자리 일반 숫자열).
 - 마스킹은 **로그 한정**이다. 지식베이스 원문(Article)은 검색 품질 때문에 원본 유지 —
@@ -333,7 +333,7 @@ OllamaService.generate
 
 설계 포인트:
 
-- **RAG 답변만 sources가 채워진다.** summarize·multimodal 같은 비-RAG LLM 호출은
+- **RAG 답변만 sources가 채워진다.** summarize나 multimodal 같은 비-RAG LLM 호출은
   근거 청크가 없으므로 sources는 null이다(의미상 맞음). 공개 메서드들은 각자 적절한
   값을 내부 `generate(...)`에 넘기고, sources 파라미터는 generate 한 곳에만 둔다.
 - **set은 반드시 save 앞에.** `save(log)`는 그 시점 상태를 DB에 쓰므로, set을 뒤에 두면
@@ -349,7 +349,7 @@ OllamaService.generate
 ### 한계 (정직하게)
 
 - 근거는 **제목+id 문자열**로만 저장한다. 청크 본문 스냅샷은 저장하지 않으므로, 이후
-  해당 청크가 수정·삭제되면 당시 근거 원문은 복원 불가 → 프로덕션은 청크 본문 해시나
+  해당 청크가 수정되거나 삭제되면 당시 근거 원문은 복원 불가 → 프로덕션은 청크 본문 해시나
   버전을 함께 남겨야 한다.
 - 근거별 기여도(어느 청크가 답에 얼마나 쓰였는지)는 기록하지 않는다.
 
@@ -397,8 +397,8 @@ GROUP BY 결과는 Spring Data가 `List<Object[]>`로 주므로, 컨트롤러에
 ### 카드 (UI)
 
 - Total Calls / Avg Latency / PII Hits / Documents (KPI)
-- By Model — 모델별 호출수·평균 지연 (모델 전환 효과가 수치로 보임: granite4가 gemma4보다 빠름)
-- By Source Type — wikipedia / image / file 별 문서·청크 수
+- By Model — 모델별 호출수와 평균 지연 (모델 전환 효과가 수치로 보임: granite4가 gemma4보다 빠름)
+- By Source Type — wikipedia / image / file 별 문서, 청크 수
 
 ### 의의
 

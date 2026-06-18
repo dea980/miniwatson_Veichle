@@ -1,6 +1,6 @@
 # Decision Guide — 언제 무엇을 쓰나
 
-파이프라인의 교체 가능한 전략(chunking, reranking, hybrid, embedding, vector store, DB)을 "언제 뭘 고르나" 기준으로 한곳에 모은 인덱스. 각 항목의 근거·측정은 해당 doc에 있고, 여기선 결론만 본다.
+파이프라인의 교체 가능한 전략(chunking, reranking, hybrid, embedding, vector store, DB)을 "언제 뭘 고르나" 기준으로 한곳에 모은 인덱스. 각 항목의 근거와 측정은 해당 doc에 있고, 여기선 결론만 본다.
 
 관통하는 규칙 하나: 후처리(rerank/hybrid)는 1차 검색이 약하거나 코퍼스가 크고 노이즈 많을 때만 이득이다. 1차가 강하면 한계이득이 0이거나 음수다. 아래 선택 대부분이 이 규칙의 적용이다.
 
@@ -16,7 +16,7 @@
 | 의미 경계가 중요 + 인덱싱 시간 여유 | semantic | 주제 단위로 묶어 경계 품질 최고. 단 문장마다 임베딩 호출 -> 850자 문서에 3.45초, 큰 문서는 분 단위 |
 | 속도 극단 우선 / 구조 없는 텍스트 | fixed | 가장 빠름. 단어/문장 중간이 잘려 경계 품질 낮음(baseline) |
 
-실측: 같은 850자 문서에서 fixed 8청크(중복·단어잘림), recursive 6청크(경계보존), semantic 5청크(의미묶음, 3.45s). 기본은 recursive.
+실측: 같은 850자 문서에서 fixed 8청크(중복과 단어잘림), recursive 6청크(경계보존), semantic 5청크(의미묶음, 3.45s). 기본은 recursive.
 
 추가 고려:
 - `chunking.max-size` — 작은 문서를 비교할 땐 250, 실사용은 800~1000.
@@ -34,9 +34,9 @@
 | 1차 검색이 이미 강함 (작은/깨끗한 코퍼스) | none 또는 mmr | 측정상 recall 100%. 후처리 이득 0 |
 | 후보에 거의 같은 청크가 여럿 | mmr | 다양성 패널티로 서로 다른 측면을 뽑음 |
 | 어휘 불일치/미묘한 의도 구분 + 약한 1차 | llm | 후보를 LLM에 listwise로 줘 의도까지 재정렬. 단 LLM 호출 1회 추가 |
-| 대규모·고정밀 필요 + Linux/GPU | cross | DJL cross-encoder 전용 모델. 최고 정밀도. 인텔 맥에선 네이티브 부재로 폴백 |
+| 대규모, 고정밀 필요 + Linux/GPU | cross | DJL cross-encoder 전용 모델. 최고 정밀도. 인텔 맥에선 네이티브 부재로 폴백 |
 
-실측(20케이스): none/mmr recall 100%, **llm rerank는 85%로 오히려 깎임**(pods·negation 등 정답 청크를 top-K 밖으로 밀어냄). 이 코퍼스의 best는 none/mmr.
+실측(20케이스): none/mmr recall 100%, **llm rerank는 85%로 오히려 깎임**(pods, negation 등 정답 청크를 top-K 밖으로 밀어냄). 이 코퍼스의 best는 none/mmr.
 
 교훈: **rerank를 무조건 붙이지 않는다.** 1차가 강하면 llm rerank가 정답을 밀어낼 수 있다. 측정으로 결정한다.
 
@@ -58,13 +58,13 @@
 
 ## 4. Embedding 모델 / 차원
 
-측정 완료 — 4개 모델을 동일 코퍼스(35케이스)로 비교. **기본값 = granite-embedding:278m**(한+영 혼재 코퍼스서 recall 97%, 한국어 11/11). 상세·결과표는 [EMBEDDINGS.md](EMBEDDINGS.md) 7절.
+측정 완료 — 4개 모델을 동일 코퍼스(35케이스)로 비교. **기본값 = granite-embedding:278m**(한+영 혼재 코퍼스서 recall 97%, 한국어 11/11). 상세 내용과 결과표는 [EMBEDDINGS.md](EMBEDDINGS.md) 7절.
 
 | 상황 | 후보 | 측정 결과 |
 |---|---|---|
 | 한국어+영어 혼재 (기본) | granite-embedding:278m (768, 다국어) | recall 97%, 한국어 만점. **승자** |
 | 영어 중심 균형 | nomic (768) | recall 94%, 한국어 1개 놓침 |
-| 속도·대량·엣지 | granite-embedding:30m (384) | recall 89%, 가장 작고 빠름 |
+| 속도, 대량, 엣지 | granite-embedding:30m (384) | recall 89%, 가장 작고 빠름 |
 | (비권장) | mxbai (1024) | recall 94% — 최대 차원인데 nomic과 동점. 비용만 큼 |
 
 핵심: **차원이 아니라 다국어 학습이 한국어 recall을 갈랐다.** mxbai(1024)가 granite-278m(768)에 짐. 영어 24케이스는 4종 거의 동점, 변별은 전적으로 한국어에서 발생.
@@ -80,7 +80,7 @@
 | 상황 | 추천 | 이유 |
 |---|---|---|
 | 개발/소량/차원 실험 | InMemory (VectorIndex, LSH/brute-force) | 차원 무관, 즉시. 단 재시작 시 재인덱싱 |
-| 영속성·대규모·운영 | pgvector (PgVectorStore, HNSW) | 디스크 영속, 재시작 후 재인덱싱 불필요, 수십만+ 확장. 단 차원 고정(vector(768)) |
+| 영속성, 대규모, 운영 | pgvector (PgVectorStore, HNSW) | 디스크 영속, 재시작 후 재인덱싱 불필요, 수십만+ 확장. 단 차원 고정(vector(768)) |
 
 LSH vs brute-force: 코퍼스가 작으면(수백~수천) brute-force가 항상 정확하고 충분히 빠르다. LSH는 수만+에서 속도를 위해 정확도(recall)를 희생하는 ANN.
 
@@ -92,8 +92,8 @@ LSH vs brute-force: 코퍼스가 작으면(수백~수천) brute-force가 항상 
 
 | 데이터 | 저장 | 이유 |
 |---|---|---|
-| audit log, document catalog | H2(dev/demo) / Postgres(prod) — OLTP | 행 단위 잦은 쓰기·단건 조회. 트랜잭션 |
-| Article + embedding (cold) | Parquet — OLAP/lakehouse | 대량 벡터 압축·스캔. 열 지향 |
+| audit log, document catalog | H2(dev/demo) / Postgres(prod) — OLTP | 행 단위 잦은 쓰기와 단건 조회. 트랜잭션 |
+| Article + embedding (cold) | Parquet — OLAP/lakehouse | 대량 벡터 압축과 스캔. 열 지향 |
 
 프로필: dev=H2 in-memory(빠른 개발), demo=H2 file(영속), prod=Postgres+pgvector. 규모가 커지면 audit는 웨어하우스로 ETL(OLTP/OLAP 분리, DATA-MODEL.md 12절).
 
@@ -104,7 +104,7 @@ LSH vs brute-force: 코퍼스가 작으면(수백~수천) brute-force가 항상 
 | 상황 | 추천 | 이유 |
 |---|---|---|
 | 기본/데모 | ibm/granite4 (2.1GB) | 가볍고 빠름(약 4.9s), IBM 내러티브 |
-| 품질 더 필요 | gemma4 (9.6GB) | 느림(약 19s)·메모리 큼. 데모엔 과함 |
+| 품질 더 필요 | gemma4 (9.6GB) | 느림(약 19s)이고 메모리 큼. 데모엔 과함 |
 | 큰 모델(qwen 23GB 등) | 비권장(로컬) | 로컬 추론은 모델 크기가 곧 비용. GPU/서버 전제 |
 
 로컬 추론 교훈: 모델 크기가 곧 운영 비용. 작은 모델이 데모엔 충분하고, 큰 모델은 GPU/vLLM 서빙이 전제다.
@@ -128,5 +128,5 @@ LSH vs brute-force: 코퍼스가 작으면(수백~수천) brute-force가 항상 
 
 - 측정 없이 최적화 없다. chunking/rerank/hybrid/embedding은 정답셋으로 비교해 정한다.
 - 후처리는 1차가 약할 때만 가치. 강하면 한계이득 0 또는 음수.
-- 비용/품질 트레이드오프를 명시한다. 큰 차원·큰 모델·semantic은 품질↑ 비용↑.
+- 비용/품질 트레이드오프를 명시한다. 큰 차원, 큰 모델, semantic은 품질↑ 비용↑.
 - 전략은 인터페이스로 추상화해 측정으로 갈아끼운다.

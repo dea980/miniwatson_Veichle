@@ -1,6 +1,6 @@
 # Vehicle 확장 — 실행 런북 (직접 따라하기)
 
-> 목표: 1주일 안에 JD 5개 항목(RAG·LoRA·경량화·Agent·InferenceAPI)을 동작 데모로.
+> 목표: 1주일 안에 JD 5개 항목(RAG, LoRA, 경량화, Agent, InferenceAPI)을 동작 데모로.
 > 전제: GPU 없음(맥). Base = Qwen2.5-1.5B-Instruct. 추론 = Ollama.
 
 ---

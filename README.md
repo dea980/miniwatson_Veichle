@@ -6,14 +6,14 @@
 >
 > 스택: Spring Boot 4, Next.js, Ollama, DuckDB, MLX(LoRA), Qwen2.5 / IBM Granite.
 >
-> 현대차 NLP/LLM 직무 JD(도메인 특화 LLM 최적화, 경량화/추론, RAG·Agent 고도화, 밸류체인 NLP, MLOps)에 매핑한 엔드투엔드 구현이다.
+> 현대차 NLP/LLM 직무 JD(도메인 특화 LLM 최적화, 경량화/추론, RAG와 Agent 고도화, 밸류체인 NLP, MLOps)에 매핑한 엔드투엔드 구현이다.
 
 ---
 
 ## 핵심 기능
 
 - **매뉴얼 RAG** — 정비 매뉴얼을 근거로 한국어 답변과 출처를 준다. 다국어 임베딩으로 한국어 질문이 영어 매뉴얼을 교차 검색한다.
-- **리콜·불만 text-to-SQL** — NHTSA 리콜/불만과 부품 CSV를 자연어로 질의(DuckDB)해 집계하고 차트로 본다. SQL 자기수정이 내장돼 있다.
+- **리콜/불만 text-to-SQL** — NHTSA 리콜/불만과 부품 CSV를 자연어로 질의(DuckDB)해 집계하고 차트로 본다. SQL 자기수정이 내장돼 있다.
 - **온디바이스 LoRA 파인튜닝** — Qwen2.5-1.5B를 자동차 도메인으로 학습(MLX, GPU 없는 맥)한 뒤 GGUF Q4로 양자화해 Ollama로 서빙한다.
 - **Agentic Search** — 질문을 받아 도구(RAG / 리콜SQL / 복합)를 고르고, 실행한 뒤 한국어로 종합하며 트레이스를 남긴다.
 - **차종 종합 진단서** — 리콜, 불만, 매뉴얼을 한 리포트로 종합한다(집계는 결정적 SQL, 서술은 LLM).

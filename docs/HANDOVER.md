@@ -9,17 +9,17 @@
 | 문서 | 용도 | 누가 읽나 |
 |---|---|---|
 | **HANDOVER.md** (이 파일) | 전체 entry point, onboarding 순서 | **모든 신규 SWE 1순위** |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | 시스템 아키텍처 · 레이어 · 데이터 흐름 다이어그램 | 설계 이해 |
-| [SDS.md](./SDS.md) | Software Design Specification · 모듈/클래스 명세 | 코드 수정 전 |
-| [ERD.md](./ERD.md) | 데이터 모델 · DB 스키마 · Parquet/Avro/JPA | 데이터 관련 작업 |
-| [API.md](./API.md) | REST API 레퍼런스 · 요청/응답 스펙 | 프론트/외부 연동 |
-| [DEBUGGING.md](./DEBUGGING.md) | 디버깅 포인트 · 알려진 함정 · 트러블슈팅 | 장애/에러 발생 시 |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | 시스템 아키텍처, 레이어, 데이터 흐름 다이어그램 | 설계 이해 |
+| [SDS.md](./SDS.md) | Software Design Specification, 모듈/클래스 명세 | 코드 수정 전 |
+| [ERD.md](./ERD.md) | 데이터 모델, DB 스키마, Parquet/Avro/JPA | 데이터 관련 작업 |
+| [API.md](./API.md) | REST API 레퍼런스, 요청/응답 스펙 | 프론트/외부 연동 |
+| [DEBUGGING.md](./DEBUGGING.md) | 디버깅 포인트, 알려진 함정, 트러블슈팅 | 장애/에러 발생 시 |
 
 ---
 
 ## 1. 프로젝트 한 줄 요약
 
-**IBM watsonx의 3-layer 구조 (data · ai · governance) 를 Spring Boot + Ollama + Parquet 로 미니어처화한 로컬 RAG 시스템.**
+**IBM watsonx의 3-layer 구조 (data, ai, governance) 를 Spring Boot + Ollama + Parquet 로 미니어처화한 로컬 RAG 시스템.**
 
 - **목적**: enterprise GenAI platform이 실제로 어떻게 동작하는지 코드로 이해.
 - **상태**: roadmap 1~22 (코어 + RAG 고도화 + governance + multimodal + Postgres prod) 완료. 정형 표(CSV/XLSX)는 DuckDB text-to-SQL(`/api/tabular`)로 분리 — 비정형은 RAG, 집계는 SQL. 배포 노트/PgVectorStore 진행 중. `roadmap` 참조 (README.md).

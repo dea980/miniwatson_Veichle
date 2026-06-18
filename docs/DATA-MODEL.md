@@ -279,12 +279,12 @@ embeddingService.embed("search_query: " + question);
 
 ## 11. 문서 카탈로그 (catalog/data 분리) — 구현됨
 
-청킹 도입으로 한 문서가 청크 N개(Article N개)로 흩어졌다. 데이터(벡터·본문)는 Parquet/JSON에 그대로 두되, **문서 단위 메타데이터만 H2에 미러링**해 SQL로 조회·집계할 수 있게 했다. 이것이 lakehouse의 catalog/data 분리이고, watsonx.data의 카탈로그 개념에 해당한다.
+청킹 도입으로 한 문서가 청크 N개(Article N개)로 흩어졌다. 데이터(벡터와 본문)는 Parquet/JSON에 그대로 두되, **문서 단위 메타데이터만 H2에 미러링**해 SQL로 조회하고 집계할 수 있게 했다. 이것이 lakehouse의 catalog/data 분리이고, watsonx.data의 카탈로그 개념에 해당한다.
 
 ### 왜 분리하나
 
-- 데이터(대량 벡터)는 컬럼형 Parquet에 — 압축·스캔 효율.
-- 카탈로그(가벼운 메타)는 H2에 — SQL 조회·집계·거버넌스 분석.
+- 데이터(대량 벡터)는 컬럼형 Parquet에 — 압축과 스캔 효율.
+- 카탈로그(가벼운 메타)는 H2에 — SQL 조회, 집계, 거버넌스 분석.
 - 둘을 한 곳에 섞지 않는다. Parquet이 source of truth, H2 카탈로그는 거기서 파생된 뷰.
 
 ### 스키마 — `document_catalog`
@@ -352,14 +352,14 @@ MiniWatson은 두 종류의 저장소를 쓴다. 왜 하나로 안 하고 나누
 
 ### 정의
 
-- OLTP (Online Transaction Processing): 행 단위의 잦은 읽기/쓰기. 주문, 로그 적재, 단건 조회. 정합성·낮은 지연이 중요. 예: Postgres, H2.
-- OLAP (Online Analytical Processing): 대량 행을 집계·스캔하는 분석 쿼리. 리포팅, 추세 분석. 컬럼형 저장 + 압축이 중요. 예: Parquet/lakehouse, Redshift, BigQuery, Snowflake.
+- OLTP (Online Transaction Processing): 행 단위의 잦은 읽기/쓰기. 주문, 로그 적재, 단건 조회. 정합성과 낮은 지연이 중요. 예: Postgres, H2.
+- OLAP (Online Analytical Processing): 대량 행을 집계하고 스캔하는 분석 쿼리. 리포팅, 추세 분석. 컬럼형 저장 + 압축이 중요. 예: Parquet/lakehouse, Redshift, BigQuery, Snowflake.
 
 ### 장단점
 
 | 구분 | OLTP (행 지향) | OLAP (열 지향) |
 |---|---|---|
-| 강점 | 단건 insert/update/조회 빠름, 트랜잭션·정합성 | 대량 집계·스캔 빠름, 높은 압축률 |
+| 강점 | 단건 insert/update/조회 빠름, 트랜잭션과 정합성 | 대량 집계와 스캔 빠름, 높은 압축률 |
 | 약점 | 대량 분석 스캔 느림, 압축 낮음 | 단건 쓰기 느리고 비쌈, 트랜잭션 약함 |
 | 적합 | 감사 로그 적재, 카탈로그, 실시간 조회 | 기간별 집계, BI, 대규모 추세 |
 
@@ -372,6 +372,6 @@ MiniWatson은 두 종류의 저장소를 쓴다. 왜 하나로 안 하고 나누
 
 ### 규모가 커지면
 
-감사 로그가 수억 건이 되면, 운영 DB(OLTP)에서 받되 장기 보관·대규모 분석은 웨어하우스(OLAP: Redshift/BigQuery/Snowflake)나 lakehouse로 ETL해 옮긴다. Redshift 같은 웨어하우스에 행을 하나씩 insert하는 것은 안티패턴이다(배치 적재·대량 스캔에 최적화돼 있어 단건 쓰기가 느리고 비싸다). 현재 규모에서는 불필요하므로 도입하지 않는다 — 개념만 남긴다.
+감사 로그가 수억 건이 되면, 운영 DB(OLTP)에서 받되 장기 보관과 대규모 분석은 웨어하우스(OLAP: Redshift/BigQuery/Snowflake)나 lakehouse로 ETL해 옮긴다. Redshift 같은 웨어하우스에 행을 하나씩 insert하는 것은 안티패턴이다(배치 적재와 대량 스캔에 최적화돼 있어 단건 쓰기가 느리고 비싸다). 현재 규모에서는 불필요하므로 도입하지 않는다 — 개념만 남긴다.
 
 교훈: "한 DB로 다 하려" 하지 말고, 워크로드(트랜잭션 vs 분석)에 맞는 저장소를 고른다. 잘못 고르면(예: 로그를 웨어하우스에 단건 insert) 느리고 비싸진다.

@@ -191,7 +191,7 @@ Parameter 0 of constructor in com.miniwatson.service.IndexingService
 ```
 - 원인: `VectorStore`를 두 구현(VectorIndex/PgVectorStore)으로 만들고 `@ConditionalOnProperty`로 상호 배타시켰는데, `IndexingService` 생성자만 **구체 타입 `VectorIndex`**를 주입받고 있었다. pgvector 모드로 VectorIndex가 꺼지자 그 빈을 못 찾아 기동 실패. (HybridRetriever는 인터페이스 `VectorStore`로 받아 멀쩡했다.)
 - 해결: IndexingService 생성자 파라미터를 `VectorStore`로 변경(필드는 이미 인터페이스였음). 한 단어.
-- 교훈: **전략 패턴은 주입을 전부 인터페이스로 받아야 완성된다.** 구체 타입 주입이 한 곳이라도 남으면 구현 교체 시 거기서 깨진다. 컴파일·단위테스트로는 안 잡히고(빈 와이어링은 런타임 결정), **프로필을 바꿔 실제 기동해야** 드러난다 — pgvector 라이브 검증이 이 누수를 잡았다. 점검: `grep -rn "VectorIndex " src/main` 으로 구체 타입 주입이 더 없는지 확인.
+- 교훈: **전략 패턴은 주입을 전부 인터페이스로 받아야 완성된다.** 구체 타입 주입이 한 곳이라도 남으면 구현 교체 시 거기서 깨진다. 컴파일과 단위테스트로는 안 잡히고(빈 와이어링은 런타임 결정), **프로필을 바꿔 실제 기동해야** 드러난다 — pgvector 라이브 검증이 이 누수를 잡았다. 점검: `grep -rn "VectorIndex " src/main` 으로 구체 타입 주입이 더 없는지 확인.
 
 ### 4.7 H2 in-memory 테이블 증발 — `Table "QUERY_LOG" not found (this database is empty)`
 증상: `/api/rag/ask`가 검색은 되는데 감사로그 저장 단계에서 500. `query_log` 테이블이 없다고 나온다.
@@ -204,27 +204,27 @@ Parameter 0 of constructor in com.miniwatson.service.IndexingService
 - 교훈: H2 mem은 데모 편의지만 커넥션 수명에 묶여 깨지기 쉽다. **기동이 길어지는 변경(대량 하이드레이션 등)이 잠복 타이밍 버그를 깨운다.** 영속이 필요하면 `DB_CLOSE_DELAY=-1` 또는 파일 모드.
 
 ### 4.8 pgvector recall이 인메모리보다 낮음 — 재구성 Article의 `id` 누락 → RRF 붕괴
-증상: 같은 코퍼스·임베더·쿼리인데 pgvector 26/35, 인메모리 35/35. 벡터·정밀도·라운드트립·좀비 다 배제했는데도 차이.
+증상: 같은 코퍼스, 임베더, 쿼리인데 pgvector 26/35, 인메모리 35/35. 벡터, 정밀도, 라운드트립, 좀비 다 배제했는데도 차이.
 - 원인: `HybridRetriever.rrf()`가 후보를 `Article.id`로 식별(`byId.put(a.getId(), ...)`, `score.merge(a.getId(), ...)`). PgVectorStore가 행에서 재구성한 Article이 `id`를 안 채움 → primitive `long` 기본값 **0** → pg 후보 전부 `id=0` 한 키로 붕괴 → 벡터 순위 소실. 인메모리는 원본 Article(진짜 id)이라 무사.
 - 단서가 헷갈렸던 이유: 검색(`<=>`)은 정확하고 벡터도 동일해서 "retrieval은 맞는데 결과가 다른" 모순. double 재정렬을 넣어도 변화 없던 게 결정적 힌트였다(RRF가 리스트 순서를 0으로 뭉개니 앞단 재정렬이 무효).
 - 해결: `article_vectors`에 `article_id` 컬럼 추가, 적재 시 원본 id 저장 / 검색 시 `a.setId(rs.getLong("article_id"))` 복원 → RRF 키가 keyword 인덱스와 매칭 → **35/35 회복**.
-- 교훈: **DB 행에서 도메인 객체를 재구성할 땐 식별 키를 반드시 복원하라.** 안 그러면 검색은 맞아도 후처리(RRF·dedup·조인)가 조용히 깨진다. 단위테스트로 안 잡히고 통합 경로에서만 드러난다. 디버깅은 "그럴듯한 원인"이 아니라 **측정으로 하나씩 배제해 남은 것**을 따라가라.
+- 교훈: **DB 행에서 도메인 객체를 재구성할 땐 식별 키를 반드시 복원하라.** 안 그러면 검색은 맞아도 후처리(RRF, dedup, 조인)가 조용히 깨진다. 단위테스트로 안 잡히고 통합 경로에서만 드러난다. 디버깅은 "그럴듯한 원인"이 아니라 **측정으로 하나씩 배제해 남은 것**을 따라가라.
 
 ### 4.9 좀비 JVM — "코드 고쳤는데 측정값이 미동도 없다"
-증상: pgvector 디버깅 중 ef_search·double 재정렬 등 뭘 바꿔도 recall이 **한 글자도 안 변함**(계속 26/35). 몇 시간을 코드에서 헤맸는데 원인은 코드가 아니었다.
+증상: pgvector 디버깅 중 ef_search나 double 재정렬 등 뭘 바꿔도 recall이 **한 글자도 안 변함**(계속 26/35). 몇 시간을 코드에서 헤맸는데 원인은 코드가 아니었다.
 - 원인: `pkill -f spring-boot`가 spring-boot-maven-plugin이 **fork한 앱 JVM**을 놓쳐, 옛 코드의 앱이 8080을 잡고 계속 응답. 새로 띄운 줄 알았지만 측정은 좀비에게 갔다.
 - 확정법: 빌드 마커 로그(예: init에 `log.info("BUILD-MARKER ...")`)를 박고 기동 로그에 뜨는지 본다. 소스=1, 컴파일된 .class=1(`grep -a -c MARKER target/.../X.class`)인데 **런타임 로그에만 없으면 좀비**.
 - 해결: `pkill -9 -f java` + `jps`로 잔여 JVM 0 확인 + `lsof -nP -iTCP:8080 -sTCP:LISTEN` 비었는지 확인 후 재기동.
 - 교훈: **"코드를 바꿨는데 결과가 미동도 없으면, 거의 항상 그 코드가 안 떠 있는 것."** 측정 전에 "최신 코드가 실제로 로드됐나"를 마커로 증명하라. (macOS `strings`는 .class의 `0xCAFEBABE`를 Mach-O fat 매직으로 오인해 깨지니 `grep -a` 사용.)
 
-### 4.10 CI/빌드 함정 — 로컬·문서엔 안 보이고 CI에서만 터지는 것들
+### 4.10 CI/빌드 함정 — 로컬과 문서엔 안 보이고 CI에서만 터지는 것들
 "내 머신에선 되는데"의 전형. 모두 fresh 체크아웃/빌드에서만 드러난다.
 
-1. **`.gitignore`의 `data/`(앵커 없음)가 소스 패키지까지 무시.** 루트 런타임 `data/`만 막으려던 패턴이 **`src/.../com/miniwatson/data/`(자바 패키지)도 매칭** → 나중에 만든 `VectorStore.java`·`KeywordIndex.java`·`PgVectorStore.java`가 **커밋 자체가 안 됨** → CI `cannot find symbol`. 로컬은 디스크 파일로 컴파일돼 안 들킴. 해결: `/data/`로 **루트 앵커**. 점검: `git ls-files src/main/.../data/ | grep VectorStore`.
+1. **`.gitignore`의 `data/`(앵커 없음)가 소스 패키지까지 무시.** 루트 런타임 `data/`만 막으려던 패턴이 **`src/.../com/miniwatson/data/`(자바 패키지)도 매칭** → 나중에 만든 `VectorStore.java`, `KeywordIndex.java`, `PgVectorStore.java`가 **커밋 자체가 안 됨** → CI `cannot find symbol`. 로컬은 디스크 파일로 컴파일돼 안 들킴. 해결: `/data/`로 **루트 앵커**. 점검: `git ls-files src/main/.../data/ | grep VectorStore`.
 2. **Dockerfile 인라인 `#` 주석.** Dockerfile은 인라인 주석 미지원 — `COPY --from=build /app/app.jar app.jar  # 한글주석`에서 주석 단어가 **인자로 먹혀**, 에러 `"/이슈": not found`(한글 "이슈"가 경로로 둔갑). `RUN`은 셸이라 `#` OK지만 `COPY/EXPOSE/FROM`은 아님. 해결: **주석은 자기 줄로만**.
 3. **`mvnw` 실행권한.** CI/Docker에서 `./mvnw`가 `Permission denied`(exit 126). 해결: `git update-index --chmod=+x mvnw` 또는 스크립트에 `chmod +x mvnw`.
 
-교훈: 단위테스트 green ≠ CI green. **CI는 "추적 안 된 소스·빌드 환경·권한"을 잡는 또 다른 방어선**이다 — 로컬 성공이 CI를 보장하지 않는다.
+교훈: 단위테스트 green ≠ CI green. **CI는 "추적 안 된 소스, 빌드 환경, 권한"을 잡는 또 다른 방어선**이다 — 로컬 성공이 CI를 보장하지 않는다.
 
 ---
 

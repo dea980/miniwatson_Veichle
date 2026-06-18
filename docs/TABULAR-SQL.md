@@ -4,7 +4,7 @@
 
 ## 1. 왜 RAG가 아니라 SQL인가
 
-Tika가 CSV/xlsx를 텍스트로 평탄화하면 행이 열 헤더와 분리된다. "강동구에 몇 채?", "위험 소행성 개수?", "평균 보증금?" 같은 집계·필터·카운트는 벡터 유사도로 원천적으로 못 한다(임베딩은 "비슷함"이지 "정확히 세기"가 아니다). 표의 정밀 조회는 **구조적 질의(SQL)**가 정답이다.
+Tika가 CSV/xlsx를 텍스트로 평탄화하면 행이 열 헤더와 분리된다. "강동구에 몇 채?", "위험 소행성 개수?", "평균 보증금?" 같은 집계, 필터, 카운트는 벡터 유사도로 원천적으로 못 한다(임베딩은 "비슷함"이지 "정확히 세기"가 아니다). 표의 정밀 조회는 **구조적 질의(SQL)**가 정답이다.
 
 IBM 맥락에서 이게 바로 **watsonx.data 라이크하우스** 패턴이다: 데이터를 옮기지 않고(zero-ETL) 컬럼 엔진으로 파일 위에서 SQL을 돌린다.
 
@@ -39,7 +39,7 @@ POST /api/tabular/ask {table, question}
 - **TextToSqlService** — 질문+스키마+샘플행을 프롬프트로 LLM에 주고 SQL을 받아 코드펜스/설명을 벗겨 실행. 생성된 SQL을 응답에 함께 돌려줘(투명성).
 - **TabularController** — `/load`, `/ask`.
 
-설계 결정 — **적재 시 컬럼명 정규화(`read_csv_auto(..., normalize_names=true)`)**: `"Orbiting Body"` 같은 공백·특수문자 컬럼을 `orbiting_body`로 바꿔 등록한다. 작은 LLM(granite4)은 "공백 컬럼은 큰따옴표로 인용" 프롬프트 지시를 매번 못 지켜 SQL이 깨졌는데(예: `SELECT Orbiting Body` 파싱 에러), 식별자를 적재 단계에서 깔끔하게 만들면 LLM이 인용할 일이 아예 없어진다. **LLM을 설득하기보다 데이터를 LLM-친화적으로 만들어 오류를 원천 차단** — 결정적이고 일관됨. (프롬프트의 인용 지시와 샘플행 제공은 보조 방어로 함께 둔다.)
+설계 결정 — **적재 시 컬럼명 정규화(`read_csv_auto(..., normalize_names=true)`)**: `"Orbiting Body"` 같은 공백이나 특수문자가 든 컬럼을 `orbiting_body`로 바꿔 등록한다. 작은 LLM(granite4)은 "공백 컬럼은 큰따옴표로 인용" 프롬프트 지시를 매번 못 지켜 SQL이 깨졌는데(예: `SELECT Orbiting Body` 파싱 에러), 식별자를 적재 단계에서 깔끔하게 만들면 LLM이 인용할 일이 아예 없어진다. **LLM을 설득하기보다 데이터를 LLM-친화적으로 만들어 오류를 원천 차단** — 결정적이고 일관됨. (프롬프트의 인용 지시와 샘플행 제공은 보조 방어로 함께 둔다.)
 
 ## 4. 보안
 
@@ -64,7 +64,7 @@ nasa.csv(4687행)의 "위험 몇 개?"는 `SELECT COUNT(*) FROM nasa WHERE Hazar
 
 ## 6. 한계와 다음 단계
 
-- **xlsx**: 지원됨. `registerXlsx`가 Apache POI로 시트를 읽어(오프라인, DuckDB excel 확장 불필요) 임시 CSV로 변환 후 `registerCsv`에 합류한다. `/load?...&headerRow=N`으로 제목·안내행을 skip한다 — 정부/기업 양식은 진짜 헤더가 위 몇 줄 아래에 있기 때문(예: 주택목록.xlsx는 `headerRow=6`). 단 병합셀·다단 헤더는 컬럼명이 거칠어질 수 있어, 셀 단위보다 COUNT/GROUP BY 같은 집계가 견고하다.
+- **xlsx**: 지원됨. `registerXlsx`가 Apache POI로 시트를 읽어(오프라인, DuckDB excel 확장 불필요) 임시 CSV로 변환 후 `registerCsv`에 합류한다. `/load?...&headerRow=N`으로 제목 행과 안내 행을 skip한다 — 정부/기업 양식은 진짜 헤더가 위 몇 줄 아래에 있기 때문(예: 주택목록.xlsx는 `headerRow=6`). 단 병합셀과 다단 헤더는 컬럼명이 거칠어질 수 있어, 셀 단위보다 COUNT/GROUP BY 같은 집계가 견고하다.
 - **테이블 영속**: 현재 in-memory(재시작 시 사라짐). 파일은 sample/에 있으니 `/load`로 다시 등록하면 됨. 영속이 필요하면 DuckDB file DB(`jdbc:duckdb:./data/tabular.db`).
 - **라우팅 자동화**: 지금은 호출자가 RAG vs SQL을 고른다. 다음은 질문 유형(집계/필터 키워드, 표 namespace)을 보고 자동 라우팅.
 - **Parquet 질의**: `read_parquet('data/articles.parquet')`로 article 저장소를 SQL로 들여다보는 거버넌스/분석 뷰.

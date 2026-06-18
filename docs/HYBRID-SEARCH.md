@@ -30,7 +30,7 @@ VectorIndex의 어휘 짝. namespace별로 분리하고, 시작 시 `@PostConstr
 
 ### HybridRetriever (RRF 융합)
 
-벡터·키워드 각각 top-N을 받아 Reciprocal Rank Fusion으로 합친다.
+벡터와 키워드 각각 top-N을 받아 Reciprocal Rank Fusion으로 합친다.
 
 ```
 score(doc) = Σ 1 / (k + rank_i)     (k = 60)
@@ -47,7 +47,7 @@ public void index(Article a)  { vectorIndex.add(a); keywordIndex.add(a); }
 public void reindex(List<Article> all) { vectorIndex.rebuild(all); keywordIndex.rebuild(all); }
 ```
 
-IngestionService·DataController는 `indexingService.index/reindex`만 부르고 인덱스 종류는 모른다. 새 인덱스를 추가해도 호출부는 안 바뀐다. (실제로 KeywordIndex 추가 시 IndexingService 한 곳만 고쳤다.)
+IngestionService와 DataController는 `indexingService.index/reindex`만 부르고 인덱스 종류는 모른다. 새 인덱스를 추가해도 호출부는 안 바뀐다. (실제로 KeywordIndex 추가 시 IndexingService 한 곳만 고쳤다.)
 
 설정:
 
@@ -73,7 +73,7 @@ retrieval:
 
 ### 통찰
 
-하이브리드의 이득은 1차 검색이 약하거나 코퍼스가 클 때 커진다. 검색이 이미 강하면(좋은 임베더 + 잘 쪼갠 청크 + 작은 코퍼스) 정답이 이미 후보에 있어 추가 이득이 작다 — reranking·MMR에서 본 것과 같은 패턴이다. 효과가 분명한 영역은 크고 노이즈 많은 코퍼스 + 희귀 어휘 질의(코드, 고유 ID, 제품명)다.
+하이브리드의 이득은 1차 검색이 약하거나 코퍼스가 클 때 커진다. 검색이 이미 강하면(좋은 임베더 + 잘 쪼갠 청크 + 작은 코퍼스) 정답이 이미 후보에 있어 추가 이득이 작다 — reranking과 MMR에서 본 것과 같은 패턴이다. 효과가 분명한 영역은 크고 노이즈 많은 코퍼스 + 희귀 어휘 질의(코드, 고유 ID, 제품명)다.
 
 ## 4. 선택 가이드
 
