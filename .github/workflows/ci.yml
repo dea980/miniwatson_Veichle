@@ -34,6 +34,10 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+      # GHCR은 이미지 이름이 전부 소문자여야 함. 레포명에 대문자(miniwatson_Veichle의 V)가 있어
+      # ${{ github.repository }}를 그대로 쓰면 "repository name must be lowercase"로 실패 → 소문자로 변환.
+      - name: Set lowercase image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
       # Oracle Always Free는 ARM(arm64). amd64만 만들면 거기서 못 뜸 → 멀티아치 빌드.
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
@@ -48,5 +52,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
