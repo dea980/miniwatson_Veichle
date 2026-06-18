@@ -10,12 +10,22 @@ function Bars({ rows }: { rows: [string, number][] }) {
       {rows.map((r, i) => (
         <div className="bar-row" key={i}>
           <span className="bar-label">{String(r[0]).slice(0, 18)}</span>
-          <span className="bar-track"><span className="bar-fill" style={{ width: `${(Number(r[1]) / max) * 100}%` }} /></span>
+          <span className="bar-track">
+            <span className={`bar-fill s${Math.min(i, 5)}`} style={{ width: `${(Number(r[1]) / max) * 100}%` }} />
+          </span>
           <span className="bar-val">{r[1]}건</span>
         </div>
       ))}
     </div>
   );
+}
+
+// 점검 결과 → 상태 배지 색 (양호=초록, 교환=빨강, 그 외 정비=주황)
+function resultPill(result: string) {
+  const ok = result === "양호" || result === "-" || result === "–" || result === "";
+  const replace = result.includes("교환");
+  const cls = ok ? "ok" : replace ? "bad" : "warn";
+  return <span className={`pill ${cls}`}>{result || "양호"}</span>;
 }
 
 export default function ReportPanel() {
@@ -103,8 +113,8 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
           <div className="cards" style={{ marginTop: 14 }}>
             <div className="stat"><div className="v">{res.recallTotal}</div><div className="l">리콜 건수</div></div>
             <div className="stat"><div className="v">{res.complaintTotal}</div><div className="l">불만 건수</div></div>
-            <div className="stat"><div className="v">{res.fires}</div><div className="l">화재 신고</div></div>
-            <div className="stat"><div className="v">{res.injuries}</div><div className="l">부상 합계</div></div>
+            <div className={`stat ${res.fires > 0 ? "danger" : ""}`}><div className="v">{res.fires}</div><div className="l">화재 신고</div></div>
+            <div className={`stat ${res.injuries > 0 ? "warn" : ""}`}><div className="v">{res.injuries}</div><div className="l">부상 합계</div></div>
           </div>
 
           {(res.inspection?.length > 0) && (
@@ -118,7 +128,7 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
                       <tr key={i}>
                         <td className="muted">{r[0]}</td>
                         <td>{r[1]}</td>
-                        <td style={{ color: r[2] === "양호" ? "var(--ok)" : "var(--danger)" }}>{r[2]}</td>
+                        <td>{resultPill(r[2])}</td>
                         <td>{r[3]}</td>
                       </tr>
                     ))}

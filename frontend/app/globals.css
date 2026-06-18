@@ -24,6 +24,10 @@
   --accent: #4f9cff;
   --accent-2: #3b82f6;
   --accent-2-hover: #5a95f7;
+  /* 다크모드용 밝은 의미색 (라이트용 어두운 값이 다크 배경에서 안 보여서) */
+  --ok: #3fb950;
+  --danger: #f85149;
+  --warn: #d6a020;
   --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.35);
 }
 
@@ -41,7 +45,10 @@ a { color: var(--accent-2); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 /* ---- Shell: sidebar + content ---- */
-.shell { display: flex; min-height: 100vh; }
+/* 테마(data-theme)가 .shell에 붙으므로 여기서 color를 다시 적용해야
+   색을 명시 안 한 상속 텍스트(표 셀·문서명·브랜드명 등)가 다크모드에서 올바른 밝은 색을 받는다.
+   (body는 .shell 상위라 항상 :root의 어두운 --text를 써서 상속 텍스트가 안 보였던 버그) */
+.shell { display: flex; min-height: 100vh; color: var(--text); background: var(--bg); }
 .sidebar {
   width: 232px; flex-shrink: 0; background: var(--surface);
   border-right: 1px solid var(--border); padding: 20px 14px;
@@ -80,6 +87,12 @@ a:hover { text-decoration: underline; }
 .topbar .crumb b { color: var(--text); font-weight: 600; }
 .brand .logo { font-weight: 800; }
 .theme-btn { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+.conn { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); }
+.conn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.conn[data-on="1"] { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 32%, transparent); background: color-mix(in srgb, var(--ok) 9%, transparent); }
+.conn[data-on="1"] .dot { background: var(--ok); }
+.conn[data-on="0"] { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 32%, transparent); background: color-mix(in srgb, var(--danger) 9%, transparent); }
+.conn[data-on="0"] .dot { background: var(--danger); }
 
 .main { padding: 0; width: 100%; }
 .hero { padding: 40px 40px 24px; max-width: 1040px; }
@@ -92,7 +105,7 @@ a:hover { text-decoration: underline; }
 
 /* ---- Card ---- */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; margin-bottom: 18px; box-shadow: var(--shadow); }
-.card h2 { font-size: 16px; font-weight: 650; margin: 0 0 16px; letter-spacing: -.02em; }
+.card h2 { font-size: 16px; font-weight: 650; margin: 0 0 16px; letter-spacing: -.02em; color: var(--text); }
 
 button.btn, button.ghost, .navitem, .theme-btn, input, select { transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease; }
 button.btn:active { transform: translateY(1px); }
@@ -137,6 +150,19 @@ button.ghost.listening { background: color-mix(in srgb, var(--danger) 12%, trans
 .stat { background: var(--surface-2); border: 1px solid var(--border); padding: 16px; border-radius: 10px; }
 .stat .v { font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
 .stat .l { color: var(--muted); font-size: 12px; margin-top: 2px; }
+/* 의미색 KPI — 위험 신호를 색으로 */
+.stat.danger { background: color-mix(in srgb, var(--danger) 8%, var(--surface)); border-color: color-mix(in srgb, var(--danger) 26%, var(--border)); }
+.stat.danger .v { color: var(--danger); }
+.stat.danger .l { color: color-mix(in srgb, var(--danger) 70%, var(--muted)); }
+.stat.warn { background: color-mix(in srgb, var(--warn) 9%, var(--surface)); border-color: color-mix(in srgb, var(--warn) 28%, var(--border)); }
+.stat.warn .v { color: var(--warn); }
+.stat.warn .l { color: color-mix(in srgb, var(--warn) 70%, var(--muted)); }
+
+/* 상태 배지 (점검표 결과 등) */
+.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid transparent; }
+.pill.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+.pill.bad { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+.pill.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); border-color: color-mix(in srgb, var(--warn) 32%, transparent); }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
@@ -153,6 +179,12 @@ th { color: var(--muted); font-weight: 600; }
 .bar-label { width: 130px; text-align: right; font-size: 13px; flex-shrink: 0; }
 .bar-track { flex: 1; background: var(--surface-2); height: 20px; border-radius: 5px; overflow: hidden; }
 .bar-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); border-radius: 5px; }
+/* 순위별 색 농도 (라이트: 진한 네이비→연블루) */
+.bar-fill.s0 { background: #002c5f; } .bar-fill.s1 { background: #15467f; } .bar-fill.s2 { background: #1f6feb; }
+.bar-fill.s3 { background: #4d90e8; } .bar-fill.s4 { background: #7eb2f0; } .bar-fill.s5 { background: #a9ccf6; }
+/* 다크: 어두운 네이비는 안 보여서 밝은 블루 계열로 */
+[data-theme="dark"] .bar-fill.s0 { background: #6cb0ff; } [data-theme="dark"] .bar-fill.s1 { background: #4f9cff; } [data-theme="dark"] .bar-fill.s2 { background: #3b82f6; }
+[data-theme="dark"] .bar-fill.s3 { background: #2f6ad0; } [data-theme="dark"] .bar-fill.s4 { background: #2a55a0; } [data-theme="dark"] .bar-fill.s5 { background: #244878; }
 .bar-val { width: 54px; font-size: 13px; color: var(--muted); flex-shrink: 0; }
 
 /* markdown */
@@ -167,6 +199,8 @@ th { color: var(--muted); font-weight: 600; }
 .empty { display: flex; align-items: center; gap: 14px; margin-top: 18px; padding: 22px; border: 1px dashed var(--border); border-radius: 10px; background: var(--surface-2); color: var(--muted); font-size: 14px; }
 .empty-ic { width: 40px; height: 40px; flex-shrink: 0; border-radius: 10px; background: var(--surface); display: grid; place-items: center; color: var(--accent-2); }
 .empty-ic svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+.empty-ic svg.spin { stroke-dasharray: 42 16; transform-origin: center; animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* upload example */
 .example { background: var(--surface-2); border: 1px dashed var(--border); border-radius: 10px; padding: 12px 14px; margin-top: 10px; }

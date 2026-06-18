@@ -53,6 +53,15 @@ export default function DiagnosePanel() {
 
       {err && <div className="err">{err}</div>}
 
+      {!diag && !err && !busy && (
+        <div className="empty">
+          <div className="empty-ic"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z" /><circle cx="12" cy="13" r="3.2" /></svg></div>
+          <div>계기판 경고등이나 파손 부품 <b>사진</b>을 올리면, Vision과 OCR로 인식한 뒤 매뉴얼 근거로 진단하고 <b>필요 부품</b>까지 산정합니다.</div>
+        </div>
+      )}
+
+      {busy && !diag && <div className="empty"><div className="empty-ic"><svg className="spin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /></svg></div><div>이미지를 인식하고 매뉴얼을 검색하는 중…</div></div>}
+
       {diag && (
         <>
           <div className="label">이미지 인식</div>

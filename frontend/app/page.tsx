@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 import AskPanel from "@/components/AskPanel";
 import AgentPanel from "@/components/AgentPanel";
 import ReportPanel from "@/components/ReportPanel";
@@ -36,10 +37,13 @@ function Icon({ id }: { id: string }) {
 export default function Home() {
   const [tab, setTab] = useState<TabId>("ask");
   const [dark, setDark] = useState(false);
+  const [online, setOnline] = useState<boolean | null>(null);
 
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("mw-theme") : null;
     if (saved === "dark") setDark(true);
+    // 백엔드 연결 확인 (models 핑)
+    api.models().then(() => setOnline(true)).catch(() => setOnline(false));
   }, []);
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("mw-theme", dark ? "dark" : "light");
@@ -83,7 +87,14 @@ export default function Home() {
       <div className="content">
         <header className="topbar">
           <span className="crumb">MiniWatson Vehicle <span className="muted">/</span> <b>{current.label}</b></span>
-          <button className="theme-btn" onClick={() => setDark((v) => !v)}>{dark ? "라이트" : "다크"}</button>
+          <div className="row" style={{ gap: 10 }}>
+            {online !== null && (
+              <span className="conn" data-on={online ? "1" : "0"}>
+                <span className="dot" />{online ? "연결됨" : "백엔드 꺼짐"}
+              </span>
+            )}
+            <button className="theme-btn" onClick={() => setDark((v) => !v)}>{dark ? "라이트" : "다크"}</button>
+          </div>
         </header>
 
         <main className="main">
@@ -104,8 +115,8 @@ export default function Home() {
           </div>
 
           <footer className="footer">
-            <span>MiniWatson Vehicle — Automotive Domain LLM Platform</span>
-            <span>RAG · Agent · text-to-SQL · LoRA · Governance · <b>Daeyeop Kim</b></span>
+            <span>MiniWatson Vehicle — 자동차 도메인 LLM 플랫폼</span>
+            <span>RAG, Agent, text-to-SQL, LoRA, 거버넌스 — <b>Daeyeop Kim</b></span>
           </footer>
         </main>
       </div>

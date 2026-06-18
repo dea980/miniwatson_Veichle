@@ -51,6 +51,15 @@ export default function AgentPanel() {
 
       {err && <div className="err">{err}</div>}
 
+      {!res && !err && !loading && (
+        <div className="empty">
+          <div className="empty-ic"><svg viewBox="0 0 24 24"><polygon points="13 2 4 14 12 14 11 22 20 10 12 10 13 2" /></svg></div>
+          <div>질문을 입력하면 <b>매뉴얼 검색 / 리콜 SQL / 복합</b> 중 알맞은 도구를 자동으로 고르고, <b>처리 과정</b>을 단계별로 보여줍니다.</div>
+        </div>
+      )}
+
+      {loading && <div className="empty"><div className="empty-ic"><svg className="spin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /></svg></div><div>질문을 분석하고 도구를 선택하는 중…</div></div>}
+
       {res && (
         <>
           <div className="label">선택된 도구 <span className="badge">{res.tool}</span></div>

@@ -24,20 +24,34 @@ export default function GovernancePanel() {
           <button className="ghost" onClick={refresh}>새로고침</button>
         </div>
         {err && <div className="err">{err}</div>}
+        {!stats && !err && (
+          <div className="empty"><div className="empty-ic"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.4 7.7-8 9-4.6-1.3-8-4-8-9V6z" /></svg></div><div>아직 호출 기록이 없습니다. 다른 탭에서 질문하면 모든 LLM 호출이 여기 감사 로그로 쌓입니다.</div></div>
+        )}
         {stats && (
           <div className="cards" style={{ marginTop: 14 }}>
             <div className="stat"><div className="v">{stats.totalCalls}</div><div className="l">총 호출</div></div>
             <div className="stat"><div className="v">{stats.avgLatencyMs} ms</div><div className="l">평균 지연</div></div>
-            <div className="stat"><div className="v">{stats.totalPii}</div><div className="l">개인정보 마스킹</div></div>
+            <div className={`stat ${stats.totalPii > 0 ? "warn" : ""}`}><div className="v">{stats.totalPii}</div><div className="l">개인정보 마스킹</div></div>
             <div className="stat"><div className="v">{stats.totalDocs}</div><div className="l">문서 수</div></div>
           </div>
         )}
-        {stats && stats.byModel?.length > 0 && (
-          <>
-            <div className="label">모델별</div>
-            {stats.byModel.map((m, i) => <div key={i} className="muted">{m.model}: {m.calls} calls, {m.avgMs} ms avg</div>)}
-          </>
-        )}
+        {stats && stats.byModel?.length > 0 && (() => {
+          const maxCalls = Math.max(1, ...stats.byModel.map((m) => m.calls));
+          return (
+            <>
+              <div className="label">모델별 호출</div>
+              <div className="bars">
+                {stats.byModel.map((m, i) => (
+                  <div className="bar-row" key={i}>
+                    <span className="bar-label">{m.model}</span>
+                    <span className="bar-track"><span className={`bar-fill s${Math.min(i, 5)}`} style={{ width: `${(m.calls / maxCalls) * 100}%` }} /></span>
+                    <span className="bar-val" style={{ width: 96 }}>{m.calls}회, {m.avgMs}ms</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          );
+        })()}
       </div>
 
       <div className="card">

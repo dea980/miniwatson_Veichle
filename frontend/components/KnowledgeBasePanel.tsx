@@ -56,7 +56,12 @@ export default function KnowledgeBasePanel() {
           <button className="ghost" onClick={refresh}>새로고침</button>
         </div>
         {err && <div className="err">{err}</div>}
-        {docs.length === 0 && <div className="muted">문서 없음</div>}
+        {docs.length === 0 && !err && (
+          <div className="empty">
+            <div className="empty-ic"><svg viewBox="0 0 24 24"><path d="M5 4h13v16H7a2 2 0 01-2-2z" /><line x1="9" y1="4" x2="9" y2="20" /></svg></div>
+            <div>아직 적재된 문서가 없습니다. 위에서 매뉴얼 PDF나 문서를 업로드하면 청크로 나뉘어 <b>매뉴얼 검색</b> 탭에서 근거로 쓰입니다.</div>
+          </div>
+        )}
         {docs.map((d, i) => (
           <div className="doc" key={i}>
             <span className="name">{d.title}</span>

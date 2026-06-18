@@ -114,6 +114,13 @@ export default function TabularPanel() {
       </div>
       {err && <div className="err">{err}</div>}
 
+      {!res && !err && !busy && (
+        <div className="empty">
+          <div className="empty-ic"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></svg></div>
+          <div>표(CSV/엑셀)를 올리고 자연어로 물어보면 <b>SQL을 생성</b>해 집계합니다. 숫자 결과는 <b>막대 차트</b>로도 보여줍니다.</div>
+        </div>
+      )}
+
       {res && (
         <>
           {res.sql && (<><div className="label">생성된 SQL</div><pre className="sqlbox">{res.sql}</pre></>)}
@@ -126,7 +133,7 @@ export default function TabularPanel() {
                   <div className="bar-row" key={i}>
                     <span className="bar-label">{String(r[0])}</span>
                     <span className="bar-track">
-                      <span className="bar-fill" style={{ width: `${(Number(r[1]) / maxVal) * 100}%` }} />
+                      <span className={`bar-fill s${Math.min(i, 5)}`} style={{ width: `${(Number(r[1]) / maxVal) * 100}%` }} />
                     </span>
                     <span className="bar-val">{String(r[1])}</span>
                   </div>

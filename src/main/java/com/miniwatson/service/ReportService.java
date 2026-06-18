@@ -71,8 +71,9 @@ public class ReportService {
             var rag = ragService.ask(car + " 안전 및 정비 시 주의사항", ns, llmModel);
             manualNotes = rag.answer();
             rag.sources().forEach(a -> sources.add(a.getTitle()));
-        } catch (Exception e) {
-            log.warn("[report] RAG 실패: {}", e.getMessage());
+        } catch (Throwable t) {
+            // Exception뿐 아니라 Error(OOM 등 — 대형 모델 첫 호출 시 모델 로딩에서 메모리 초과)도 잡아 500 방지
+            log.warn("[report] RAG 실패({}): {}", llmModel, t.toString());
         }
         out.put("manualNotes", manualNotes);
         out.put("sources", sources);
@@ -87,21 +88,30 @@ public class ReportService {
             if (!"양호".equals(result)) issues.append(r.get(0)).append("/").append(r.get(1)).append("(").append(result).append(") ");
         }
 
-        String stats = "리콜 총건수: " + recallTotal + "\n리콜 주요부품(상위): " + recallTop
-                + "\n불만 총건수: " + complaintTotal + "\n불만 주요부품(상위): " + complaintTop
-                + "\n화재 신고: " + fires + " / 부상 합계: " + injuries
-                + "\n점검 지적사항: " + (issues.length() == 0 ? "없음(전 항목 양호)" : issues)
-                + "\n매뉴얼 주의(근거): " + manualNotes;
-        String prompt = "당신은 현대자동차 A/S 진단 어시스턴트입니다. 아래 데이터로 '" + car
-                + "' 차량 진단 의견을 한국어로 작성하세요. 자동차 성능·상태점검기록부 톤.\n"
-                + "다음 섹션 구조로, 수치는 데이터를 그대로 인용하고 없는 내용은 지어내지 마세요:\n"
-                + "## 차량 개요\n## 주요장치 점검 요약\n## 사고·결함 이력\n## 정비 권고\n## 종합 의견\n\n"
-                + "[데이터]\n" + stats + "\n\n진단 의견:";
+        String manualClean = manualNotes == null ? "" : manualNotes.replaceAll("\\s+", " ").trim();
+        if (manualClean.length() > 300) manualClean = manualClean.substring(0, 300);
+        String stats = "차종: " + car + "\n"
+                + "리콜 총 " + recallTotal + "건. 주요 부품: " + fmtTop(recallTop) + "\n"
+                + "불만 총 " + complaintTotal + "건. 주요 부품: " + fmtTop(complaintTop) + "\n"
+                + "화재 신고 " + fires + "건, 부상 합계 " + injuries + "명\n"
+                + "점검 지적사항: " + (issues.length() == 0 ? "없음(전 항목 양호)" : issues.toString().trim())
+                + (manualClean.isBlank() ? "" : "\n매뉴얼 주의: " + manualClean);
+        String prompt = "당신은 현대자동차 A/S 진단 어시스턴트입니다. 아래 통계만 근거로 '" + car
+                + "' 차량의 진단 의견을 한국어 서술형으로 작성하세요.\n"
+                + "규칙: 주어진 수치만 인용하고 없는 내용은 지어내지 마세요. "
+                + "대괄호([]), 표, 코드 기호를 쓰지 말고 자연스러운 완결된 문장으로만 4~6문장 이내로 간결하게 쓰세요.\n\n"
+                + "통계:\n" + stats + "\n\n진단 의견:";
         String report;
         try {
             report = ollama.ask(prompt, llmModel, "진단서:" + car);
-        } catch (Exception e) {
-            report = "(종합 생성 실패) 통계: 리콜 " + recallTotal + "건, 불만 " + complaintTotal + "건, 화재 " + fires + "건.";
+        } catch (Throwable t) {
+            // Exception뿐 아니라 Error(OutOfMemoryError 등 — 9.6GB gemma4 같은 대형 모델이 M2 메모리 초과)도 잡아
+            // 500으로 터지지 않게 한다. 집계(KPI·표·차트)는 이미 결정적 SQL로 만들어졌으니 부분 리포트로라도 응답.
+            log.warn("[report] 종합 생성 실패({}): {} — 부분 리포트 반환", llmModel, t.toString());
+            report = "## 종합 의견 (자동 생성 실패)\n\n"
+                + "선택 모델(" + (llmModel == null ? "기본" : llmModel) + ")로 종합 서술 생성에 실패했습니다. "
+                + "집계 수치는 위 KPI와 표를 참고하세요. 더 가벼운 모델(qwen2.5:7b-instruct, granite4)을 권장합니다.\n\n"
+                + "- 리콜 " + recallTotal + "건, 불만 " + complaintTotal + "건, 화재 " + fires + "건, 부상 " + injuries + "명.";
         }
         out.put("report", report);
         return out;
@@ -127,5 +137,19 @@ public class ReportService {
     private List<List<Object>> rows(String sql) {
         try { return tabular.runSelect(sql).rows(); }
         catch (Exception e) { log.warn("[report] rows 실패: {}", e.getMessage()); return List.of(); }
+    }
+
+    /** [[부품,건수],...] → "부품 N건, 부품 N건" 사람이 읽는 문장(프롬프트에 원시 리스트 누수 방지). */
+    private String fmtTop(List<List<Object>> top) {
+        if (top == null || top.isEmpty()) return "없음";
+        StringBuilder sb = new StringBuilder();
+        for (List<Object> r : top) {
+            if (r.isEmpty()) continue;
+            String name = String.valueOf(r.get(0));
+            String cnt = r.size() > 1 ? String.valueOf(r.get(1)) : "";
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(name).append(cnt.isBlank() ? "" : " " + cnt + "건");
+        }
+        return sb.length() == 0 ? "없음" : sb.toString();
     }
 }

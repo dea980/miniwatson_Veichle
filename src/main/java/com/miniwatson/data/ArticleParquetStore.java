@@ -24,6 +24,8 @@ public class ArticleParquetStore {
 
     private static final String STORAGE_PATH = "./data/articles.parquet";
     private final Schema schema;
+    // load-once 캐시 — 요청마다 Parquet 전체를 다시 읽지 않게. 쓰기(saveAll) 시 갱신, 디스크 읽기는 최초 1회.
+    private volatile List<Article> cache;
 
     public ArticleParquetStore() throws IOException {
         try (InputStream is = getClass().getClassLoader().getResourceAsStream("article.avsc")) {
@@ -76,9 +78,19 @@ public class ArticleParquetStore {
         }
 
         System.out.println("[Parquet] Saved " + articles.size() + " articles → " + STORAGE_PATH);
+        this.cache = new ArrayList<>(articles);   // 쓰기 후 캐시 갱신 (디스크 재읽기 없이 일관성 유지)
     }
 
-    public List<Article> loadAll() throws IOException {
+    /**
+     * load-once: 디스크는 최초 1회만 읽고 이후 캐시 반환. 동시 요청이 각자 357건을 재로드하던 문제 해결.
+     * 호출부가 리스트를 변형(add/remove)하므로 방어적 복사본을 반환한다.
+     */
+    public synchronized List<Article> loadAll() throws IOException {
+        if (cache == null) cache = readFromDisk();
+        return new ArrayList<>(cache);
+    }
+
+    private List<Article> readFromDisk() throws IOException {
         File file = new File(STORAGE_PATH);
         if (!file.exists() || file.length() < 8) {   // 빈/손상 파일은 무시
             return new ArrayList<>();
@@ -119,16 +131,11 @@ public class ArticleParquetStore {
 
                 article.setEmbedding(embedding);
                 articles.add(article);
-
-                System.out.println("[Parquet] Loaded #" + idx
-                        + " id=" + article.getId()
-                        + " title=" + article.getTitle()
-                        + " embedding.size=" + embedding.size());
                 idx++;
             }
         }
 
-        System.out.println("[Parquet] loadAll → " + articles.size() + " articles");
+        System.out.println("[Parquet] readFromDisk → " + articles.size() + " articles (이후 캐시 사용)");
         return articles;
     }
 

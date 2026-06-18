@@ -5,9 +5,10 @@ mlx-lm>=0.18.0          # 맥 GPU(Metal) LoRA 학습/생성
 datasets>=2.19.0
 huggingface-hub>=0.23.0
 
-# Colab/CUDA 경로 (Intel 맥 등 로컬 학습 불가 시)
+# Colab/Kaggle CUDA 경로 — 7B QLoRA 학습 (finetune/train_qlora.py, finetune/COLAB_QLORA.md)
+# Colab 셀에서 직접 설치: pip install -U transformers peft trl bitsandbytes accelerate datasets
 # transformers>=4.44.0
 # peft>=0.12.0
 # trl>=0.9.0
-# bitsandbytes>=0.43.0   # QLoRA 4bit (CUDA 전용)
+# bitsandbytes>=0.43.0   # QLoRA 4bit nf4 (CUDA 전용 — 맥 로컬 학습엔 위 mlx-lm)
 # accelerate>=0.33.0
