@@ -1,21 +1,72 @@
-# MiniWatson
+# 🚗 MiniWatson Vehicle
 
-[![CI](https://github.com/dea980/miniwatson/actions/workflows/ci.yml/badge.svg)](https://github.com/dea980/miniwatson/actions/workflows/ci.yml)
-[![GitLab pipeline](https://gitlab.com/kdea989/miniwatson/badges/main/pipeline.svg)](https://gitlab.com/kdea989/miniwatson/-/pipelines)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
 
-> A miniature watsonx-style platform — built end-to-end from scratch  
-> Spring Boot · Ollama · Parquet · 768-dim embeddings · RAG (chunking + reranking) · multimodal (vision + OCR) · tabular text-to-SQL (DuckDB) · multi-tenant · PII governance
+> **자동차 도메인 특화 LLM 플랫폼** — 정비 매뉴얼 RAG · 리콜/불만 text-to-SQL · 온디바이스 LoRA 파인튜닝 · Agentic 진단→부품, 그리고 거버넌스까지 한 곳에서.
+> Spring Boot · Ollama · Next.js · DuckDB · MLX(LoRA) · Qwen2.5 / IBM Granite
 
-> 정형 표(CSV/XLSX)는 DuckDB로 text-to-SQL — 집계는 SQL, 텍스트는 RAG.
+> watsonx 스타일 RAG 플랫폼([MiniWatson](https://github.com/dea980/miniwatson))을 **자동차 밸류체인(판매·제조·A·S)** 으로 특화한 프로젝트. 현대차 NLP/LLM 직무 JD + 실제 AI 스택(H-Chat 거버넌스 게이트웨이 · 자체 도메인 LLM · 차량 온디바이스)에 매핑.
 
-MiniWatson is a learning project that recreates IBM watsonx's 3-layer architecture
-(data · ai · governance) at a small scale. The goal: understand how enterprise
-GenAI platforms work by building one — not by reading about it.
+**핵심 기능**
+- **매뉴얼 RAG** — 정비 매뉴얼 근거로 한국어 답변(+출처). 다국어 임베딩으로 한↔영 교차검색.
+- **text-to-SQL** — 리콜·불만(NHTSA)·부품 CSV를 자연어로 질의(DuckDB), 차트 시각화.
+- **LoRA 파인튜닝** — Qwen2.5-1.5B를 자동차 도메인으로(MLX, GPU 없는 맥) → GGUF Q4 온디바이스.
+- **Agentic Search** — 질문→도구선택(RAG/SQL/복합)→종합 + 트레이스, SQL 자기수정.
+- **종합 진단서 / 이미지 진단→부품** — 리콜·불만·매뉴얼 통합 리포트, 사진(Vision+OCR) 진단.
+- **거버넌스** — 모든 LLM 호출 감사 로그 · PII 마스킹 · 멀티프로바이더(H-Chat 정합).
 
-![MiniWatson dashboard — RAG answer with grounded sources, multi-LLM select, and a governance audit trail](docs/miniwatson_final_demo_UI_Knowledgebase.png)
+전체 문서: **[docs/](docs/README.md)** · 설계 근거: [아키텍처](docs/VEHICLE_ARCHITECTURE.md) · [결과](docs/RESULTS.md) · 실행: [ml/RUNBOOK.md](ml/RUNBOOK.md)
 
-> 답변마다 출처(grounding)가 붙고, 모든 LLM 호출이 감사 로그에 남는다 — RAG와 거버넌스를 한 화면에서.
+## 프로젝트 구조
+
+3개 계층이 HTTP/모델파일로만 연결된 모노레포 (서빙·프론트·ML 분리):
+
+```
+miniwatson-vehicle/
+├── src/ · pom.xml · Dockerfile   # 백엔드 — Spring Boot 4 / Java 21 (RAG·Agent·거버넌스·서빙)
+├── frontend/                     # 프론트 — Next.js (RAG·Agent·진단서·SQL·거버넌스 탭)
+├── ml/                           # ML 사이드카 — Python (데이터수집·LoRA·양자화·벤치)
+│   ├── data/      수집·데이터셋 스크립트   ├── finetune/  LoRA 학습·평가
+│   └── optimize/  양자화·벤치마크          └── RUNBOOK.md 실행 가이드
+├── data/vehicle/                 # 도메인 데이터 (샘플 CSV만 커밋, 매뉴얼 PDF는 로컬)
+├── docs/                         # 설계 문서 (아키텍처·LoRA·Agent·GraphRAG·디자인·결과)
+├── reference/graphrag/           # GraphRAG 레퍼런스(미통합) — 고도화 설계 근거
+├── eval/ · sample/ · monitoring/ # 평가 하니스 · 샘플 · Prometheus/Grafana
+```
+
+> 백엔드를 `backend/`로 옮기지 않고 루트에 둔 건 의도적 — 기존 Maven·Docker·CI 경로를 유지(리스크↓). 분리는 디렉터리(`frontend/`·`ml/`) + HTTP 경계로 달성.
+
+---
+
+## 🚗 Vehicle Extension (Automotive Domain LLM)
+
+완성된 watsonx 클론 위에 **자동차 밸류체인 NLP**를 얹는 트랙. 현대차 NLP/LLM 직무 JD에 매핑된다.
+
+**2계층 설계** — 본체(Java: RAG·거버넌스·서빙)는 그대로, 모델 제작(Python: 파인튜닝·양자화)을 `ml/` 사이드카로 분리하고 완성 모델을 `llm.provider`로 다시 꽂는다.
+
+| 데이터 | 소스(공개·재현가능) | 경로 |
+|---|---|---|
+| 정비 매뉴얼 | Internet Archive (공개 PDF) | RAG (`/api/data/ingest-file` → `/api/rag`) |
+| 리콜/결함 | NHTSA API (키 불필요) | text-to-SQL (`/api/tabular`, DuckDB) |
+
+> 현대차 공홈(oms.hmc.co.kr)은 로그인·ToS 제약 → 공개·재현가능 소스로 대체. 원문은 `data/vehicle/`(gitignore)에 로컬 인덱싱.
+
+**ML 파이프라인** (`ml/`) — GPU 없는 맥(M2) → 작은 모델 + LoRA + 4bit 양자화 = **온디바이스** 컨셉:
+
+```
+fetch_recalls.py / fetch_manuals.py   # 데이터 수집(원본 보존)
+        ↓
+build_dataset.py                      # 청크 → 한국어 instruction JSONL
+        ↓
+train_lora.py (MLX, Qwen2.5-1.5B)     # LoRA 파인튜닝 (맥 GPU)
+        ↓
+quantize_gguf.sh → Ollama 등록         # GGUF Q4 경량화 → 서빙
+        ↓
+benchmark.py                          # TTFT·tok/s·지연 (양자화 전후)
+```
+
+현황: 데이터 수집 + 자동차 RAG(한국어 답변·근거) 검증 완료, LoRA 파인튜닝 진행 중.
+자세한 단계는 [ml/RUNBOOK.md](ml/RUNBOOK.md), 설계 이유는 [docs/VEHICLE_ARCHITECTURE.md](docs/VEHICLE_ARCHITECTURE.md).
 
 ---
 
@@ -546,6 +597,24 @@ Notes from building this:
 - [ ] 30 — 라이브 배포 (VPS docker-compose, 또는 IBM Cloud Code Engine + watsonx.ai 스왑)
 - [ ] 31 — 보안 Tier 2: 프롬프트 인젝션 방어, PII 커버리지 확대, TLS/레이트리밋
 - [ ] 32 — 평가 심화(RAGAS류 답변품질), 관측성(metrics/health/tracing)
+
+### 🚗 Vehicle (Automotive) 트랙
+
+자동차 도메인 특화 LLM (현대차 NLP/LLM 직무 JD + 실제 AI 스택 매핑).
+상세: [docs/README.md](docs/README.md) · [VEHICLE_EXTENSION_PLAN.md](VEHICLE_EXTENSION_PLAN.md) · [docs/RESULTS.md](docs/RESULTS.md) · [docs/HYUNDAI_NEEDS_ROADMAP.md](docs/HYUNDAI_NEEDS_ROADMAP.md)
+
+- [x] V1 — 데이터 수집: NHTSA 리콜 API(원본 JSON 보존) + Internet Archive 매뉴얼 PDF (`ml/data/fetch_*.py`)
+- [x] V2 — 자동차 RAG: `vehicle` 네임스페이스 인제스트 + 약어/DTC 시드 사전 + 한국어 답변·근거
+- [x] V3 — 리콜 text-to-SQL 트랙 (`/api/tabular`, DuckDB)
+- [x] V4 — 도메인 LoRA 파인튜닝 (Qwen2.5-1.5B, MLX, early-stopping) + base vs FT 평가
+- [x] V5 — 경량화(GGUF Q4) → Ollama 서빙 + 추론 벤치(Q4 vs Q8: 메모리½·속도2배)
+- [x] V6 — **Agentic Search**: 질문→도구선택(RAG/리콜SQL/BOTH)→실행→한국어 종합 + 트레이스 (`/api/agent`)
+- [x] V7 — Next.js 프론트(7탭) + 브라우저 음성(STT/TTS) + 정적 UI 패리티
+- [x] V8 — 멀티테이블: NHTSA 불만(complaints) 추가 + 설정 레지스트리(`vehicle.tables`) 동적 선택
+- [x] V9 — **차종 종합 진단서**: 리콜+불만+매뉴얼 종합 (`/api/agent/report`, 집계는 결정적 SQL)
+- [x] V10 — **이미지 진단→필요 부품**: 사진(Vision+OCR)→매뉴얼 진단→부품 명세(+샘플 견적) (`/api/agent/diagnose-image`, `/estimate`)
+- [x] V11 — text-to-SQL 자기수정(self-correction) + 작업별 모델 라우팅(SQL=강한모델, 답변=FT)
+- [ ] V12 — (옵션) vLLM provider · 임베딩 파인튜닝 · 온디바이스 음성(Whisper) · 라이브 배포
 
 ---
 

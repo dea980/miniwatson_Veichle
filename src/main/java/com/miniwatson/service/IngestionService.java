@@ -47,6 +47,9 @@ public class IngestionService {
     private final Chunker chunker;// 청킹 분리
     private final int maxSize;
     private final boolean expandAcronyms;   // 약어->정식명 주입 토글 (A/B·거버넌스)
+
+    private Map<String, String> seedGlossary = Map.of();   // ★추가: 자동차 약어/DTC 시드 사전
+
     private final Tika tika = new Tika();
     private final HwpExtractor hwpExtractor;
     private final DocumentCatalogRepository catalogRepo;
@@ -195,9 +198,12 @@ public class IngestionService {
         }
 
         List<String> chunks = chunker.chunk(content, maxSize); // 분리된 청커 사용
-        // 약어 정의는 전체 문서에서 1회 수집(정의가 숫자 청크와 다른 청크에 있을 수 있음)
-        Map<String, String> glossary = expandAcronyms
-                ? AcronymExpander.buildGlossary(content) : Map.of();
+        // 약어 정의: 자동차 시드 사전 + 문서에서 추출한 정의를 병합
+        Map<String, String> glossary = new LinkedHashMap<>();
+        if (expandAcronyms) {
+            glossary.putAll(seedGlossary);                            // ★ 자동차 시드 먼저
+            glossary.putAll(AcronymExpander.buildGlossary(content));  // 문서 정의가 있으면 우선(덮어씀)
+        }
         List<Article> saved = new ArrayList<>();
 
         for (int i = 0; i < chunks.size(); i++) {
@@ -229,6 +235,24 @@ public class IngestionService {
                 }
         );
         return saved;
+    }
+    /** 자동차 약어/DTC 시드 사전 로드. 파일 없거나 깨져도 기존 동작 유지(빈 맵). */
+    @PostConstruct
+    public void loadSeedGlossary() {
+        try {
+            var om = new com.fasterxml.jackson.databind.ObjectMapper();
+            var root = om.readTree(
+                    new org.springframework.core.io.ClassPathResource(
+                            "vehicle/automotive-glossary.json").getInputStream());
+            Map<String, String> seed = new LinkedHashMap<>();
+            root.get("acronyms").fields()
+                    .forEachRemaining(e -> seed.put(e.getKey(), e.getValue().asText()));
+            root.get("dtc_sample").fields()
+                    .forEachRemaining(e -> seed.put(e.getKey(), e.getValue().asText()));
+            this.seedGlossary = seed;
+        } catch (Exception ignore) {
+            // 시드 없으면 문서 추출만으로 동작 (기존과 동일)
+        }
     }
 
     @PostConstruct

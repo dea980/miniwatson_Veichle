@@ -40,9 +40,27 @@ public class TextToSqlService {
         try {
             var res = sql.runSelect(query);
             return Map.of("sql", query, "columns", res.columns(), "rows", res.rows());
-        } catch (Exception e) {
-            // 잘못된 SQL은 500이 아니라 진단 가능한 형태로 (생성된 SQL + 에러)
-            return Map.of("sql", query, "error", e.getMessage(), "rows", java.util.List.of());
+        } catch (Exception e1) {
+            // 자기수정(self-correction): 실행 에러를 모델에 돌려주고 1회 재시도 — agentic 패턴.
+            String fixPrompt = """
+                이전 SQL이 DuckDB에서 실행 에러가 났다. 에러를 보고 고쳐서 SQL SELECT 하나만 출력하라.
+                규칙: 집계(COUNT 등)와 함께 출력하는 비집계 컬럼은 GROUP BY에 넣거나 빼라.
+                테이블 `%s`만 사용. 설명/마크다운 없이 SQL만.
+                스키마:
+                %s
+                이전 SQL:
+                %s
+                에러:
+                %s
+                수정 SQL:""".formatted(table, sql.schema(table), query, e1.getMessage());
+            String fixed = cleanSql(ollama.ask(fixPrompt, null));
+            try {
+                var res = sql.runSelect(fixed);
+                return Map.of("sql", fixed, "columns", res.columns(), "rows", res.rows(), "retried", true);
+            } catch (Exception e2) {
+                // 재시도도 실패 → 진단 정보 반환(500 아님)
+                return Map.of("sql", fixed, "error", e2.getMessage(), "rows", java.util.List.of(), "retried", true);
+            }
         }
     }
 

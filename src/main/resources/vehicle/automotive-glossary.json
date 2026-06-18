@@ -1,0 +1,41 @@
+{
+  "_comment": "자동차 도메인 약어 시드 사전. AcronymExpander 문서 자동추출과 병합하여 청크에 정식명 주입. P1(Day2)에서 IngestionService 글로서리에 merge.",
+  "acronyms": {
+    "ECU": "Engine Control Unit (엔진 제어 장치)",
+    "TCU": "Transmission Control Unit (변속기 제어 장치)",
+    "ABS": "Anti-lock Braking System (잠김 방지 제동 장치)",
+    "ESC": "Electronic Stability Control (차체 자세 제어 장치)",
+    "TPMS": "Tire Pressure Monitoring System (타이어 공기압 경보 장치)",
+    "ADAS": "Advanced Driver Assistance Systems (첨단 운전자 보조 시스템)",
+    "SCC": "Smart Cruise Control (스마트 크루즈 컨트롤)",
+    "LKA": "Lane Keeping Assist (차로 유지 보조)",
+    "FCA": "Forward Collision-avoidance Assist (전방 충돌방지 보조)",
+    "BCW": "Blind-spot Collision Warning (후측방 충돌 경고)",
+    "HUD": "Head-Up Display (헤드업 디스플레이)",
+    "AVN": "Audio Video Navigation (오디오·비디오·내비게이션)",
+    "OBD": "On-Board Diagnostics (자가 진단 장치)",
+    "DTC": "Diagnostic Trouble Code (고장 진단 코드)",
+    "EV": "Electric Vehicle (전기차)",
+    "HEV": "Hybrid Electric Vehicle (하이브리드 전기차)",
+    "PHEV": "Plug-in Hybrid Electric Vehicle (플러그인 하이브리드)",
+    "ICE": "Internal Combustion Engine (내연기관)",
+    "BMS": "Battery Management System (배터리 관리 시스템)",
+    "SOC": "State of Charge (배터리 충전 상태)",
+    "SOH": "State of Health (배터리 건강 상태)",
+    "RPM": "Revolutions Per Minute (분당 회전수)",
+    "MPG": "Miles Per Gallon (갤런당 마일 연비)",
+    "VIN": "Vehicle Identification Number (차대번호)"
+  },
+  "dtc_sample": {
+    "P0010": "Camshaft Position Actuator Circuit (캠축 위치 액추에이터 회로)",
+    "P0102": "Mass Air Flow Sensor Circuit Low (흡입 공기량 센서 회로 낮음)",
+    "P0128": "Coolant Thermostat (냉각수 온도 정상범위 미달)",
+    "P0171": "System Too Lean Bank 1 (혼합기 희박, 뱅크1)",
+    "P0300": "Random/Multiple Cylinder Misfire (불규칙·다중 실린더 실화)",
+    "P0420": "Catalyst System Efficiency Below Threshold (촉매 효율 저하)",
+    "P0442": "EVAP System Leak Small (증발가스 누설 소량)",
+    "P0455": "EVAP System Leak Large (증발가스 누설 대량)",
+    "C1101": "ABS Sensor (ABS 휠 속도 센서)",
+    "U0100": "Lost Communication with ECM/PCM (제어모듈 통신 두절)"
+  }
+}

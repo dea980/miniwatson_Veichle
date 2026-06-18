@@ -1,0 +1,7 @@
+url,filename,source
+# Internet Archive 공개 현대차 정비 매뉴얼 (로그인 불필요, 직접 PDF). 정비=A/S 도메인에 적합.
+# 2011 Accent는 메타데이터로 직접 링크 확인됨(15MB/282p). 나머지는 동일 컬렉션 파일명 규칙.
+https://archive.org/download/car-service-manuals-hyundai-2011-accent/car-service-manuals-hyundai-2011-accent.pdf,hyundai_2011_accent_service.pdf,internet_archive
+https://archive.org/download/car-service-manuals-hyundai-2016-tucson/car-service-manuals-hyundai-2016-tucson.pdf,hyundai_2016_tucson_service.pdf,internet_archive
+https://archive.org/download/car-service-manuals-hyundai-2014-sonata/car-service-manuals-hyundai-2014-sonata.pdf,hyundai_2014_sonata_service.pdf,internet_archive
+# 더 추가하려면 archive.org에서 항목 찾아 'download/<식별자>/<식별자>.pdf' 형식으로 한 줄씩.

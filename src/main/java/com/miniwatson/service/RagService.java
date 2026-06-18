@@ -119,8 +119,10 @@ public class RagService {
                 .map(a -> "#" + a.getId() + " " + a.getTitle())
                 .collect(Collectors.joining("; "));
 
-        String prompt = "Use the context below. For exact numbers, trust [OCR] sections over [Vision] descriptions.\n"
-                + context + "\nAnswer concisely: " + question;
+        String prompt = "아래 컨텍스트(자동차 매뉴얼 발췌)를 근거로 사용자 질문에 답하라.\n"
+                + "반드시 한국어로 간결하게 답하라. 컨텍스트가 영어여도 한국어로 번역해서 답한다.\n"
+                + "컨텍스트에 없는 내용은 지어내지 말 것. 정확한 숫자는 [OCR] 섹션을 신뢰한다.\n\n"
+                + "[컨텍스트]\n" + context + "\n[질문] " + question + "\n[답변(한국어)]";
 
         log.info("Augmented prompt length: {} chars", prompt.length());
 

@@ -16,25 +16,25 @@ A small but production-shaped reference of IBM watsonx's three-pillar architectu
 ┌────────────────────────────▼─────────────────────────────────┐
 │  REST API  (Spring Boot 4 · Jackson 3.x)                     │
 │  ── DataController · RagController                           │
-│     GovernanceController · MultimodalController             │
-│     TabularController                                       │
+│     GovernanceController · MultimodalController              │
+│     TabularController                                        │
 └────────────────────────────┬─────────────────────────────────┘
                              │
         ┌────────────────────┼────────────────────┐
         │                    │                    │
 ┌───────▼─────────┐  ┌───────▼─────────┐  ┌──────▼──────────┐
-│ Service Layer   │  │ Retrieval       │  │ Governance       │
-│ IngestionService│  │ HybridRetriever │  │ QueryLogRepo     │
-│ IndexingService │  │ Reranker (mmr)  │  │ DocumentCatalog  │
-│ EmbeddingService│  │ OllamaService   │  │ PiiRedaction     │
+│ Service Layer   │  │ Retrieval       │  │ Governance      │
+│ IngestionService│  │ HybridRetriever │  │ QueryLogRepo    │
+│ IndexingService │  │ Reranker (mmr)  │  │ DocumentCatalog │
+│ EmbeddingService│  │ OllamaService   │  │ PiiRedaction    │
 └───────┬─────────┘  └───────┬─────────┘  └──────┬──────────┘
         │                    │                    │
 ┌───────▼──────────┐  ┌──────▼───────────┐  ┌────▼────────────┐
-│ ArticleRepository│  │ VectorIndex      │  │ H2 / PostgreSQL  │
-│ TieredArticleStore│ │ KeywordIndex(BM25│  │ query_log +      │
-│ (JSON hot+Parquet│  │ Ollama LLM       │  │ document_catalog │
-│  cold)           │  │ localhost:11434  │  │ (JPA)            │
-└──────────────────┘  └──────────────────┘  └──────────────────┘
+│ ArticleRepository│  │ VectorIndex      │  │ H2 / PostgreSQL │
+│TieredArticleStore│  │ KeywordIndex(BM25│  │ query_log +     │
+│ (JSON hot+Parquet│  │ Ollama LLM       │  │ document_catalog│
+│  cold)           │  │ localhost:11434  │  │ (JPA)           │
+└──────────────────┘  └──────────────────┘  └─────────────────┘
 ```
 
 ---
@@ -198,7 +198,7 @@ These are mapped 1:1 in `docs/DATA-MODEL.md` and `docs/GOVERNANCE.md`.
 
 ---
 
-## 9. Why This Architecture (for IBM)
+## 9. Why This Architecture (after IBM interview)
 
 1. **Three-pillar parity** — data · ai · governance, mirroring watsonx.
 2. **Anti-corruption** — Wikipedia DTO은 internal Article로 격리 (`@JsonIgnoreProperties`).

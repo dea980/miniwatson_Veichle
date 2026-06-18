@@ -1,0 +1,47 @@
+[
+  {
+    "id": "veh-tpms",
+    "category": "semantic",
+    "question": "TPMS 경고등이 켜졌을 때 어떻게 해야 하나요?",
+    "namespace": "vehicle",
+    "expectTitleContains": "manual",
+    "expectAnswer": "타이어 공기압 경고(TPMS)는 공기압 부족/누설 신호이므로 안전한 곳에 정차 후 공기압을 점검·보충하고 필요 시 점검을 받는다",
+    "note": "코퍼스 인제스트 후 expectTitleContains를 실제 매뉴얼 제목으로 교체"
+  },
+  {
+    "id": "veh-checkengine",
+    "category": "reasoning",
+    "question": "엔진 경고등(체크엔진)이 점등되는 대표적인 원인은?",
+    "namespace": "vehicle",
+    "expectTitleContains": "manual",
+    "expectAnswer": "산소센서/촉매(P0420), 점화 실화(P0300), 혼합기 희박(P0171), 증발가스 누설 등 DTC로 진단되는 원인이 대표적이다",
+    "note": "약어/DTC 사전 주입 효과 확인용"
+  },
+  {
+    "id": "veh-dtc-p0420",
+    "category": "lexical",
+    "question": "DTC P0420 코드는 무엇을 의미하나요?",
+    "namespace": "vehicle",
+    "expectTitleContains": "manual",
+    "expectAnswer": "P0420은 촉매 시스템 효율 저하(Catalyst System Efficiency Below Threshold)를 의미한다",
+    "note": "정형 코드 lexical 매칭 — hybrid/BM25 효과"
+  },
+  {
+    "id": "veh-ev-soc-soh",
+    "category": "semantic",
+    "question": "전기차 배터리 SOC와 SOH의 차이는?",
+    "namespace": "vehicle",
+    "expectTitleContains": "manual",
+    "expectAnswer": "SOC(State of Charge)는 현재 충전 상태(잔량), SOH(State of Health)는 배터리 노화·건강 상태를 나타낸다",
+    "note": "약어 확장(SOC/SOH) 주입 효과"
+  },
+  {
+    "id": "veh-scc",
+    "category": "semantic",
+    "question": "스마트 크루즈 컨트롤(SCC) 사용 시 주의사항은?",
+    "namespace": "vehicle",
+    "expectTitleContains": "manual",
+    "expectAnswer": "SCC는 앞차와 거리·속도를 유지하지만 운전자가 항상 전방을 주시하고 제어 책임을 진다; 악천후·합류구간 등에서는 제한될 수 있다",
+    "note": "ADAS"
+  }
+]

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>MiniWatson</title>
+    <title>MiniWatson Vehicle</title>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -13,9 +13,9 @@
         <div class="header-inner">
             <div class="brand">
                 <span class="brand-mark"></span>
-                <span class="brand-name">MiniWatson</span>
+                <span class="brand-name">MiniWatson Vehicle</span>
             </div>
-            <div class="header-meta">watsonx-style RAG platform</div>
+            <div class="header-meta">Automotive Domain LLM · RAG · text-to-SQL · Agent · Governance</div>
         </div>
     </header>
 
@@ -71,6 +71,34 @@
                     <button onclick="sendFeedback('up')" class="btn-ghost">👍</button>
                     <button onclick="sendFeedback('down')" class="btn-ghost">👎</button>
                     <span id="feedback-result"></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Agentic Search -->
+        <section class="panel">
+            <div class="panel-header">
+                <h2 class="panel-title">Agent</h2>
+                <span class="panel-subtitle">질문 → 도구 선택(RAG / 리콜SQL / BOTH) → 실행 → 한국어 종합</span>
+            </div>
+            <div class="panel-body">
+                <div class="input-row">
+                    <input id="agent-question" type="text" placeholder="예: 팰리세이드 리콜 몇 건이고 어떤 주의가 필요해?" class="input">
+                    <input id="agent-namespace" type="text" placeholder="namespace (vehicle)" class="input">
+                    <button onclick="askAgent()" class="btn btn-primary">Run</button>
+                </div>
+                <div class="status-msg" style="font-size:12px">모델은 위 Ask의 드롭다운 선택을 사용합니다.</div>
+                <div id="agent-loading" class="hidden status-msg">분석 · 도구 실행 · 종합 중</div>
+                <div id="agent-tool" class="hidden meta-label"></div>
+                <div id="agent-trace" class="hidden"></div>
+                <div id="agent-answer" class="answer-box hidden"></div>
+                <div id="agent-sources" class="hidden">
+                    <div class="meta-label">Sources</div>
+                    <div id="agent-sources-list"></div>
+                </div>
+                <div id="agent-sql" class="hidden">
+                    <div class="meta-label">실행 SQL</div>
+                    <pre id="agent-sql-text" class="answer-box"></pre>
                 </div>
             </div>
         </section>

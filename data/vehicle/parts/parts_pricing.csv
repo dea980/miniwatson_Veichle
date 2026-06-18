@@ -1,0 +1,16 @@
+part,component,unit_price,labor_hours
+브레이크 패드(앞),BRAKE,80000,1.0
+브레이크 디스크,BRAKE,150000,1.5
+산소센서,ENGINE,120000,0.8
+촉매변환기,EXHAUST,600000,2.0
+안전벨트 프리텐셔너,SEAT BELTS,200000,1.0
+앞유리(윈드실드),VISIBILITY,350000,2.5
+후방카메라,CAMERA,180000,1.0
+엔진오일+필터,ENGINE,60000,0.5
+배터리(12V),ELECTRICAL,150000,0.5
+TPMS 센서,TIRE,70000,0.7
+변속기오일,TRANSMISSION,90000,1.0
+와이퍼 모터,VISIBILITY,110000,1.0
+에어백 모듈,AIR BAGS,400000,1.5
+점화플러그(4개),ENGINE,50000,1.0
+연료펌프,FUEL,250000,1.8

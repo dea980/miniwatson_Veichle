@@ -1,0 +1,13 @@
+# Apple Silicon 로컬 학습 경로
+mlx-lm>=0.18.0          # 맥 GPU(Metal) LoRA 학습/생성
+
+# 공통 (데이터셋/평가)
+datasets>=2.19.0
+huggingface-hub>=0.23.0
+
+# Colab/CUDA 경로 (Intel 맥 등 로컬 학습 불가 시)
+# transformers>=4.44.0
+# peft>=0.12.0
+# trl>=0.9.0
+# bitsandbytes>=0.43.0   # QLoRA 4bit (CUDA 전용)
+# accelerate>=0.33.0

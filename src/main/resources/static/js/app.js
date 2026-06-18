@@ -42,6 +42,58 @@ async function askRAG() {
         alert('Error: ' + e.message);
     }
 }
+async function askAgent() {
+    const question = document.getElementById('agent-question').value;
+    if (!question) return;
+    const namespace = document.getElementById('agent-namespace')?.value || 'vehicle';
+    const model = document.getElementById('model-select')?.value;
+
+    const ids = ['agent-tool', 'agent-trace', 'agent-answer', 'agent-sources', 'agent-sql'];
+    ids.forEach(id => document.getElementById(id).classList.add('hidden'));
+    document.getElementById('agent-loading').classList.remove('hidden');
+
+    try {
+        const res = await fetch(`${API}/api/agent/ask`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ question, namespace, model })
+        });
+        const data = await res.json();
+        document.getElementById('agent-loading').classList.add('hidden');
+
+        const tool = document.getElementById('agent-tool');
+        tool.textContent = '선택된 도구: ' + (data.tool || '?');
+        tool.classList.remove('hidden');
+
+        const trace = document.getElementById('agent-trace');
+        trace.innerHTML = (data.trace || []).map((s, i) => `
+            <div class="source-item">
+                <b>${i + 1}. ${s.action}</b> [${s.tool}] → ${s.result}
+                <div class="summary">${(s.detail || '').substring(0, 200)}</div>
+            </div>`).join('');
+        trace.classList.remove('hidden');
+
+        const ans = document.getElementById('agent-answer');
+        ans.textContent = data.answer || '(No answer)';
+        ans.classList.remove('hidden');
+
+        const srcs = data.sources || [];
+        if (srcs.length) {
+            document.getElementById('agent-sources-list').innerHTML = srcs.map(s => `
+                <div class="source-item"><a>${s.title}</a>
+                <div class="summary">${(s.summary || '').substring(0, 150)}...</div></div>`).join('');
+            document.getElementById('agent-sources').classList.remove('hidden');
+        }
+        if (data.sql) {
+            document.getElementById('agent-sql-text').textContent = data.sql;
+            document.getElementById('agent-sql').classList.remove('hidden');
+        }
+    } catch (e) {
+        document.getElementById('agent-loading').classList.add('hidden');
+        alert('Error: ' + e.message);
+    }
+}
+
 async function summarizeArticle(id) {
     const box = document.getElementById(`summary-${id}`);
     box.classList.remove('hidden');
@@ -269,4 +321,7 @@ document.getElementById('question').addEventListener('keypress', e => {
 });
 document.getElementById('ingest-title').addEventListener('keypress', e => {
     if (e.key === 'Enter') ingestArticle();
+});
+document.getElementById('agent-question')?.addEventListener('keypress', e => {
+    if (e.key === 'Enter') askAgent();
 });
