@@ -1,7 +1,7 @@
 # 추론 최적화 & 경량화 (Inference Optimization)
 
 > JD: "모델 경량화 및 추론 최적화를 통한 온디바이스/클라우드 환경 대응"
-> 관련: [WHY_LORA.md](WHY_LORA.md) · [PEFT_METHODS.md](PEFT_METHODS.md) · [../ml/optimize/benchmark.py](../ml/optimize/benchmark.py)
+> 관련: [WHY_LORA.md](WHY_LORA.md), [PEFT_METHODS.md](PEFT_METHODS.md), [../ml/optimize/benchmark.py](../ml/optimize/benchmark.py)
 
 ---
 
@@ -9,7 +9,7 @@
 
 | 레버 | 효과 | 이 프로젝트 |
 |---|---|---|
-| **양자화(Quantization)** | 가중치 정밀도↓(16→8/4bit) → 메모리↓·속도↑ | ✅ 메인 (GGUF Q4/Q8, Ollama) |
+| **양자화(Quantization)** | 가중치 정밀도↓(16→8/4bit) → 메모리↓, 속도↑ | ✅ 메인 (GGUF Q4/Q8, Ollama) |
 | KV 캐시 | 이전 토큰 재계산 방지 | Ollama 기본 |
 | 출력 길이 제한(num_predict) | 불필요 생성 차단 | 적용(256) |
 | 연속 배칭 / PagedAttention | 다중요청 처리량↑ | vLLM(클라우드 GPU) — 배포 단계 |
@@ -24,7 +24,7 @@ fp16(원본)  →  Q8  →  Q5  →  Q4_K_M
 크다/정확 ◀──────────────────────▶ 작다/빠르다/약간 부정확
 ```
 
-정밀도를 낮추면 가중치 1개당 비트수↓ → **메모리 사용·대역폭↓ → 로드·생성 빨라짐.** 대가는 미세한 품질 저하.
+정밀도를 낮추면 가중치 1개당 비트수↓ → **메모리 사용과 대역폭↓ → 로드와 생성이 빨라짐.** 대가는 미세한 품질 저하.
 "온디바이스"란 결국 **노트북 메모리 안에 모델을 욱여넣고 실용 속도를 내는 것** → 양자화가 핵심.
 
 ## 3. 측정 방법 (benchmark.py)
@@ -71,7 +71,7 @@ ollama stop <model>            # 안 쓰는 모델 내려 메모리 회수
 [데이터 생성 7b] → stop → [LoRA 학습 MLX] → 종료 → [추론 벤치 1~2개] → stop
 ```
 
-> **면접 포인트:** 노트북은 직렬화로 버티지만, 운영에선 이래서 **학습/서빙/추론을 별도 노드·서비스로 분리**한다.
+> **면접 포인트:** 노트북은 직렬화로 버티지만, 운영에선 이래서 **학습/서빙/추론을 별도 노드와 서비스로 분리**한다.
 > 이 프로젝트가 ML 사이드카(Python)와 서빙(Java)을 나눈 이유와 정확히 연결된다. (→ VEHICLE_ARCHITECTURE.md)
 
 ## 6. 온디바이스 vs 클라우드 (대응 전략)
@@ -80,6 +80,6 @@ ollama stop <model>            # 안 쓰는 모델 내려 메모리 회수
 |---|---|---|
 | 서빙 | Ollama + GGUF Q4 (이 데모) | vLLM(OpenAI 호환) + AWQ/배칭 |
 | 모델 연결 | `llm.provider=ollama` | `llm.provider=vllm`(예정) |
-| 장점 | 프라이버시·오프라인·무비용 | 처리량·확장 |
+| 장점 | 프라이버시, 오프라인, 무비용 | 처리량, 확장 |
 
 → `LlmClient` 추상화로 **설정만 바꿔 전환** = JD "온디바이스/클라우드 환경 대응".

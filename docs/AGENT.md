@@ -1,7 +1,7 @@
 # Agentic Search (Agent) 설계
 
 > 질문 → 도구 선택 → 실행 → 한국어 종합 + 트레이스. 자동차 밸류체인 NLP의 "업무 자동화 / Agentic Search".
-> 코드: `AgentService` · `AgentController`(`/api/agent/ask`) · UI: Next `AgentPanel`, 정적 `Agent` 패널.
+> 코드: `AgentService`, `AgentController`(`/api/agent/ask`). UI: Next `AgentPanel`, 정적 `Agent` 패널.
 > 관련: [VEHICLE_ARCHITECTURE.md](VEHICLE_ARCHITECTURE.md) · [RESULTS.md](RESULTS.md)
 
 ---
@@ -16,14 +16,14 @@
  → 응답 {answer, tool, trace[], sources, sql, rows}
 ```
 
-trace에 각 단계(도구·결정·결과)를 담아 **왜 그 도구를 골랐는지 투명하게** 보여준다(Agentic Search의 핵심 UX).
+trace에 각 단계(도구, 결정, 결과)를 담아 **왜 그 도구를 골랐는지 투명하게** 보여준다(Agentic Search의 핵심 UX).
 
 ## 2. 라우팅 — 결정적 우선 + LLM 폴백
 
 작은 로컬 모델은 BOTH를 남발해 RAG 노이즈를 끌어온다 → **규칙(rule) 우선**으로 모델 크기에 흔들리지 않게:
 
-- 집계 신호(리콜·건수·통계·순위·차종별…) 있고 서술 신호 없음 → **SQL**
-- 서술 신호(주의·방법·원인·작동·증상…) 있고 집계 없음 → **RAG**
+- 집계 신호(리콜, 건수, 통계, 순위, 차종별…) 있고 서술 신호 없음 → **SQL**
+- 서술 신호(주의, 방법, 원인, 작동, 증상…) 있고 집계 없음 → **RAG**
 - 둘 다 → **BOTH**
 - 신호 없음(모호) → **LLM 분류 폴백**
 
@@ -38,7 +38,7 @@ SQL 생성 → 실행
   └ 실패(예: Binder Error: GROUP BY) → 에러+이전SQL을 모델에 돌려줌 → 수정 SQL 1회 재시도
 ```
 
-- `TextToSqlService.ask`가 1차 실패 시 에러 메시지를 프롬프트에 넣어 재생성·재실행. 응답에 `retried:true`.
+- `TextToSqlService.ask`가 1차 실패 시 에러 메시지를 프롬프트에 넣어 재생성하고 재실행한다. 응답에 `retried:true`.
 - 문법 오류(집계/GROUP BY 등)에 특히 효과적.
 
 ## 4. 모델 라우팅 (작업별 특화)
@@ -47,7 +47,7 @@ SQL 생성 → 실행
 
 | 작업 | 모델 | 이유 |
 |---|---|---|
-| 도메인 답변(RAG 생성) | 선택 모델 (예: `vehicle-qwen2.5-1.5b` FT) | 정비 말투·도메인 |
+| 도메인 답변(RAG 생성) | 선택 모델 (예: `vehicle-qwen2.5-1.5b` FT) | 정비 말투와 도메인 |
 | **SQL 생성** | 기본 모델(`granite4`) 고정 | 코드 생성은 강한 모델이 안정적; 1.5B는 SQL 취약 |
 | 종합/라우팅 폴백 | 선택 모델 | 호출자 제어 |
 
@@ -73,7 +73,7 @@ vehicle:
 |---|---|---|
 | 복합 질문 종합 환각 | 1.5B 소형 모델 | 종합을 더 큰 모델로 라우팅 / FT 데이터 확대 |
 | 잘못된 SQL 필터(예: 팰리세이드→ELANTRA) | text-to-SQL grounding 미스 | 프롬프트에 차종 매핑 힌트 / 더 큰 모델 |
-| 순수 집계는 견고, 복합 BOTH는 거침 | 라우팅·소형 모델 | 자기수정(완료) + 모델 라우팅 |
+| 순수 집계는 견고, 복합 BOTH는 거침 | 라우팅, 소형 모델 | 자기수정(완료) + 모델 라우팅 |
 
 > 핵심: **단순 질의는 안정적**, **복합 질의는 자기수정으로 견고성↑ + 종합은 큰 모델로**. 한계와 개선경로를 명시하는 게 설계 성숙도.
 
@@ -91,7 +91,7 @@ vehicle:
 
 정형 데이터셋도 확장됨: `recalls`, `complaints`(NHTSA 불만), `parts`(샘플 단가) — `vehicle.tables`에 등록, Agent가 질문 보고 테이블 선택.
 
-> 설계 원칙: **집계·금액은 결정적 코드/SQL, 선택·서술은 LLM.** 돈 계산·통계를 LLM에 맡기지 않아 신뢰성 확보.
+> 설계 원칙: **집계와 금액은 결정적 코드/SQL, 선택과 서술은 LLM.** 돈 계산과 통계를 LLM에 맡기지 않아 신뢰성 확보.
 
 ## 8. 면접 한 줄
 
