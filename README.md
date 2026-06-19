@@ -168,22 +168,27 @@ curl -X POST http://localhost:8080/api/agent/ask \
   -H "Content-Type: application/json" \
   -d '{"question": "팰리세이드 안전벨트 관련 이슈 정리해줘"}'
 
-# 차종 종합 진단서 (리콜+불만+매뉴얼)
+# 차종 종합 진단서 (리콜+불만+매뉴얼) — 차종은 car
 curl -X POST http://localhost:8080/api/agent/report \
-  -H "Content-Type: application/json" -d '{"model": "PALISADE"}'
+  -H "Content-Type: application/json" -d '{"car": "PALISADE"}'
 
-# 이미지 진단 → 필요 부품
+# 이미지 진단 → 한국어 진단 (image, namespace, model 파라미터)
 curl -X POST http://localhost:8080/api/agent/diagnose-image \
-  -F "image=@dashboard.jpg" -F "question=경고등 원인과 필요한 부품은?"
+  -F "image=@dashboard.jpg" -F "namespace=vehicle"
 
-# 부품 견적 (부품 선택은 LLM, 금액 계산은 Java 결정적)
+# 필요 부품 산정 (problem=증상, car=차종 / 부품 선택은 LLM, 금액 계산은 Java 결정적)
 curl -X POST http://localhost:8080/api/agent/estimate \
-  -H "Content-Type: application/json" -d '{"symptom": "브레이크 소음"}'
+  -H "Content-Type: application/json" -d '{"problem": "브레이크 소음", "car": "PALISADE"}'
 
-# 리콜/불만 text-to-SQL
+# 리콜/불만 text-to-SQL — table 지정 필수 (먼저 /api/tabular/load로 등록)
+curl -X POST http://localhost:8080/api/tabular/load \
+  -H "Content-Type: application/json" \
+  -d '{}' "http://localhost:8080/api/tabular/load?table=recalls&path=data/vehicle/recalls/hyundai_recalls_nhtsa.csv"
 curl -X POST http://localhost:8080/api/tabular/ask \
-  -H "Content-Type: application/json" -d '{"question": "연도별 리콜 건수"}'
+  -H "Content-Type: application/json" -d '{"table": "recalls", "question": "연도별 리콜 건수"}'
 ```
+
+> 자연어 질문만으로 도구·테이블을 자동 선택하게 하려면 `/api/agent/ask`를 쓰면 된다(리콜/불만 테이블 자동 로드 + 라우팅).
 
 매뉴얼 RAG, 파일 업로드, 거버넌스 같은 플랫폼 공통 API는 [docs/API.md](docs/API.md)에 있다.
 
@@ -202,7 +207,8 @@ curl -X POST http://localhost:8080/api/tabular/ask \
 - [x] **V9 종합 진단서** — 리콜, 불만, 매뉴얼 종합 (`/api/agent/report`, 집계는 결정적 SQL)
 - [x] **V10 이미지 진단에서 부품까지** — 사진(Vision+OCR)에서 매뉴얼 진단, 부품 명세와 샘플 견적
 - [x] **V11 고도화** — text-to-SQL 자기수정, 작업별 모델 라우팅(SQL은 강한 모델, 답변은 FT)
-- [ ] **V12 (옵션)** — vLLM provider, 임베딩 파인튜닝, 온디바이스 음성(Whisper), 라이브 배포, GraphRAG 통합
+- [x] **V12 온디바이스 STT** — 로컬 Whisper(faster-whisper) STT 서비스 (`ml/serve/whisper_stt.py`), 오프라인·프라이빗
+- [ ] **V13 (옵션)** — 7B QLoRA(Colab) 학습, vLLM provider, 임베딩 파인튜닝, 로컬 TTS·웨이크워드, 라이브 배포, GraphRAG 통합
 
 > GraphRAG는 지금 설계서만 있고 구현은 안 됐다. 실제 RAG는 벡터+BM25 하이브리드로 동작한다. 고도화 방향은 [docs/GRAPHRAG_VEHICLE.md](docs/GRAPHRAG_VEHICLE.md)에 정리했다.
 

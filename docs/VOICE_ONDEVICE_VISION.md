@@ -22,10 +22,19 @@
 
 | 단계 | 기술 | 상태 | 특성 |
 |---|---|---|---|
-| **1. 브라우저 음성** | Web Speech API (STT+TTS) | ✅ 구현 | 쉬움. STT는 클라우드(구글) 경유 |
-| **2. 로컬 STT** | Whisper (small/base, 오프라인) | ⬜ | 음성이 기기 밖으로 안 나감(프라이버시) |
-| **3. 로컬 TTS** | Piper (경량 오프라인) | ⬜ | 완전 오프라인 응답 |
-| **4. 웨이크워드** | openWakeWord / Porcupine ("헤이 현대") | ⬜ | 핸즈프리. 실차 어시스턴트의 핵심 |
+| **1. 브라우저 음성** | Web Speech API (STT+TTS) | ✅ 구현 | 쉬움. TTS는 한국어 voice 명시+마크다운 정리(아래 메모). STT는 클라우드 경유 |
+| **2. 로컬 STT** | Whisper (faster-whisper, 오프라인) | ✅ 구현 | `ml/serve/whisper_stt.py` (CLI+HTTP). 음성이 기기 밖으로 안 나감(프라이버시) |
+| **3. 로컬 TTS** | Piper (경량 오프라인) | ✅ 구현(서비스) | `ml/serve/tts_piper.py` (CLI+HTTP). 브라우저 없는 완전 오프라인 경로용 |
+| **4. 웨이크워드** | openWakeWord / Porcupine ("헤이 현대") | ⬜ 로드맵 | 핸즈프리. 커스텀 "헤이 현대"는 학습 필요 |
+
+### 구현 메모 — 브라우저 TTS "글자 단위로 읽힘" 버그
+
+증상: 답변 읽기(🔊)가 단어가 아니라 **글자/자모 단위**로 읽혔다. 원인 둘:
+1. **한국어 voice 미지정** — `lang="ko-KR"`만 주고 실제 한국어 음성을 안 골라, 엔진이 기본(비한국어) voice로 한글을 글자 단위로 발음. → `speechSynthesis.getVoices()`에서 `lang`이 `ko`로 시작하는 음성을 찾아 `utterance.voice`에 **명시 지정**.
+2. **마크다운 기호 낭독** — `#`, `*` 등을 그대로 읽음. → `cleanForSpeech()`로 기호/링크 제거 후 낭독.
+- 보강: voice 목록은 비동기 로드라 마운트 시 `getVoices()` warm-up + `onvoiceschanged` 처리.
+- 잔여: 맥에 한국어 시스템 음성(유나)이 없으면 여전히 부정확 → OS 음성 설치 필요(브라우저 TTS는 OS 음성에 의존).
+- 완전 오프라인·OS 무의존이 필요하면 Piper(3단계)로 전환.
 
 > 1→4로 갈수록 "진짜 온디바이스"에 가까워지나, 메모리와 구현 비용↑. M2 단일 기기에선 직렬화 필요.
 

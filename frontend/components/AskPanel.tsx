@@ -22,6 +22,11 @@ export default function AskPanel() {
     // 브라우저 음성 지원 확인 (Chrome/Safari)
     const SR = (typeof window !== "undefined") && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
     setVoiceOk(Boolean(SR) && typeof window !== "undefined" && "speechSynthesis" in window);
+    // 음성 목록은 비동기 로드 — 미리 채워둬야 speak()에서 한국어 voice를 고를 수 있음
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    }
   }, []);
 
   async function ask(q?: string) {
@@ -59,12 +64,25 @@ export default function AskPanel() {
     setListening(false);
   }
 
-  // TTS: 답변 읽기
+  // 마크다운 기호/링크 제거 — 안 그러면 "#", "*" 같은 기호를 그대로 읽음
+  function cleanForSpeech(t: string): string {
+    return (t || "")
+      .replace(/\[(.*?)\]\([^)]*\)/g, "$1")  // [텍스트](링크) → 텍스트
+      .replace(/[#*_`>~|]/g, " ")            // 마크다운 기호 제거
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // TTS: 답변 읽기 — 한국어 voice를 명시 선택(미선택 시 글자 단위로 읽히는 문제 방지)
   function speak(text: string) {
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
+    const u = new SpeechSynthesisUtterance(cleanForSpeech(text));
     u.lang = "ko-KR";
+    const voices = window.speechSynthesis.getVoices();
+    const ko = voices.find((v) => v.lang?.toLowerCase().startsWith("ko"));
+    if (ko) u.voice = ko;       // 실제 한국어 음성 지정 → 자연스러운 단어 단위 발음
+    u.rate = 1.0; u.pitch = 1.0;
     u.onend = () => setSpeaking(false);
     setSpeaking(true);
     window.speechSynthesis.speak(u);
