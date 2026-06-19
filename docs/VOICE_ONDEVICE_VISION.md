@@ -25,7 +25,7 @@
 | **1. 브라우저 음성** | Web Speech API (STT+TTS) | ✅ 구현 | 쉬움. TTS는 한국어 voice 명시+마크다운 정리(아래 메모). STT는 클라우드 경유 |
 | **2. 로컬 STT** | Whisper (faster-whisper, 오프라인) | ✅ 구현 | `ml/serve/whisper_stt.py` (CLI+HTTP). 음성이 기기 밖으로 안 나감(프라이버시) |
 | **3. 로컬 TTS** | Piper (경량 오프라인) | ✅ 구현(서비스) | `ml/serve/tts_piper.py` (CLI+HTTP). 브라우저 없는 완전 오프라인 경로용 |
-| **4. 웨이크워드** | openWakeWord / Porcupine ("헤이 현대") | ⬜ 로드맵 | 핸즈프리. 커스텀 "헤이 현대"는 학습 필요 |
+| **4. 웨이크워드** | openWakeWord ("헤이 현대") | 🔄 리스너 구현 | `ml/serve/wakeword.py` (프리빌트 모델 데모). 커스텀 "헤이 현대"는 합성음성 학습 필요(로드맵) |
 
 ### 구현 메모 — 브라우저 TTS "글자 단위로 읽힘" 버그
 

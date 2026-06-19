@@ -8,6 +8,8 @@ huggingface-hub>=0.23.0
 # 온디바이스 음성 — serve/ (로컬·오프라인·프라이빗)
 faster-whisper>=1.0.0   # STT: whisper_stt.py. M2 CPU int8, 첫 실행 시 모델 자동 다운로드
 piper-tts>=1.2.0        # TTS: tts_piper.py. .onnx 음성 모델 별도 지정(PIPER_MODEL)
+openwakeword>=0.6.0     # 웨이크워드: wakeword.py. 프리빌트 모델, 커스텀 단어는 학습 필요
+sounddevice>=0.4.6      # 마이크 입력(웨이크워드). macOS: brew install portaudio
 
 # Colab/Kaggle CUDA 경로 — 7B QLoRA 학습 (finetune/train_qlora.py, finetune/COLAB_QLORA.md)
 # Colab 셀에서 직접 설치: pip install -U transformers peft trl bitsandbytes accelerate datasets

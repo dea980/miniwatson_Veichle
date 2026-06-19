@@ -5,13 +5,13 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16   # pgvector 확장 내장 (CREATE EXTENSION vector 가능)
-    container_name: miniwatson-pg
+    container_name: miniwatson-veichle-pg
     environment:
       POSTGRES_DB: miniwatson
       POSTGRES_USER: miniwatson
       POSTGRES_PASSWORD: miniwatson
     ports:
-      - "55432:5432"   # 호스트 55432 -> 컨테이너 5432. 5432/5433은 다른 컨테이너 엔진이 점유라 고포트로 비켜씀
+      - "55433:5432"   # 호스트 55433 -> 컨테이너 5432. (원본 miniwatson-pg가 55432라 vehicle은 55433으로 분리)
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

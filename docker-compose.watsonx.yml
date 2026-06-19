@@ -24,7 +24,7 @@ services:
     restart: unless-stopped
 
   app:
-    image: ghcr.io/dea980/miniwatson:latest   # watsonx 코드 포함 이미지(CI가 main에서 빌드). public이어야 pull됨
+    image: ghcr.io/dea980/miniwatson_veichle:latest   # vehicle CI가 main에서 빌드(소문자). public이어야 pull됨
     depends_on:
       postgres:
         condition: service_healthy

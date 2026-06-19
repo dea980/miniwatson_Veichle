@@ -59,7 +59,7 @@ vector:
 
 # pgvector 연결 (vector.store=pgvector 일 때만 사용). docker-compose.yml의 값과 일치.
 pgvector:
-  url: ${PGVECTOR_URL:jdbc:postgresql://localhost:5433/miniwatson}
+  url: ${PGVECTOR_URL:jdbc:postgresql://localhost:55433/miniwatson}   # docker-compose.yml 호스트 매핑(55433)과 일치. 원본 miniwatson-pg(55432)와 분리
   user: ${PGVECTOR_USER:miniwatson}
   password: ${PGVECTOR_PASSWORD:miniwatson}
 

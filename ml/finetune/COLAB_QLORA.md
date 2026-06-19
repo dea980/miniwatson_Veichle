@@ -72,6 +72,24 @@ ollama create vehicle-qwen2.5-7b --quantize q4_K_M -f ml/finetune/Modelfile_7b
 ollama list   # vehicle-qwen2.5-7b ~4.7GB 확인
 ```
 
+## 3.5 (선택) DPO 정렬 튜닝 — SFT 다음 단계
+
+SFT(위)가 "뭘 말할지"를 가르쳤다면, DPO는 "두 답 중 뭐가 나은지"를 가르쳐 **관찰된 실패(중국어 누수·숫자 환각·언어 혼용)를 교정**한다. RLHF와 달리 리워드 모델·RL 루프 없이 **선호쌍 + 대조 손실**로 정책을 직접 최적화(싸고 안정적). 코드: `train_dpo.py`.
+
+선호쌍 데이터 `ml/data/pref_seed.jsonl` (한 줄 = chosen/rejected):
+```json
+{"prompt":"KONA 리콜 요약","chosen":"한국어+근거+숫자 정확한 답","rejected":"중국어 누수/환각 답(1.5B 실패 그대로)"}
+```
+- chosen = 한국어·매뉴얼 근거·숫자 정확 / rejected = 우리가 관찰한 실패 모드. 10~30쌍이면 0→1 데모로 충분.
+
+```python
+# SFT 어댑터(adapters_7b) 위에서 정렬 → adapters_dpo
+!python train_dpo.py --base Qwen/Qwen2.5-7B-Instruct \
+    --sft-adapter adapters_7b --data ../data/pref_seed.jsonl \
+    --out adapters_dpo --beta 0.1
+```
+핵심 손잡이: `beta`(KL 강도)와 작은 lr(5e-6) — "SFT를 안 망가뜨리며 선호로 살짝 민다". 이후 merge→Q4는 §2~3과 동일(어댑터만 `adapters_dpo`로).
+
 ## 4. 검증 + 벤치 (1.5B와 비교)
 
 ```bash
