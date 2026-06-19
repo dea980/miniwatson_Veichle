@@ -24,6 +24,23 @@
 
 ---
 
+## 프로젝트 성격 — PoC + 확장 로드맵
+
+이 프로젝트는 **PoC(개념 증명)** 다. 증명하려는 가설은 "현대차 도메인 LLM 스택(도메인 LoRA, 경량화/온디바이스, RAG, Agent, 거버넌스)을 **GPU 없는 단일 맥(M2)** 에서 작게 재현할 수 있는가"다. 그래서 샘플 데이터, 1.5B 베이스, 인메모리 저장 같은 선택은 **규모가 아니라 가능성 검증**에 맞춘 의도적 결정이다.
+
+각 컴포넌트는 "어디까지, 어떻게 키울지"를 **확장 사다리**로 문서화했다 — 지금 안 만드는 것도 의도다(규모에 안 맞는 단계는 오버엔지니어링).
+
+| 영역 | 지금 (PoC) | 다음 | 스케일 |
+|---|---|---|---|
+| 모델 | 1.5B LoRA(MLX) Q4 | 7B QLoRA(Colab) Q4 | vLLM 서빙 |
+| 벡터 저장 | 인메모리 + load-once 캐시 | pgvector(HNSW, 이미 구현) | 오브젝트스토리지 + 파티션 Parquet 레이크하우스 |
+| 진단서 서술 | 작업별 모델 라우팅 | 7B FT(진단서 예시 학습) | — |
+| 배포 | 로컬 | docker-compose | 클라우드(provider 스왑) |
+
+근거: 모델 [docs/RESULTS.md](docs/RESULTS.md), 저장소 [docs/DATA-MODEL.md](docs/DATA-MODEL.md)와 [docs/DECISIONS.md](docs/DECISIONS.md), 디버깅 [docs/DEBUGGING.md](docs/DEBUGGING.md).
+
+---
+
 ## 프로젝트 구조
 
 3개 계층(서빙, 프론트, ML)이 HTTP와 모델파일로만 연결된 모노레포다.

@@ -145,6 +145,30 @@ LSH vs brute-force: 코퍼스가 작으면(수백~수천) brute-force가 항상 
 
 ---
 
+## 10. 프레임워크 vs 자체구현 (LangChain / LangGraph / LangSmith)
+
+"왜 LangChain 안 썼어요?"는 거의 확실히 나오는 질문. 세 축으로 나눠 본다 — 셋 다 **의도적으로 자체구현**했고 이유가 같다.
+
+| 축 | 대표 프레임워크 | 본 프로젝트 | 핵심 이유 |
+|---|---|---|---|
+| 오케스트레이션 | LangChain / **LangGraph**(상태그래프 에이전트) | Java `AgentService` (규칙기반 라우터 + LLM 폴백) | 흐름이 단순(라우팅→도구→종합), **결정성·투명성** > 프레임워크 편의 |
+| 검색(retrieval) | LangChain Retriever / **GraphRAG** | 벡터+BM25 RRF (+ GraphRAG는 설계만) | 직접 제어, 측정으로 튜닝(§2~3). GraphRAG는 검색 *기법*이라 별개 축 |
+| 관측/평가 | **LangSmith**(트레이싱·eval·모니터링 SaaS) | 거버넌스 감사로그 + Prometheus/Grafana + eval 하니스 | **데이터 주권** — 트레이스가 외부로 나가면 안 됨 |
+
+관통하는 이유 셋:
+1. **데이터 주권** — 플랫폼 명제가 현대 H-Chat식 "내부 게이트웨이". LangSmith(SaaS)는 트레이스를 외부 클라우드로 보내 명제와 충돌. 관측·평가를 내재화하는 게 일관됨.
+2. **언어/스택 일치** — 서빙 본체가 Java/Spring. LangChain/LangGraph/LangSmith는 Python·JS 중심(LangChain4j는 미성숙). 자체구현이 본체와 자연스럽게 통합.
+3. **결정성·거버넌스** — 규칙기반 라우터 + 결정적 SQL은 감사 가능하고 디버그 쉬움. 거버넌스 중심 플랫폼엔 프레임워크 추상화보다 제어력이 중요.
+
+언제 프레임워크가 맞나(정직):
+- **LangGraph** — 에이전트가 동적 다단계 계획·루프·재계획을 해야 할 때(지금은 단순해서 오버킬).
+- **LangSmith** — 데이터 주권 제약이 없고 eval·관측을 빨리 깔아야 할 때. 트레이스 UI·회귀 워크플로가 자체구현보다 세련됨.
+- **GraphRAG** — 멀티홉·연결 질의가 핵심일 때(설계는 [GRAPHRAG_VEHICLE.md](GRAPHRAG_VEHICLE.md)에 준비).
+
+교훈: **"프레임워크를 몰라서 안 쓴 게 아니라, 트레이드오프를 알고 안 썼다."** 제약(주권·스택·규모)이 바뀌면 채택 조건도 명확하다 — 그 경계를 아는 게 엔지니어링 판단이다.
+
+---
+
 ## 관통 규칙
 
 - 측정 없이 최적화 없다. chunking/rerank/hybrid/embedding은 정답셋으로 비교해 정한다.
