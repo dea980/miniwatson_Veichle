@@ -18,7 +18,7 @@ DPO 정렬 튜닝 (SFT 다음 단계) — 스켈레톤.
   TODO-3  DPOTrainer 조립 + 학습
 참고: TRL DPOTrainer 문서 — https://huggingface.co/docs/trl/dpo_trainer
 """
-import argparse, torch
+import argparse, os, torch
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel, LoraConfig
@@ -45,9 +45,19 @@ def main():
         tok.pad_token = tok.eos_token
     base = AutoModelForCausalLM.from_pretrained(args.base, quantization_config=bnb,
                                                 device_map="auto", torch_dtype=torch.bfloat16)
-    # 정책 = base + SFT 어댑터. (DPO는 이 위에서 이어서 정렬)
-    model = PeftModel.from_pretrained(base, args.sft_adapter, is_trainable=True)
-    # 레퍼런스 모델: LoRA면 ref_model=None → 어댑터를 끈 base가 자동 레퍼런스(KL 앵커). 메모리 절약.
+    # 정책 결정: SFT 어댑터가 로컬에 있으면 그 위에서 이어서 정렬(정석),
+    # 없으면 base에 새 LoRA를 얹어 DPO(메커니즘 데모 — SFT 데이터/어댑터 불필요).
+    if args.sft_adapter and os.path.isdir(args.sft_adapter):
+        print(f"[dpo] SFT 어댑터 이어가기: {args.sft_adapter}")
+        model = PeftModel.from_pretrained(base, args.sft_adapter, is_trainable=True)
+        peft_cfg = None                       # 이미 어댑터 있음 → 새로 안 얹음(2겹 방지)
+    else:
+        print("[dpo] SFT 어댑터 없음 → base에 새 LoRA로 DPO (0→1 데모)")
+        model = base
+        peft_cfg = LoraConfig(r=16, lora_alpha=32, lora_dropout=0.05, bias="none",
+                              task_type="CAUSAL_LM",
+                              target_modules=["q_proj","k_proj","v_proj","o_proj"])
+    # 레퍼런스 모델: ref_model=None → 어댑터를 끈 base가 자동 레퍼런스(KL 앵커). 메모리 절약.
 
     # ── TODO-1: 선호 데이터 매핑 ─────────────────────────────────────────
     # pref_seed.jsonl 한 줄 = {"prompt": "...", "chosen": "...", "rejected": "..."}
@@ -79,13 +89,12 @@ def main():
 
     # ── TODO-3: DPOTrainer 조립 + 학습 ──────────────────────────────────
     trainer = DPOTrainer(
-                        model=model,
-                        ref_model=None,
-                        args=cfg,
-                        train_dataset=ds,
-                        processing_class=tok,
-                         # peft_config=LoraConfig(r=16, lora_alpha=32, task_type="CAUSAL_LM",
-                         #     target_modules=["q_proj","k_proj","v_proj","o_proj"]))
+        model=model,
+        ref_model=None,
+        args=cfg,
+        train_dataset=ds,
+        processing_class=tok,
+        peft_config=peft_cfg,        # None이면 무시(어댑터 이어가기), LoraConfig면 base에 새로 얹음
     )
     trainer.train()
     trainer.save_model(args.out)
