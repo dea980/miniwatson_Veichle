@@ -16,6 +16,13 @@
 → 권장: 차종 2~3종(예: 아반떼/쏘나타/아이오닉) 매뉴얼 PDF를 받아 `data/vehicle/manuals/`에 저장.
    기존 PDF/HWP 인제스트 파이프라인이 그대로 처리.
 
+**실제 사용 코퍼스 (재현 가능):** 위 현대 공홈은 로그인·ToS·JS 렌더 제약이 있어, 공개·직접 PDF인 **Internet Archive**로 수집했다(`ml/data/manuals_manifest.csv` → `fetch_manuals.py`).
+- 컬렉션: `identifier:car-service-manuals-hyundai*` (총 69개, 연식별)
+- URL 패턴: `https://archive.org/download/<식별자>/<식별자>.pdf`
+- 수집 차종(모델별 최신 연식): Accent, Sonata, Tucson, Santa Fe, Elantra, Elantra GT, Veloster, **Azera(=그랜저)**, **Equus(=에쿠스)**, Genesis, Genesis Coupe, Sonata Hybrid, Entourage
+
+> **중요 — 매뉴얼 종류:** 컬렉션 이름이 'service-manuals'지만 본문을 확인하면 전부 **OWNER'S MANUAL(오너스 매뉴얼 / 취급설명서)** 이다(운전자용: 작동법·경고등·점검 주기·제원·안전 주의사항). **공장 정비 매뉴얼**(분해·조립·토크·DTC 트러블슈팅·배선도)이 아니다. 후자는 현대차 정비사 전용 시스템(국내 **GSW**, 미국 **hyundaitechinfo.com**)에 잠긴 **유료·비공개 자산**이라 공개 수집이 불가하며, 프로덕션에서는 라이선스 계약으로 붙이는 영역이다. 파일명은 `hyundai_<연식>_<모델>_owners.pdf`로 통일한다.
+
 ## 2) 리콜 / 결함(DTC) 공공데이터 (정형 → text-to-SQL + RAG)
 
 | 소스 | URL | 형식 | 비고 |

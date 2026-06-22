@@ -130,7 +130,7 @@ export default function AskPanel() {
       {!result && !loading && !err && (
         <div className="empty">
           <div className="empty-ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg></div>
-          <div>정비 매뉴얼에 무엇이든 물어보세요. 답변에는 항상 <b>출처(근거 청크)</b>가 함께 표시됩니다.</div>
+          <div>오너스 매뉴얼(취급설명서)에 무엇이든 물어보세요. 답변에는 항상 <b>출처(근거 청크)</b>가 함께 표시됩니다.</div>
         </div>
       )}
 

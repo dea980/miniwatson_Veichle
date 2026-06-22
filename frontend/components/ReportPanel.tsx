@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api, type ReportResult, type Models } from "@/lib/api";
 import Markdown from "@/components/Markdown";
+import CarImage from "@/components/CarImage";
 
 function Bars({ rows }: { rows: [string, number][] }) {
   const max = Math.max(1, ...rows.map((r) => Number(r[1]) || 0));
@@ -28,7 +29,7 @@ function resultPill(result: string) {
   return <span className={`pill ${cls}`}>{result || "양호"}</span>;
 }
 
-export default function ReportPanel() {
+export default function ReportPanel({ initialCar }: { initialCar?: string }) {
   const [car, setCar] = useState("PALISADE");
   const [namespace, setNamespace] = useState("vehicle");
   const [models, setModels] = useState<Models | null>(null);
@@ -41,12 +42,19 @@ export default function ReportPanel() {
     api.models().then((m) => { setModels(m); setModel(m.default); }).catch(() => {});
   }, []);
 
-  async function gen() {
-    if (!car.trim()) return;
+  async function gen(carOverride?: string) {
+    const c = (carOverride ?? car).trim().toUpperCase();
+    if (!c) return;
     setLoading(true); setErr(""); setRes(null);
-    try { setRes(await api.report(car.trim().toUpperCase(), namespace, model || undefined)); }
+    try { setRes(await api.report(c, namespace, model || undefined)); }
     catch (e) { setErr(String(e)); } finally { setLoading(false); }
   }
+
+  // 홈 "차종별 업무"에서 넘어오면 차종 세팅 + 자동 생성
+  useEffect(() => {
+    if (initialCar && initialCar.trim()) { setCar(initialCar); gen(initialCar); }
+    // eslint-disable-next-line
+  }, [initialCar]);
 
   function buildHtml(): string {
     if (!res) return "";
@@ -99,7 +107,7 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
         <select value={model} onChange={(e) => setModel(e.target.value)}>
           {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
-        <button className="btn" onClick={gen} disabled={loading}>{loading ? "생성 중…" : "진단서 생성"}</button>
+        <button className="btn" onClick={() => gen()} disabled={loading}>{loading ? "생성 중…" : "진단서 생성"}</button>
       </div>
       <div className="row" style={{ gap: 6, marginTop: 6 }}>
         {cars.map((c) => <button key={c} className="ghost" style={{ fontSize: 12 }} onClick={() => setCar(c)}>{c}</button>)}
@@ -110,6 +118,15 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
 
       {res && (
         <>
+          <div className="car-hero" style={{ marginTop: 14 }}>
+            <CarImage model={res.car} height={150} rounded={false} />
+            <div className="car-hero-overlay">
+              <div className="kicker" style={{ color: "#cfe0ff" }}>차종 진단 리포트</div>
+              <h2>{res.car}</h2>
+              <p>리콜·불만·매뉴얼을 종합한 한국어 진단서</p>
+            </div>
+          </div>
+
           <div className="cards" style={{ marginTop: 14 }}>
             <div className="stat"><div className="v">{res.recallTotal}</div><div className="l">리콜 건수</div></div>
             <div className="stat"><div className="v">{res.complaintTotal}</div><div className="l">불만 건수</div></div>

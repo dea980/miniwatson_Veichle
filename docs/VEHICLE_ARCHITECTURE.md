@@ -60,7 +60,7 @@
 | 데이터 | 소스 | 수집 | 처리 경로 | 비고 |
 |---|---|---|---|---|
 | 리콜/결함 | **NHTSA API**(키 불필요) | `fetch_recalls.py` | text-to-SQL(`/api/tabular`, DuckDB) | 정형 → 집계 질의 |
-| 정비 매뉴얼 | **Internet Archive**(공개 PDF) | `fetch_manuals.py` | RAG(`/api/data/ingest-file`→`/api/rag`) | 비정형 → 서술 질의 |
+| 오너스 매뉴얼(취급설명서) | **Internet Archive**(공개 PDF) | `fetch_manuals.py` | RAG(`/api/data/ingest-file`→`/api/rag`) | 비정형 → 서술 질의. 공장 정비 매뉴얼은 비공개·유료라 미포함 |
 
 **왜 이 소스인가 (현대차 공홈 대신)**
 - `oms.hmc.co.kr`(오너스매뉴얼 포털)은 **로그인 필요(딜러용)** → 접근 불가.

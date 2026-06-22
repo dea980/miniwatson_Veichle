@@ -2,6 +2,21 @@
 import { useEffect, useState } from "react";
 import { api, type DocItem } from "@/lib/api";
 
+// 제목으로 자동 분류 (백엔드 메타 없이도 정리)
+const MODELS = ["PALISADE", "SANTA FE", "SANTAFE", "TUCSON", "SONATA", "ELANTRA", "KONA", "ACCENT", "VELOSTER",
+  "AZERA", "EQUUS", "GENESIS", "ENTOURAGE"];
+function vehicleOf(title: string): string {
+  const t = (title || "").toUpperCase().replace(/[_\-]/g, " ");
+  for (const m of MODELS) if (t.includes(m)) return m === "SANTAFE" ? "SANTA FE" : m;
+  return "공통 / 기타";
+}
+function categoryOf(title: string): "매뉴얼" | "진단리포트" | "기타" {
+  const t = (title || "").toLowerCase();
+  if (/manual|service|owner|매뉴얼|취급|정비|accent|sonata|tucson|elantra|palisade|kona|santa/.test(t)) return "매뉴얼";
+  if (/진단|report|리포트|diagnos/.test(t)) return "진단리포트";
+  return "기타";
+}
+
 export default function KnowledgeBasePanel() {
   const [docs, setDocs] = useState<DocItem[]>([]);
   const [nsFilter, setNsFilter] = useState("");
@@ -62,15 +77,37 @@ export default function KnowledgeBasePanel() {
             <div>아직 적재된 문서가 없습니다. 위에서 매뉴얼 PDF나 문서를 업로드하면 청크로 나뉘어 <b>매뉴얼 검색</b> 탭에서 근거로 쓰입니다.</div>
           </div>
         )}
-        {docs.map((d, i) => (
-          <div className="doc" key={i}>
-            <span className="name">{d.title}</span>
-            <span className="badge">{d.chunks} chunks</span>
-            <span className="badge">{d.namespace}</span>
-            <span className="spacer" />
-            <button className="ghost" onClick={() => del(d)}>삭제</button>
-          </div>
-        ))}
+        {(["매뉴얼", "진단리포트", "기타"] as const).map((cat) => {
+          const catDocs = docs.filter((d) => categoryOf(d.title) === cat);
+          if (catDocs.length === 0) return null;
+          // 차종별로 묶기 (차종 추출 → 그룹)
+          const byVeh: Record<string, DocItem[]> = {};
+          for (const d of catDocs) (byVeh[vehicleOf(d.title)] ||= []).push(d);
+          const vehKeys = Object.keys(byVeh).sort((a, b) => (a === "공통 / 기타" ? 1 : b === "공통 / 기타" ? -1 : a.localeCompare(b)));
+          const chunks = catDocs.reduce((s, d) => s + (d.chunks || 0), 0);
+          return (
+            <section key={cat} style={{ marginTop: 14 }}>
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", borderBottom: "2px solid var(--border)", paddingBottom: 6 }}>
+                <h3 style={{ margin: 0, fontSize: 15 }}>{cat}</h3>
+                <span className="muted" style={{ fontSize: 12 }}>{catDocs.length}개 문서 · {chunks} chunks</span>
+              </div>
+              {vehKeys.map((veh) => (
+                <div key={veh} style={{ marginTop: 8 }}>
+                  <div className="muted" style={{ fontSize: 12, fontWeight: 600, margin: "4px 0" }}>{veh}</div>
+                  {byVeh[veh].map((d, i) => (
+                    <div className="doc" key={i}>
+                      <span className="name">{d.title}</span>
+                      <span className="badge">{d.chunks} chunks</span>
+                      <span className="badge">{d.namespace}</span>
+                      <span className="spacer" />
+                      <button className="ghost" onClick={() => del(d)}>삭제</button>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </section>
+          );
+        })}
       </div>
     </>
   );

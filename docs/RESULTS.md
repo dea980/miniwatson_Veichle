@@ -13,7 +13,7 @@
    → 출처(sources) + 거버넌스(감사, PII) 로그 → (음성 TTS)
 ```
 
-- ✅ 데이터 수집: NHTSA 리콜 119건(원본 JSON) + Internet Archive 정비 매뉴얼 PDF
+- ✅ 데이터 수집: NHTSA 리콜 119건(원본 JSON) + Internet Archive 오너스 매뉴얼(취급설명서) PDF
 - ✅ 자동차 RAG: `vehicle` 네임스페이스, 매뉴얼 근거 + **한국어 답변** (영어 코퍼스 → 한국어 강제)
 - ✅ 리콜 text-to-SQL: 차종별 집계 (PALISADE 26, SANTA FE 24, ELANTRA 18 …)
 - ✅ LoRA 파인튜닝: MLX, M2 로컬, GPU 없이

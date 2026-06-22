@@ -1,7 +1,21 @@
 url,filename,source
-# Internet Archive 공개 현대차 정비 매뉴얼 (로그인 불필요, 직접 PDF). 정비=A/S 도메인에 적합.
-# 2011 Accent는 메타데이터로 직접 링크 확인됨(15MB/282p). 나머지는 동일 컬렉션 파일명 규칙.
-https://archive.org/download/car-service-manuals-hyundai-2011-accent/car-service-manuals-hyundai-2011-accent.pdf,hyundai_2011_accent_service.pdf,internet_archive
-https://archive.org/download/car-service-manuals-hyundai-2016-tucson/car-service-manuals-hyundai-2016-tucson.pdf,hyundai_2016_tucson_service.pdf,internet_archive
-https://archive.org/download/car-service-manuals-hyundai-2014-sonata/car-service-manuals-hyundai-2014-sonata.pdf,hyundai_2014_sonata_service.pdf,internet_archive
-# 더 추가하려면 archive.org에서 항목 찾아 'download/<식별자>/<식별자>.pdf' 형식으로 한 줄씩.
+# Internet Archive 공개 현대차 오너스 매뉴얼(취급설명서) (로그인 불필요, 직접 PDF).
+# 주의: 컬렉션 이름은 'service-manuals'지만 실제 내용은 OWNER'S MANUAL(운전자용) — 공장 정비 매뉴얼 아님.
+# 운전자용이라 경고등·기능·점검주기·제원·안전 주의사항을 다룸(A/S 상담·RAG Q&A에 적합).
+# 다운로드 URL 패턴: https://archive.org/download/<식별자>/<식별자>.pdf  (내부 PDF는 <식별자>.pdf로 일관)
+# 더 추가: archive.org advancedsearch 'identifier:car-service-manuals-hyundai*' (총 69개, 연식별 다수)
+# ── 기존(이미 수집) ──
+https://archive.org/download/car-service-manuals-hyundai-2011-accent/car-service-manuals-hyundai-2011-accent.pdf,hyundai_2011_accent_owners.pdf,internet_archive
+https://archive.org/download/car-service-manuals-hyundai-2016-tucson/car-service-manuals-hyundai-2016-tucson.pdf,hyundai_2016_tucson_owners.pdf,internet_archive
+https://archive.org/download/car-service-manuals-hyundai-2014-sonata/car-service-manuals-hyundai-2014-sonata.pdf,hyundai_2014_sonata_owners.pdf,internet_archive
+# ── 신규: 모델별 최신 연식으로 차종 커버리지 확대 (Azera=그랜저, Equus=에쿠스) ──
+https://archive.org/download/car-service-manuals-hyundai-2016-santafe/car-service-manuals-hyundai-2016-santafe.pdf,hyundai_2016_santafe_owners.pdf,internet_archive
+https://archive.org/download/car-service-manuals-hyundai-2016-elantra/car-service-manuals-hyundai-2016-elantra.pdf,hyundai_2016_elantra_owners.pdf,internet_archive
+https://archive.org/download/car-service-manuals-hyundai-2016-veloster/car-service-manuals-hyundai-2016-veloster.pdf,hyundai_2016_veloster_owners.pdf,internet_archive
+https://archive.org/download/car-service-manuals-hyundai-2016-azera/car-service-manuals-hyundai-2016-azera.pdf,hyundai_2016_azera_owners.pdf,internet_archive
+https://archive.org/download/car-service-manuals-hyundai-2016-equus/car-service-manuals-hyundai-2016-equus.pdf,hyundai_2016_equus_owners.pdf,internet_archive
+https://archive.org/download/car-service-manuals-hyundai-2016-genesis/car-service-manuals-hyundai-2016-genesis.pdf,hyundai_2016_genesis_owners.pdf,internet_archive
+https://archive.org/download/car-service-manuals-hyundai-2016-genesiscoupe/car-service-manuals-hyundai-2016-genesiscoupe.pdf,hyundai_2016_genesiscoupe_owners.pdf,internet_archive
+https://archive.org/download/car-service-manuals-hyundai-2016-elantragt/car-service-manuals-hyundai-2016-elantragt.pdf,hyundai_2016_elantragt_owners.pdf,internet_archive
+https://archive.org/download/car-service-manuals-hyundai-2016-sonatahybrid/car-service-manuals-hyundai-2016-sonatahybrid.pdf,hyundai_2016_sonatahybrid_owners.pdf,internet_archive
+https://archive.org/download/car-service-manuals-hyundai-2007-entourage/car-service-manuals-hyundai-2007-entourage.pdf,hyundai_2007_entourage_owners.pdf,internet_archive

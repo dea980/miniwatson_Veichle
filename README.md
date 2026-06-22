@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
 
-> **자동차 도메인 특화 LLM 플랫폼.** 정비 매뉴얼 RAG, 리콜/불만 text-to-SQL, 온디바이스 LoRA 파인튜닝, Agentic 진단과 부품 견적, 거버넌스까지 한 곳에서 다룬다.
+> **자동차 도메인 특화 LLM 플랫폼.** 오너스 매뉴얼(취급설명서) RAG, 리콜/불만 text-to-SQL, 온디바이스 LoRA 파인튜닝, Agentic 진단과 부품 견적, 거버넌스까지 한 곳에서 다룬다.
 >
 > 스택: Spring Boot 4, Next.js, Ollama, DuckDB, MLX(LoRA), Qwen2.5 / IBM Granite.
 >
@@ -12,7 +12,7 @@
 
 ## 핵심 기능
 
-- **매뉴얼 RAG** — 정비 매뉴얼을 근거로 한국어 답변과 출처를 준다. 다국어 임베딩으로 한국어 질문이 영어 매뉴얼을 교차 검색한다.
+- **매뉴얼 RAG** — 현대차 오너스 매뉴얼(취급설명서)을 근거로 한국어 답변과 출처를 준다. 다국어 임베딩으로 한국어 질문이 영어 매뉴얼을 교차 검색한다. (공개 코퍼스는 오너스 매뉴얼이며, 공장 정비 매뉴얼은 비공개·유료라 미포함.)
 - **리콜/불만 text-to-SQL** — NHTSA 리콜/불만과 부품 CSV를 자연어로 질의(DuckDB)해 집계하고 차트로 본다. SQL 자기수정이 내장돼 있다.
 - **온디바이스 LoRA 파인튜닝** — Qwen2.5-1.5B를 자동차 도메인으로 학습(MLX, GPU 없는 맥)한 뒤 GGUF Q4로 양자화해 Ollama로 서빙한다.
 - **Agentic Search** — 질문을 받아 도구(RAG / 리콜SQL / 복합)를 고르고, 실행한 뒤 한국어로 종합하며 트레이스를 남긴다.
@@ -107,11 +107,13 @@ benchmark.py                # TTFT, tok/s, 메모리 (Q4 vs Q8: 메모리 절반
 
 | 데이터 | 소스 (공개, 재현 가능) | 사용처 |
 |---|---|---|
-| 정비 매뉴얼 | Internet Archive (공개 PDF) | 매뉴얼 RAG |
+| 오너스 매뉴얼(취급설명서) | Internet Archive (공개 PDF) | 매뉴얼 RAG |
 | 리콜/결함 | NHTSA API (키 불필요) | text-to-SQL, 진단서 |
 | 불만(complaints) | NHTSA API | text-to-SQL, 진단서 |
 | 성능·상태점검기록부 | 자동차관리법 별지 제82호 표준양식 (샘플) | 진단서 스키마 |
 
+> 코퍼스는 **오너스 매뉴얼(취급설명서)** 다. 운전자용이라 경고등·기능·점검 주기·제원·안전 주의사항을 다루며 A/S 상담형 RAG에 적합하다. **공장 정비 매뉴얼**(분해·조립·토크·DTC·배선도)은 현대차 정비사 전용 시스템(GSW / hyundaitechinfo)에 잠긴 유료·비공개 자산이라 포함하지 않는다 — 프로덕션 배포 시 라이선스 계약으로 붙이는 영역이다.
+>
 > 현대차 공홈(oms.hmc.co.kr)은 로그인과 ToS, JS 렌더 제약이 있어 공개되고 재현 가능한 소스로 대체했다. 매뉴얼 원문과 원본 JSON은 `data/vehicle/`(gitignore)에 두고 샘플 CSV만 커밋한다. 실행 단계는 [ml/RUNBOOK.md](ml/RUNBOOK.md), 소스와 라이선스는 [ml/data/sources.md](ml/data/sources.md)에 정리했다.
 
 ---
@@ -152,7 +154,7 @@ cd frontend && npm install && npm run dev   # → http://localhost:3000
 
 ### 자동차 데모 흐름
 
-1. **인제스트** — 정비 매뉴얼 PDF를 업로드한다 (namespace=`vehicle`).
+1. **인제스트** — 오너스 매뉴얼(취급설명서) PDF를 업로드한다 (namespace=`vehicle`).
 2. **질문** — "P0420 코드가 뭐야?" → 매뉴얼 근거로 한국어 답변과 출처를 받는다.
 3. **리콜 SQL** — "팰리세이드 리콜 몇 건이야?" → DuckDB가 집계한다.
 4. **진단서** — 차종을 넣으면 리콜, 불만, 매뉴얼을 종합한 리포트를 PDF로 뽑는다.
