@@ -27,6 +27,7 @@
 | [PEFT_METHODS.md](PEFT_METHODS.md) | PEFT 방식 비교(LoRA/QLoRA/Adapter…) + 선택 가이드 |
 | [INFERENCE_OPTIMIZATION.md](INFERENCE_OPTIMIZATION.md) | 양자화와 추론 최적화 + 벤치 + 자원 직렬화 |
 | [AGENT.md](AGENT.md) | Agentic Search(라우팅, SQL 자기수정, 모델 라우팅) + 진단서, 이미지진단, 부품견적 |
+| [AS-OPERATIONS.md](AS-OPERATIONS.md) | A/S 운영 기능 — 차종/케이스 2레벨, 우선순위 트리아지, 건별 점검 체크리스트, 정비 스케줄, 리포트 개편 |
 | [GRAPHRAG_VEHICLE.md](GRAPHRAG_VEHICLE.md) | GraphRAG 고도화 설계(자동차 사전 기반 경량 공출현 그래프) |
 | [DESIGN.md](DESIGN.md) | UI 디자인 시스템, 토큰, 결정(현대풍 미니멀, 무프레임워크) |
 | [RESULTS.md](RESULTS.md) | 동작 결과 + 정량 지표 + 의사결정 |

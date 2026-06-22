@@ -48,6 +48,26 @@ POST /api/tabular/ask {table, question}
 - `path`는 데모라 서버측 `sample/`만 가정. 운영이면 경로 화이트리스트로 path traversal 차단 필요.
 - LLM이 만든 SQL은 신뢰 경계 밖이다 — 가드(SELECT 전용)가 1차 방어, 읽기 전용 연결/권한이 2차 방어가 되어야 한다.
 
+## 4.5 동시성과 등록 정책 (운영 고려)
+
+임베디드 DuckDB는 **단일 인메모리 커넥션을 공유**한다. 단일 `java.sql.Connection`은 스레드 안전이 아니라서, 대시보드가 여러 쿼리(요약·트리아지·체크리스트 등)를 **병렬로** 쏘면 DuckDB가 내부적으로 깨지고 이후 모든 쿼리가 `database has been invalidated because of a previous fatal error` 로 실패한다. 두 가지로 방어한다.
+
+1. **직렬화** — `runSelect`/`schema`/`sample`/`registerCsv`를 모두 `synchronized`로 묶어 커넥션 접근을 한 줄로 세운다. (데모 규모에선 충분, 운영에선 처리량 천장이라 아래 사다리 참고.)
+2. **자가복구** — 쿼리가 치명 오류(`invalidated`/`FATAL`)를 던지면 커넥션을 재생성하고 등록 캐시를 비운다. 다음 요청의 `ensure()`가 CSV를 다시 등록해 스스로 회복한다(재시작 불필요).
+
+**등록 1회 정책**: 사고의 진짜 트리거는 *읽기 경로가 매 요청마다 `CREATE OR REPLACE TABLE`(쓰기)을 실행*하던 것이었다(쓰기/읽기 충돌 + CSV 재스캔 낭비). `registerCsvOnce(table, path)`로 **같은 경로면 등록을 건너뛰고**, 데이터가 바뀌면 `invalidateRegistrations()`(또는 `POST /api/analytics/refresh`)로 명시적으로만 다시 읽는다. 즉 **읽기는 등록을 유발하지 않는다.**
+
+**스케일 사다리** (이 한계를 운영에서 푸는 순서):
+
+| 단계 | 방식 | 동시성 |
+|---|---|---|
+| 지금(데모) | 단일 인메모리 커넥션 + 직렬화 + 등록 1회 | 읽기 직렬화 |
+| 다음 | **DuckDB 파일 DB + 커넥션 풀(Hikari)** | 다중 reader 동시 / 단일 writer(갱신) |
+| 본격 | 읽기/쓰기 분리, 집계 머티리얼라이즈·캐시 | reader 풀 + 스냅샷(MVCC) |
+| 스케일 | **Parquet on HDFS/S3 + Trino/Spark** 레이크하우스 | 분산 질의(=JD의 Hadoop 트랙) |
+
+핵심 원칙: 읽기(질의)와 쓰기(등록/갱신)를 섞지 말 것, 데이터 변경은 이벤트/스케줄로만 트리거할 것.
+
 ## 5. 예시
 
 ```bash

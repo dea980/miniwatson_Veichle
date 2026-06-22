@@ -501,3 +501,27 @@ grep -rnE "\[[^]]*\]|\.get\(|subList|substring|charAt" \
 - 데모 스토리상 cross-encoder가 꼭 필요 없으면 **명시적으로 빼라**. 죽은 채 fallback만 도는 의존성은 11.1 VM 크래시의 공범이 될 수 있고, "구현했다"는 인상만 주고 실제론 안 도는 상태가 더 위험하다.
 
 교훈: 리랭커는 `none/llm/mmr/cross`로 pluggable하게 빠지게 설계돼 있으니(`Reranker` 인터페이스), 안 되는 네이티브 경로는 **살리든가 빼든가 둘 중 하나로 명확히** 한다. 어중간한 fallback 상태가 제일 나쁘다.
+
+### 11.3 `database has been invalidated because of a previous fatal error` — DuckDB 동시성 크래시
+
+증상: 대시보드/리포트 화면을 열자 분석 API가 500. 응답 trace에 `java.sql.SQLException: FATAL Error: ... database has been invalidated`. 한 번 뜨면 이후 **모든** 분석 쿼리가 같은 에러(인메모리 DB가 통째로 무효화).
+
+원인: `TabularSqlService`가 **단일 DuckDB 인메모리 커넥션을 공유**하는데, 단일 `Connection`은 스레드 안전이 아니다. 화면이 `summary`·`cases`·`checklist`·`report`를 **동시에**(별도 Tomcat 스레드) 쏘면서 같은 커넥션을 동시 접근 → DuckDB 내부 상태 손상. 트리거를 키운 것은 분석의 `ensure()`가 **요청마다 `CREATE OR REPLACE TABLE`(쓰기)으로 CSV를 재등록**하던 점 — 읽기 경로가 쓰기를 유발하며 충돌 면적을 넓혔다.
+
+해결:
+1. 커넥션 접근을 전부 `synchronized`로 직렬화(`runSelect`/`schema`/`sample`/`registerCsv`).
+2. 치명 오류 감지 시 커넥션 재생성 + 등록 캐시 무효화 → 다음 요청에서 자가복구(재시작 불필요).
+3. **등록 1회**(`registerCsvOnce`) — 같은 경로면 재등록 스킵, 데이터 변경은 `POST /api/analytics/refresh`로만. 읽기가 더 이상 쓰기를 유발하지 않는다.
+
+교훈: 임베디드 단일 커넥션 엔진(DuckDB/SQLite)은 **동시 요청에서 직렬화 + 읽기/쓰기 분리**가 필수다. 데모는 `synchronized`로 충분하지만, 운영은 파일 DB + 커넥션 풀(다중 reader) 또는 레이크하우스로 올라가야 한다. 설계 근거는 [TABULAR-SQL.md](TABULAR-SQL.md) §4.5.
+
+### 11.4 `spring-boot:run ... exit code 255` — 빌드 실패가 아닐 수 있다
+
+증상: 종료 시 `Failed to execute goal ... spring-boot-maven-plugin:run ... Process terminated with exit code: 255` → "빌드 실패"로 오인.
+
+**먼저 로그 위쪽을 보라.** `Total time: 01:05 h` 처럼 오래 떠 있었고 그 사이 `RagService: ... answer length` 같은 **요청 처리 로그가 있으면 앱은 정상 기동·동작한 것**이다. exit 255는 spring-boot:run이 *띄운 앱 프로세스의 비정상 종료 코드를 그대로 보고*하는 값이라, 다음도 전부 255로 나온다:
+- **Ctrl+C / 터미널 닫음 / IDE Stop**(수동 종료) — 정상. 신경 쓸 것 없음.
+- 맥 절전·세션 종료로 포그라운드 프로세스 정리.
+- 네이티브 크래시(SIGSEGV) — 이 경우만 진짜 문제. `hs_err_pid*.log`/`javacore*.txt`가 남는다(§11.1·11.2).
+
+판별: **크래시 로그(hs_err_pid)가 없고 앱이 한동안 정상 처리했다면 = 수동/절전 종료(정상).** 있으면 네이티브 크래시로 다룬다. "BUILD FAILURE + 255"라는 문구만 보고 컴파일/설정 문제로 단정하지 말 것 — 기동 전에 죽었는지(컴파일/포트), 한참 돌다 죽었는지(종료/크래시)를 로그의 `Total time`과 요청 로그로 먼저 가른다.

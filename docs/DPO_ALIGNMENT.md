@@ -49,6 +49,57 @@ DPO 손실은 **레퍼런스 대비** chosen의 로그확률은 ↑, rejected는
 - **닫는 괄호를 주석에 묻기** — 함수 인자를 주석 처리할 때 닫는 `)`까지 주석에 들어가면 호출이 안 닫혀 `SyntaxError`. 닫는 `)`는 항상 주석 밖 코드로.
 - **이중 어댑터** — 이미 PeftModel인데 `peft_config`를 또 주면 SFT 위에 빈 LoRA가 덧씌워짐.
 - **TRL 버전차** — 신버전 `processing_class=tok` vs 구버전 `tokenizer=tok`, DPOConfig 인자명 변동. 설치 버전 문서 확인.
+- **SFTConfig 인자 리네임(Colab 실측)** — 최신 TRL은 `SFTConfig(max_seq_length=...)` 를 받지 않는다 → `max_length`로 변경됨(`TypeError: unexpected keyword argument 'max_seq_length'`). transformers/TRL이 빠르게 바뀌니 Colab의 설치 버전 기준으로 인자명을 맞춘다.
+- **데이터 경로 기본값(cwd 의존)** — `--data ../data/pref_seed.jsonl` 같은 상대경로 기본값은 실행 위치(cwd)에 따라 `.../finetune/../content/.../pref_seed.jsonl` 처럼 꼬여 `FileNotFoundError`. 기본값을 **스크립트 기준 절대경로**(`os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", ...)`)로 두면 cwd와 무관하게 안정적.
+- **gitignore된 데이터는 clone에 없다** — SFT 데이터(`ml/data/out/`)는 gitignore라 Colab `git clone`엔 안 들어간다 → 업로드하거나(임시) gitignore 예외로 커밋(재현성). 반면 `pref_seed.jsonl`은 `ml/data/`에 커밋돼 있어 clone에 포함된다.
+- **SFT 없이 DPO(0→1 데모)** — `adapters_7b`(SFT 산출)가 없으면 base에 새 LoRA를 얹어 DPO만 돌린다. 정석은 SFT→DPO지만, 메커니즘·지표를 보여주는 데는 충분(로그에 `[dpo] SFT 어댑터 없음 → base에 새 LoRA로 DPO`).
+
+## 6.5 지표 읽는 법 (학습 로그)
+
+DPO 로그에서 봐야 할 핵심 지표:
+
+| 지표 | 의미 | 좋은 방향 |
+|---|---|---|
+| `rewards/chosen` | chosen 응답의 (정책 vs 레퍼런스) 로그확률 차 | 0 위로 상승 |
+| `rewards/rejected` | rejected 응답의 같은 값 | 0 아래로 하락 |
+| `rewards/margins` | chosen − rejected | **커질수록 선호 분리 잘 됨** |
+| `rewards/accuracies` | chosen > rejected 인 비율 | 1.0에 가까울수록 |
+| `loss` | DPO 대조 손실 | 하락 |
+
+해석: **margin이 벌어지고 accuracy가 오르면** 정책이 chosen(한국어·근거·정확)을 rejected(중국어 누수·환각)보다 선호하도록 정렬되는 중. 단 `beta`(KL)가 너무 작으면 base에서 과하게 멀어져(품질 붕괴), 너무 크면 거의 안 변한다 — 작은 데이터(10쌍)에선 epoch·lr를 보수적으로.
+
+**실측(7B QLoRA SFT 어댑터 위에서 DPO, Colab T4):**
+
+| 지표 | 값 | 읽기 |
+|---|---|---|
+| `rewards/chosen` | **+0.0035** | chosen 보상 상승(방향 ✓) |
+| `rewards/rejected` | **−0.0166** | rejected 보상 하락(방향 ✓) |
+| `rewards/margins` | **+0.020** | chosen−rejected 양수 → 선호 분리 시작 |
+| `rewards/accuracies` | **0.20** | 낮음 — 데이터·스텝 부족 |
+| `train_loss` | **0.669** | 시작점(−ln0.5≈0.693)에서 거의 안 내려감 |
+| 스텝/epoch | 2 steps / 1 epoch | 10쌍 × 1 epoch ÷ 유효배치8 |
+
+정직한 결론: **파이프라인과 메커니즘은 증명**(SFT→DPO 이어가기 정상, 어댑터 `adapters_dpo` 생성, 보상 부호 방향 정확)됐으나, **10쌍·1 epoch·2 step이라 undertrained**(accuracy 0.2, loss 정체). 이건 "0→1 메커니즘 데모"의 의도된 한계다. 실제 정렬 효과를 내려면: (1) 선호쌍 수십~수백으로 확대(관찰된 실패를 rejected로 계속 수집), (2) epoch 3~5, (3) `beta` 0.1~0.3 스윕, (4) 정렬 전/후를 같은 프롬프트로 정성 비교(중국어 누수·환각 감소 확인).
+
+## 8. 선호 데이터 늘려 재학습하기 (추후 ② 가이드라인)
+
+§6.5 실측이 보여주듯 10쌍·1 epoch는 메커니즘 데모용이다. 정렬을 *실제로* 강화하려면 **선호쌍을 늘려 재학습**한다. 절차:
+
+1. **수집 — 실패를 rejected로.** 좋은 rejected는 *진짜 관찰된 실패*다. 출처 세 가지:
+   - 1.5B/약한 모델의 실패 출력(중국어 누수·숫자 환각·언어 혼용)을 그대로 rejected에.
+   - **거버넌스 피드백 활용(데이터 플라이휠)**: UI의 👎(thumbs-down) 답변을 rejected 후보로, 사람이 고친 답을 chosen으로. `query_log`에 호출·피드백이 쌓이므로 주기적으로 선호쌍으로 승격.
+   - 같은 prompt에 강한 선생모델 답(chosen) vs 현 모델 답(rejected) 대조.
+2. **형식 — 한 줄 = `{prompt, chosen, rejected}`** (`ml/data/pref_seed.jsonl`에 append). chosen=한국어·근거·숫자 정확 / rejected=실패 모드.
+3. **검증** — `python ml/data/validate_pref.py` 로 스키마·빈값·중복·동일(chosen==rejected) 점검 후 학습.
+4. **재학습** — 수십~수백 쌍이면: `--epochs 3~5`, `--beta` 0.1~0.3 스윕. SFT 어댑터(`adapters_7b`) 위에서 이어가기(`--sft-adapter adapters_7b`).
+   ```bash
+   python ml/finetune/train_dpo.py --sft-adapter adapters_7b \
+     --data ml/data/pref_seed.jsonl --out adapters_dpo --epochs 4 --beta 0.2
+   ```
+5. **평가(전/후 비교)** — 같은 프롬프트 셋으로 정렬 전(SFT만) vs 후(DPO) 출력을 나란히: 중국어 누수율·숫자 정확도·언어 일관성. 지표는 §6.5(`margins`↑, `accuracies`↑) + 정성 비교.
+6. **목표 신호** — `rewards/accuracies`가 0.2 → 0.7+ 로, `margins`가 꾸준히 양수로 벌어지고, 정성 비교에서 실패 모드가 줄면 성공.
+
+> 핵심: DPO 품질은 **선호쌍의 질과 양**이 좌우한다. 모델을 다시 짜는 게 아니라 *데이터를 모으는 루프*(특히 👎 피드백 → rejected)를 운영에 붙이는 게 정렬의 본질이다.
 
 ## 7. 면접 한 줄
 
