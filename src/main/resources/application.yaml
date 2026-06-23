@@ -7,6 +7,9 @@ spring:
     multipart:
       max-file-size: 50MB
       max-request-size: 50MB
+  devtools:
+    restart:
+      enabled: false   # 대량 ingest 중 자동 재시작이 응답을 끊는 사고 방지. 일반 개발 복귀 시 true.
 
 retrieval:
   hybrid:
@@ -14,7 +17,15 @@ retrieval:
 
 chunking:
   strategy: recursive    # fixed | recursive | semantic
-  max-size: 1000
+  max-size: 1400         # 1000→1400: 수백 쪽 매뉴얼의 청크 수↓(임베딩 콜·인덱스 크기↓). RAG는 소스당 600자 표출이라 검색 품질 영향 미미.
+
+ingest:
+  embed:
+    concurrency: 8       # 청크 임베딩 동시 호출 수. Ollama 부하 보고 4~16 조정. 1로 두면 직렬과 동등.
+
+storage:
+  tier:
+    threshold: 500       # hot→cold compact 임계. 100→500: 매뉴얼 1권(수백 청크) 안에서 compact 미발동. save 비용↓.
   expand-acronyms: true  # 약어->정식명 주입(CAIO->Chief AI Officer). false로 A/B 비교. 근거 docs/CHUNKING.md
 
 rerank:

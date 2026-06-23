@@ -2,9 +2,16 @@
 import { useEffect, useState } from "react";
 import { api, type DocItem, type Source } from "@/lib/api";
 
-// 제목으로 자동 분류 (백엔드 메타 없이도 정리)
+// 제목으로 자동 분류 (백엔드 메타 없이도 정리).
+// 순서 중요: 더 구체적인 토큰(IONIQ5)을 일반(IONIQ)보다 앞에 둬 정확히 그룹핑.
 const MODELS = ["PALISADE", "SANTA FE", "SANTAFE", "TUCSON", "SONATA", "ELANTRA", "KONA", "ACCENT", "VELOSTER",
-  "AZERA", "EQUUS", "GENESIS", "ENTOURAGE"];
+  "AZERA", "EQUUS", "GENESIS", "ENTOURAGE",
+  // 전기/수소/하이브리드 + 신형(한국 라인업)
+  "IONIQ5", "IONIQ6", "IONIQ9", "IONIQ", "NEXO", "ST1", "CASPER", "VENUE",
+  "GRANDEUR", "AVANTE", "STARIA", "STAREX", "PORTER", "I30", "I40",
+  // 단종/상용/기타 한국 라인업
+  "IX35", "MAXCRUZ", "VERACRUZ", "ASLAN", "BLUEON", "COUNTY", "MIGHTY",
+  "UNIVERSE", "XCIENT", "NEWPOWER", "SOLATI", "PAVISE", "ELECCITY"];
 function vehicleOf(title: string): string {
   const t = (title || "").toUpperCase().replace(/[_\-]/g, " ");
   for (const m of MODELS) if (t.includes(m)) return m === "SANTAFE" ? "SANTA FE" : m;
@@ -12,14 +19,16 @@ function vehicleOf(title: string): string {
 }
 function categoryOf(title: string): "매뉴얼" | "진단리포트" | "기타" {
   const t = (title || "").toLowerCase();
-  if (/manual|service|owner|매뉴얼|취급|정비|accent|sonata|tucson|elantra|palisade|kona|santa/.test(t)) return "매뉴얼";
+  if (/manual|service|owner|매뉴얼|취급|정비|accent|sonata|tucson|elantra|palisade|kona|santa|ioniq|nexo|casper|venue|grandeur|avante|staria|starex|porter|veloster|genesis|equus|azera|i30|st1/.test(t)) return "매뉴얼";
   if (/진단|report|리포트|diagnos/.test(t)) return "진단리포트";
   return "기타";
 }
 
 // 파일명(hyundai_<연식>_<모델>_*.pdf) → archive.org 원본 PDF URL. 매칭 안 되면 null(업로드 문서 등).
 function archiveUrl(title: string): string | null {
-  const m = (title || "").toLowerCase().match(/hyundai[_-](\d{4})[_-]([a-z0-9]+)/);
+  const lc = (title || "").toLowerCase();
+  if (/_kr|owners_kr/.test(lc)) return null;   // 한국 포털(full_pdf) 출처 — archive.org에 없음
+  const m = lc.match(/hyundai[_-](\d{4})[_-]([a-z0-9]+)/);
   if (!m) return null;
   const id = `car-service-manuals-hyundai-${m[1]}-${m[2]}`;
   return `https://archive.org/download/${id}/${id}.pdf`;

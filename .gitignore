@@ -41,6 +41,9 @@ docs/LINKEDIN-POST.md
 /data/*.crc
 /data/*.mv.db
 /data/*.db
+# Phase 1·2 적용 후 신규 런타임 저장 디렉터리(파티션 Parquet / JSONL hot) — 커밋 금지
+/data/articles/
+/data/articles_hot/
 .DS_Store
 *.crc
 
@@ -104,3 +107,11 @@ ml/**/__pycache__/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+
+# 에이전트/하니스 로컬 상태 — 절대 커밋 금지
+.claude/
+.omc/
+CLAUDE.md.fablize-bak.*
+
+# Python 캐시 (ml/ 외부 디렉터리도 모두)
+**/__pycache__/

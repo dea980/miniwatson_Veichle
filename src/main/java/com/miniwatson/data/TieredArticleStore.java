@@ -16,6 +16,10 @@ public class TieredArticleStore implements ArticleRepository{
     @Value("${storage.tier.threshold:100}")
     private int threshold;
 
+    // nextId를 매 저장마다 loadAll()로 계산하면 청크당 O(N) → 누적 O(N²)(대량 매뉴얼 적재에 치명적).
+    // 최초 1회만 디스크에서 최대 id를 시드한 뒤, 메모리 카운터로 증가시킨다.
+    private long maxId = -1;
+
     public TieredArticleStore(ArticleStore hot, ArticleParquetStore cold){
         this.hot = hot;
         this.cold = cold;
@@ -27,12 +31,11 @@ public class TieredArticleStore implements ArticleRepository{
         return all;
     }
 
-    public Article save(Article a) throws IOException {
-        List<Article> all = loadAll();
-        long nextId = all.stream().mapToLong(Article::getId).max().orElse(0) + 1;
-        a.setId(nextId);
-        hot.save(a);   // JSON에 append
-        if (hot.loadAll().size() >= threshold) compact();
+    public synchronized Article save(Article a) throws IOException {
+        if (maxId < 0) maxId = loadAll().stream().mapToLong(Article::getId).max().orElse(0);
+        a.setId(++maxId);
+        hot.save(a);   // JSONL append (O(1))
+        if (hot.size() >= threshold) compact();   // size()는 라인 카운트만 — 전체 파싱 안 함
         return a;
     }
     public boolean deleteById(long id) throws IOException{

@@ -21,6 +21,11 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.io.InputStream;
@@ -55,6 +60,7 @@ public class IngestionService {
     private final DocumentCatalogRepository catalogRepo;
     private final String embedModel;
     private final TenantAccessChecker accessChecker;   // 테넌트 격리 강제(적재도)
+    private final int embedConcurrency;   // 청크 임베딩 동시 호출 수 (Ollama 부하 한도 내).
     //private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(IngestionService.class);
     public IngestionService(ArticleRepository articleStore,
                             EmbeddingClient embeddingService,
@@ -68,7 +74,8 @@ public class IngestionService {
                             @Value("${chunking.strategy:recursive}") String strategy,
                             @Value("${chunking.max-size:1000}") int maxSize,
                             @Value("${chunking.expand-acronyms:true}") boolean expandAcronyms,
-                            @Value("${ollama.embed-model:nomic-embed-text}") String embedModel) {
+                            @Value("${ollama.embed-model:nomic-embed-text}") String embedModel,
+                            @Value("${ingest.embed.concurrency:8}") int embedConcurrency) {
         this.articleStore = articleStore;
         this.embeddingService = embeddingService;
         this.indexingService = indexingService;
@@ -81,7 +88,7 @@ public class IngestionService {
         this.embedModel = embedModel;
         this.hwpExtractor = hwpExtractor;
         this.accessChecker = accessChecker;
-
+        this.embedConcurrency = Math.max(1, embedConcurrency);
     }
 
     /** Backward-compatible: ingest into the "default" namespace. */
@@ -175,49 +182,82 @@ public class IngestionService {
 
     /** 임의 파일(PDF/docx/txt/csv...)을 추출 → 청킹 → 청크별 Article 저장. */
     public List<Article> ingestText(MultipartFile file, String namespace) throws IOException {
+        long t0 = System.nanoTime();
         String ns = (namespace == null || namespace.isBlank()) ? DEFAULT_NS : namespace;
-        accessChecker.check(ns);   // 격리: 파일 적재 권한
+        accessChecker.check(ns);
         String filename = file.getOriginalFilename();
-        String content = extractText(file, filename);          // 확장자 분기 (HWP/HWPX/Tika) — 결과를 덮어쓰지 않는다
+        long tExtractStart = System.nanoTime();
+        String content = extractText(file, filename);
+        long tExtractMs = (System.nanoTime() - tExtractStart) / 1_000_000;
         if (content == null || content.isBlank()) {
             throw new RuntimeException("No extractable text in file");
         }
         String baseTitle = (filename == null || filename.isBlank())
                 ? "text-" + System.currentTimeMillis() : filename;
 
-        List<Article> existing = articleStore.loadAll();
-        boolean already = existing.stream().anyMatch(a -> {
-            String aNs = (a.getNamespace() == null || a.getNamespace().isBlank()) ? DEFAULT_NS : a.getNamespace();
-            String aBase = a.getTitle().replaceAll(" #\\d+$", "");
-            return aNs.equals(ns) && aBase.equals(baseTitle);
-        });
+        long tDedupStart = System.nanoTime();
+        boolean already = catalogRepo.findByTitleAndNamespace(baseTitle, ns).isPresent();
+        long tDedupMs = (System.nanoTime() - tDedupStart) / 1_000_000;
         if (already) {
-            return existing.stream()
-                    .filter(a -> a.getTitle().replaceAll(" #\\d+$", "").equals(baseTitle))
-                    .toList();   // 이미 있는 청크들 그대로 반환 (재삽입 안 함)
+            System.out.println("[ingest-timing] " + baseTitle + " skipped (already in catalog) extract=" + tExtractMs + "ms dedup=" + tDedupMs + "ms");
+            return List.of();
         }
 
-        List<String> chunks = chunker.chunk(content, maxSize); // 분리된 청커 사용
-        // 약어 정의: 자동차 시드 사전 + 문서에서 추출한 정의를 병합
+        long tChunkStart = System.nanoTime();
+        List<String> chunks = chunker.chunk(content, maxSize);
         Map<String, String> glossary = new LinkedHashMap<>();
         if (expandAcronyms) {
-            glossary.putAll(seedGlossary);                            // ★ 자동차 시드 먼저
-            glossary.putAll(AcronymExpander.buildGlossary(content));  // 문서 정의가 있으면 우선(덮어씀)
+            glossary.putAll(seedGlossary);
+            glossary.putAll(AcronymExpander.buildGlossary(content));
         }
-        List<Article> saved = new ArrayList<>();
+        long tChunkMs = (System.nanoTime() - tChunkStart) / 1_000_000;
 
-        for (int i = 0; i < chunks.size(); i++) {
-            String c = AcronymExpander.expand(chunks.get(i), glossary);   // 약어->정식명 보정
+        // 약어 확장본을 미리 만들어 두면 임베딩 단계에서 글로서리 락 경합이 없다.
+        List<String> expanded = new ArrayList<>(chunks.size());
+        for (String raw : chunks) expanded.add(AcronymExpander.expand(raw, glossary));
+
+        // === Phase A: 임베딩 병렬 호출 ===========================================
+        // Ollama 서버가 받쳐주는 한 N개 동시 호출 → 직렬 합산 대비 ~N배 단축 기대.
+        // save/index는 상태 의존(maxId 카운터·파티션 파일 쓰기)이라 직렬 유지.
+        long embedT0 = System.nanoTime();
+        List<List<Float>> embeddings = new ArrayList<>(Collections.nCopies(expanded.size(), null));
+        ExecutorService pool = Executors.newFixedThreadPool(embedConcurrency);
+        try {
+            List<CompletableFuture<Void>> futures = new ArrayList<>(expanded.size());
+            for (int i = 0; i < expanded.size(); i++) {
+                final int idx = i;
+                final String text = expanded.get(i);
+                futures.add(CompletableFuture.runAsync(
+                        () -> embeddings.set(idx, embeddingService.embedDocument(text)), pool));
+            }
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        } finally {
+            pool.shutdown();
+            try { pool.awaitTermination(30, TimeUnit.SECONDS); } catch (InterruptedException ignored) {}
+        }
+        long embedMs = (System.nanoTime() - embedT0) / 1_000_000;
+
+        // === Phase B: 직렬 save + index =========================================
+        List<Article> saved = new ArrayList<>(expanded.size());
+        long saveMs = 0, indexMs = 0;
+        for (int i = 0; i < expanded.size(); i++) {
             Article article = new Article();
             article.setNamespace(ns);
             article.setTitle(baseTitle + " #" + (i + 1));
-            article.setSummary(c);                              // 저장본 = 임베딩본 (감사 추적 일관성)
+            article.setSummary(expanded.get(i));
             article.setUrl("file://" + baseTitle + "#" + (i + 1));
             article.setIngestedAt(LocalDateTime.now());
-            article.setEmbedding(embeddingService.embedDocument(c));
+            ManualMeta.apply(article, baseTitle);
+            article.setEmbedding(embeddings.get(i));
 
+            long s0 = System.nanoTime();
             Article s = articleStore.save(article);
+            saveMs += (System.nanoTime() - s0) / 1_000_000;
+
+            long x0 = System.nanoTime();
             indexingService.index(s);
+            indexMs += (System.nanoTime() - x0) / 1_000_000;
+
             saved.add(s);
         }
         catalogRepo.findByTitleAndNamespace(baseTitle, ns).ifPresentOrElse(
@@ -234,6 +274,16 @@ public class IngestionService {
                     // log.info("[catalog] saved {} [{}]", baseTitle, ns); // debugging
                 }
         );
+        long totalMs = (System.nanoTime() - t0) / 1_000_000;
+        int n = saved.size();
+        System.out.println("[ingest-timing] " + baseTitle
+                + " total=" + totalMs + "ms"
+                + " extract=" + tExtractMs + "ms"
+                + " dedup=" + tDedupMs + "ms"
+                + " chunk=" + tChunkMs + "ms (" + n + " chunks)"
+                + " embed=" + embedMs + "ms (avg=" + (n == 0 ? 0 : embedMs / n) + "ms/chunk)"
+                + " save=" + saveMs + "ms"
+                + " index=" + indexMs + "ms");
         return saved;
     }
     /** 자동차 약어/DTC 시드 사전 로드. 파일 없거나 깨져도 기존 동작 유지(빈 맵). */
