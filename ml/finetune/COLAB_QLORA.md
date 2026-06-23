@@ -100,6 +100,19 @@ python3 ml/optimize/benchmark.py    # TTFT·tok/s·메모리 (Q4 7B vs Q4 1.5B)
 
 기대: 7B FT는 1.5B의 **중국어 누수·반복 퇴화 제거** + 도메인 말투 유지. tok/s는 1.5B보다 느리지만 24GB M2에서 충분히 온디바이스 범위.
 
+## 3.6 실행 인사이트 — Colab에서 실제로 막혔던 것들
+
+라이브러리(transformers/TRL/datasets)가 빠르게 바뀌어, 코드보다 **버전·경로**에서 먼저 막힌다. 실측 정리:
+
+| 증상 | 원인 | 해결 |
+|---|---|---|
+| `FileNotFoundError: .../train_7b.jsonl` | SFT 데이터(`ml/data/out/`)가 gitignore라 Colab clone에 없음 | 파일 업로드(`files.upload()`) 또는 gitignore 예외로 커밋 |
+| `SFTConfig got unexpected keyword 'max_seq_length'` | 최신 TRL에서 `max_seq_length`→`max_length` 리네임 | 인자명 교체(설치 버전 기준) |
+| `FileNotFoundError: .../finetune/../content/.../pref_seed.jsonl` | `--data` 상대경로 기본값이 cwd에 따라 꼬임 | 스크립트 기준 절대경로 기본값 |
+| HF Hub 느림/레이트리밋 경고 | 비인증 다운로드 | `HF_TOKEN` 설정(선택, 데모는 무시 가능) |
+
+교훈: **학습 코드가 맞아도 환경(버전·경로·데이터 위치)에서 절반은 막힌다.** 경로 기본값은 `__file__` 기준 절대경로로, 데이터 위치는 "clone에 포함되는가"를 먼저 확인. 지표 해석은 [docs/DPO_ALIGNMENT.md](../../docs/DPO_ALIGNMENT.md) §6.5.
+
 ## 메모
 
 - **스택 분리**: 학습(CUDA/PyTorch)과 서빙(로컬 Ollama)이 다른 환경 — 어댑터/merged만 이동.

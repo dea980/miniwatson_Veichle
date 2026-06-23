@@ -31,7 +31,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="Qwen/Qwen2.5-7B-Instruct")
     ap.add_argument("--sft-adapter", default="adapters_7b", help="train_qlora.py 산출 LoRA 어댑터(SFT 체크포인트)")
-    ap.add_argument("--data", default="../data/pref_seed.jsonl")
+    ap.add_argument("--data", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "pref_seed.jsonl"))
     ap.add_argument("--out", default="adapters_dpo")
     ap.add_argument("--beta", type=float, default=0.1)
     ap.add_argument("--epochs", type=float, default=1.0)
@@ -85,7 +85,7 @@ def main():
     cfg = DPOConfig(output_dir=args.out, beta=args.beta, num_train_epochs=args.epochs,
                     per_device_train_batch_size=1, gradient_accumulation_steps=8,
                     learning_rate=5e-6, lr_scheduler_type="cosine", bf16=True,
-                    logging_steps=10, max_prompt_length=512, max_length=1024, report_to="none")
+                    logging_steps=10, report_to="none")   # max_prompt_length/max_length는 TRL 버전마다 인자명이 달라 제거(기본 truncation; 데이터가 짧음)
 
     # ── TODO-3: DPOTrainer 조립 + 학습 ──────────────────────────────────
     trainer = DPOTrainer(

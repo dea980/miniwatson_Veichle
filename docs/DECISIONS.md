@@ -123,6 +123,8 @@ LSH vs brute-force: 코퍼스가 작으면(수백~수천) brute-force가 항상 
 | 34B | A100(Pro) | ~20GB | 32GB+ |
 | 70B | A100 다중 | ~40GB | 64GB+ |
 
+> 갱신(2026): "vLLM은 NVIDIA CUDA 전제"라는 통념은 **부분 구식**이 됐다 — **vLLM-Metal**(MLX 백엔드)이 Apple Silicon에서 vLLM(PagedAttention·KV cache·OpenAI API)을 돌린다. 즉 *서빙 엔진* 선택지는 넓어졌고, 상한은 여전히 맥 RAM이 정한다. 서빙 스택 사다리·로드맵은 [SERVING.md](SERVING.md).
+
 결정: **7B QLoRA**가 (1.5B의 중국어 누수·환각을 잡으면서) **온디바이스 서빙**을 유지하는 최소점. 품질을 더 원하면 **13B가 가성비 스윗스팟**(학습 Colab 무료~Pro, 서빙 맥 RAM 16GB+). 34B+는 학습은 유료 GPU, 서빙은 클라우드 vLLM이 전제 → "온디바이스·데이터 주권" 전제가 깨지므로 PoC 범위 밖. 즉 모델 크기는 **두 예산(학습 VRAM·서빙 RAM)의 교집합**에서 고르며, Colab은 학습 칸만 넓힌다.
 
 ---

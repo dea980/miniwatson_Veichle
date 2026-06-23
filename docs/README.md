@@ -26,6 +26,7 @@
 | [WHY_LORA.md](WHY_LORA.md) | 왜 파인튜닝/LoRA인가 (RAG와의 차이) |
 | [PEFT_METHODS.md](PEFT_METHODS.md) | PEFT 방식 비교(LoRA/QLoRA/Adapter…) + 선택 가이드 |
 | [INFERENCE_OPTIMIZATION.md](INFERENCE_OPTIMIZATION.md) | 양자화와 추론 최적화 + 벤치 + 자원 직렬화 |
+| [SERVING.md](SERVING.md) | 서빙 스택 사다리(Ollama→vLLM-Metal→vLLM/sglang→Triton/TRT-LLM), 우리 패턴→최적화 매핑, JD 매핑, 로드맵 |
 | [AGENT.md](AGENT.md) | Agentic Search(라우팅, SQL 자기수정, 모델 라우팅) + 진단서, 이미지진단, 부품견적 |
 | [AS-OPERATIONS.md](AS-OPERATIONS.md) | A/S 운영 기능 — 차종/케이스 2레벨, 우선순위 트리아지, 건별 점검 체크리스트, 정비 스케줄, 리포트 개편 |
 | [GRAPHRAG_VEHICLE.md](GRAPHRAG_VEHICLE.md) | GraphRAG 고도화 설계(자동차 사전 기반 경량 공출현 그래프) |

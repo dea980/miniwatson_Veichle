@@ -78,7 +78,7 @@ def main():
         per_device_train_batch_size=args.batch, gradient_accumulation_steps=args.accum,
         learning_rate=args.lr, lr_scheduler_type="cosine", warmup_ratio=0.05,
         logging_steps=10, eval_strategy="epoch", save_strategy="epoch",
-        bf16=True, max_seq_length=args.max_seq, dataset_text_field="text",
+        bf16=True, max_length=args.max_seq, dataset_text_field="text",   # TRL 최신: max_seq_length → max_length
         report_to="none", load_best_model_at_end=True, metric_for_best_model="eval_loss",
     )
     trainer = SFTTrainer(model=model, args=cfg,

@@ -16,11 +16,15 @@
 - **리콜/불만 text-to-SQL** — NHTSA 리콜/불만과 부품 CSV를 자연어로 질의(DuckDB)해 집계하고 차트로 본다. SQL 자기수정이 내장돼 있다.
 - **온디바이스 LoRA 파인튜닝** — Qwen2.5-1.5B를 자동차 도메인으로 학습(MLX, GPU 없는 맥)한 뒤 GGUF Q4로 양자화해 Ollama로 서빙한다.
 - **Agentic Search** — 질문을 받아 도구(RAG / 리콜SQL / 복합)를 고르고, 실행한 뒤 한국어로 종합하며 트레이스를 남긴다.
-- **차종 종합 진단서** — 리콜, 불만, 매뉴얼을 한 리포트로 종합한다(집계는 결정적 SQL, 서술은 LLM).
+- **차종 진단 리포트** — 한 차종의 리콜·불만·매뉴얼을 종합(집계는 결정적 SQL, 서술은 LLM)하고, 그 차종의 **개별 케이스(접수 건)를 검색·진단**까지 한 화면에 잇는다.
+- **케이스 우선순위 트리아지** — 고객 불만(접수)을 심각도(사망×100+부상×10+화재×5+사고×3) 우선순위로 정렬해 먼저 대응할 건을 위로 올린다. 차종·부위 필터 + 건별 진단.
+- **건별 점검 체크리스트** — 공통(성능·상태점검 표준) + **그 접수 건의 결함 부위에 맞춘 점검 항목**(부위→점검항목 매핑표)을 함께 제시. 차종이 아니라 *건* 단위.
+- **정비 스케줄** — 달력으로 정비 일정을 예약·관리(예정/진행/완료). 새 DB 없이 기존 JPA 데이터소스에 테이블만 추가해 영속.
 - **이미지 진단에서 부품까지** — 차량 사진을 Vision과 OCR로 읽어 매뉴얼 기반 진단을 하고 필요 부품과 샘플 견적을 낸다.
+- **대화형 어시스턴트 & 차종 사진** — 멀티턴 RAG 채팅(출처 표시), 위키백과 기반 차종 사진을 홈·리포트에 표시.
 - **거버넌스** — 모든 LLM 호출을 감사 로그에 남기고 PII를 마스킹하며, 멀티프로바이더로 현대 H-Chat 게이트웨이와 정합한다.
 
-> 데모 화면과 정량 결과는 [docs/RESULTS.md](docs/RESULTS.md), 설계 근거는 [docs/VEHICLE_ARCHITECTURE.md](docs/VEHICLE_ARCHITECTURE.md), 전체 문서 색인은 [docs/README.md](docs/README.md)를 참고.
+> 데모 화면과 정량 결과는 [docs/RESULTS.md](docs/RESULTS.md), 설계 근거는 [docs/VEHICLE_ARCHITECTURE.md](docs/VEHICLE_ARCHITECTURE.md), A/S 운영 기능(트리아지·체크리스트·스케줄)은 [docs/AS-OPERATIONS.md](docs/AS-OPERATIONS.md), 전체 문서 색인은 [docs/README.md](docs/README.md)를 참고.
 
 ---
 
@@ -32,12 +36,14 @@
 
 | 영역 | 지금 (PoC) | 다음 | 스케일 |
 |---|---|---|---|
-| 모델 | 1.5B LoRA(MLX) Q4 | 7B QLoRA(Colab) Q4 | vLLM 서빙 |
+| 모델 | 1.5B LoRA(MLX) Q4 | **7B QLoRA + DPO(Colab) Q4 — 완료** | 13B QLoRA |
+| 서빙 | Ollama(온디바이스) | **vLLM-Metal(맥) / vLLM CUDA** | sglang·Triton/TRT-LLM |
 | 벡터 저장 | 인메모리 + load-once 캐시 | pgvector(HNSW, 이미 구현) | 오브젝트스토리지 + 파티션 Parquet 레이크하우스 |
+| 문서 파싱 | Tika 텍스트 | **표 구조추출**(마크다운) | 비전(ColQwen) — 다이어그램 |
 | 진단서 서술 | 작업별 모델 라우팅 | 7B FT(진단서 예시 학습) | — |
 | 배포 | 로컬 | docker-compose | 클라우드(provider 스왑) |
 
-근거: 모델 [docs/RESULTS.md](docs/RESULTS.md), 저장소 [docs/DATA-MODEL.md](docs/DATA-MODEL.md)와 [docs/DECISIONS.md](docs/DECISIONS.md), 디버깅 [docs/DEBUGGING.md](docs/DEBUGGING.md).
+근거: 모델 [docs/RESULTS.md](docs/RESULTS.md)·[docs/DPO_ALIGNMENT.md](docs/DPO_ALIGNMENT.md), 서빙 [docs/SERVING.md](docs/SERVING.md), 문서 파싱 [docs/INGESTION-FORMATS.md](docs/INGESTION-FORMATS.md), 저장소 [docs/DATA-MODEL.md](docs/DATA-MODEL.md)와 [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ---
 
@@ -210,7 +216,13 @@ curl -X POST http://localhost:8080/api/tabular/ask \
 - [x] **V10 이미지 진단에서 부품까지** — 사진(Vision+OCR)에서 매뉴얼 진단, 부품 명세와 샘플 견적
 - [x] **V11 고도화** — text-to-SQL 자기수정, 작업별 모델 라우팅(SQL은 강한 모델, 답변은 FT)
 - [x] **V12 온디바이스 STT** — 로컬 Whisper(faster-whisper) STT 서비스 (`ml/serve/whisper_stt.py`), 오프라인·프라이빗
-- [ ] **V13 (옵션)** — 7B QLoRA(Colab) 학습, vLLM provider, 임베딩 파인튜닝, 로컬 TTS·웨이크워드, 라이브 배포, GraphRAG 통합
+- [x] **V13 7B QLoRA + DPO 정렬** — Colab T4에서 7B QLoRA(SFT) → DPO(선호쌍 대조), 실측 지표·정직한 해석 ([docs/DPO_ALIGNMENT.md](docs/DPO_ALIGNMENT.md) §6.5)
+- [x] **V14 A/S 운영 기능** — 케이스 우선순위 트리아지, 건별 점검 체크리스트(공통+그 건 부위), 정비 스케줄(JPA 캘린더) ([docs/AS-OPERATIONS.md](docs/AS-OPERATIONS.md))
+- [x] **V15 문서 전용 어시스턴트** — 지식베이스 PDF 클릭 → 원본(새 탭) + 그 문서 청크만 검색하는 title-스코프 RAG
+- [x] **V16 UI 고도화** — 홈 대시보드(멀티턴 채팅·차종 사진), 케이스/정비 탭, 다크모드·가독성, 오너스 매뉴얼 13차종 코퍼스
+- [ ] **V17 서빙 트랙** — vLLM-Metal 로컬 서빙 + `llm.provider=vllm`, prefix-cache/배칭 벤치 ([docs/SERVING.md](docs/SERVING.md) 로드맵 P1~P4)
+- [ ] **V18 문서 파싱 고도화** — 표 구조추출(스캐폴드 `PdfTableExtractor`), 다이어그램 비전 경로 ([docs/INGESTION-FORMATS.md](docs/INGESTION-FORMATS.md) §5)
+- [ ] **V19 (옵션)** — 임베딩 파인튜닝, 로컬 TTS·웨이크워드, 라이브 배포, GraphRAG 통합
 
 > GraphRAG는 지금 설계서만 있고 구현은 안 됐다. 실제 RAG는 벡터+BM25 하이브리드로 동작한다. 고도화 방향은 [docs/GRAPHRAG_VEHICLE.md](docs/GRAPHRAG_VEHICLE.md)에 정리했다.
 
