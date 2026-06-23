@@ -9,6 +9,12 @@
     {"name": "summary", "type": "string"},
     {"name": "url", "type": "string"},
     {"name": "ingestedAt", "type": "string"},
-    {"name": "embedding", "type": {"type": "array", "items": "float"}}
+    {"name": "embedding", "type": {"type": "array", "items": "float"}},
+    {"name": "carCode",    "type": ["null", "string"], "default": null},
+    {"name": "carModel",   "type": ["null", "string"], "default": null},
+    {"name": "powertrain", "type": ["null", "string"], "default": null},
+    {"name": "year",       "type": ["null", "int"],    "default": null},
+    {"name": "lang",       "type": ["null", "string"], "default": null},
+    {"name": "region",     "type": ["null", "string"], "default": null}
   ]
 }

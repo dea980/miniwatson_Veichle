@@ -1,0 +1,16 @@
+url,filename,model,year
+# 현대 미국 공식 오너스 매뉴얼(글러브박스 PDF, owners.hyundaiusa.com /content/dam). 직접 정적 PDF.
+# 파일명 규칙이 모델·연식마다 제각각이라(-OM/_Owners_Manual/공백) 검증된 정확한 URL을 그대로 적재.
+# ── 전기/수소/하이브리드 (기존 KB 공백 메움) ──
+https://owners.hyundaiusa.com/content/dam/hyundai/us/myhyundai/manuals/glovebox-manual/2022/ioniq5/2022-Ioniq-5-Owners-Manual.pdf,hyundai_2022_ioniq5_owners.pdf,IONIQ 5,2022
+https://owners.hyundaiusa.com/content/dam/hyundai/us/myhyundai/manuals/glovebox-manual/2023/ioniq-6/2023-Ioniq-6-OM.pdf,hyundai_2023_ioniq6_owners.pdf,IONIQ 6,2023
+https://owners.hyundaiusa.com/content/dam/hyundai/us/myhyundai/manuals/glovebox-manual/2023/nexo/2023-Nexo-Owners-Manual.pdf,hyundai_2023_nexo_owners.pdf,NEXO,2023
+https://owners.hyundaiusa.com/content/dam/hyundai/us/myhyundai/manuals/glovebox-manual/2021/ioniq-electric/2021%20Ioniq%20EV%20OM.pdf,hyundai_2021_ioniq_electric_owners.pdf,IONIQ ELECTRIC,2021
+https://owners.hyundaiusa.com/content/dam/hyundai/us/myhyundai/manuals/glovebox-manual/2022/ioniq-phev/2022-Ioniq-PHEV-OM.pdf,hyundai_2022_ioniq_phev_owners.pdf,IONIQ PHEV,2022
+# ── 주력 내연 신형(2022~2024, NHTSA 불만 차종과 매칭) ──
+https://owners.hyundaiusa.com/content/dam/hyundai/us/myhyundai/manuals/glovebox-manual/2024/tucson/2024_Tucson_Owners_Manual.pdf,hyundai_2024_tucson_owners.pdf,TUCSON,2024
+https://owners.hyundaiusa.com/content/dam/hyundai/us/myhyundai/manuals/glovebox-manual/2024/palisade/2024%20Palisade%20(LX2)%20OM.pdf,hyundai_2024_palisade_owners.pdf,PALISADE,2024
+https://owners.hyundaiusa.com/content/dam/hyundai/us/myhyundai/manuals/glovebox-manual/2023/palisade/2023-Palisade-Owners-Manual.pdf,hyundai_2023_palisade_owners.pdf,PALISADE,2023
+https://owners.hyundaiusa.com/content/dam/hyundai/us/myhyundai/manuals/glovebox-manual/2024/sonata/24%20Sonata%20OM.pdf,hyundai_2024_sonata_owners.pdf,SONATA,2024
+https://owners.hyundaiusa.com/content/dam/hyundai/us/myhyundai/manuals/glovebox-manual/2023/elantra/2023-Elantra-Owners-Manual.pdf,hyundai_2023_elantra_owners.pdf,ELANTRA,2023
+https://owners.hyundaiusa.com/content/dam/hyundai/us/myhyundai/manuals/glovebox-manual/2024/kona/2024%20Kona%20(SX2)%20OM.pdf,hyundai_2024_kona_owners.pdf,KONA,2024

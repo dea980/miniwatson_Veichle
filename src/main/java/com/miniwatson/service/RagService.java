@@ -71,6 +71,13 @@ public class RagService {
         return ask(question, namespace, model, rerankOverride, hybridOverride, null);
     }
 
+    /** 메타 1차 필터 — 차종(carModel 또는 carCode 부분일치), 연식, 언어, 구동계.
+     *  파라미터는 모두 nullable; 주어진 것만 AND로 적용. */
+    public RagResult ask(String question, String namespace, String model, String title,
+                         String car, Integer year, String lang, String powertrain) throws IOException {
+        return ask(question, namespace, model, null, null, title, car, year, lang, powertrain);
+    }
+
     /**
      * RAG over a single tenant namespace, optionally with a caller-chosen chat model.
      *
@@ -79,6 +86,12 @@ public class RagService {
      * @param model     chat model override (null/blank → configured default)
      */
     public RagResult ask(String question, String namespace, String model, String rerankOverride, Boolean hybridOverride, String title) throws IOException {
+        return ask(question, namespace, model, rerankOverride, hybridOverride, title, null, null, null, null);
+    }
+
+    /** 풀 시그니처 — 메타 필터(car/year/lang/powertrain) 추가. 다른 진입점은 모두 이것으로 위임. */
+    public RagResult ask(String question, String namespace, String model, String rerankOverride, Boolean hybridOverride,
+                         String title, String car, Integer year, String lang, String powertrain) throws IOException {
         String ns = (namespace == null || namespace.isBlank()) ? DEFAULT_NS : namespace;
         accessChecker.check(ns);   // 격리 강제: 이 호출자가 ns 접근 가능한지 (보안 off면 통과)
         // 평가를 위한 게이트
@@ -94,9 +107,14 @@ public class RagService {
         log.info("RAG question (ns={}, model={}): {}", ns, model == null ? "default" : model, question);
 
         List<Float> questionEmbedding = embeddingService.embedQuery(question);
-        // 문서 한정(title) 시 후보를 더 넓게 떠서 그 문서의 청크를 충분히 확보한 뒤 필터한다.
+        // 문서 한정(title) 또는 메타 필터(car/year/lang/powertrain) 시 후보를 더 넓게 떠서
+        // 필터 후에도 top-K를 충분히 확보. 메타 필터가 강할수록 후보가 줄어드니 6배로 확대.
         boolean scoped = title != null && !title.isBlank();
-        int fetchN = scoped ? FETCH_N * 6 : FETCH_N;
+        boolean metaScoped = (car != null && !car.isBlank())
+                          || year != null
+                          || (lang != null && !lang.isBlank())
+                          || (powertrain != null && !powertrain.isBlank());
+        int fetchN = (scoped || metaScoped) ? FETCH_N * 6 : FETCH_N;
         List<Article> candidates = hybridRetriever.search(ns, questionEmbedding, question, fetchN, hy);
         if (candidates.isEmpty()) throw new RuntimeException("No articles in knowledge base for namespace '" + ns + "'.");
         if (scoped) {
@@ -107,6 +125,30 @@ public class RagService {
                     .collect(Collectors.toList());
             if (!only.isEmpty()) candidates = only;          // 이 문서 청크만 → 문서 전용 어시스턴트
             else log.warn("[rag] title='{}' 매칭 청크 없음 — 전체 후보로 진행", t);
+        }
+        if (metaScoped) {
+            // 메타 1차 필터(매뉴얼만 매치 — 비-매뉴얼 청크는 메타가 null이라 자동 제외).
+            // car는 carModel("ioniq5") 또는 carCode("NE1N")에 부분일치(대소문자 무시).
+            // 매뉴얼 KB 규모가 커지면 이 한 단계로 노이즈가 크게 줄어 정확도↑.
+            String carQ = car == null ? null : car.trim().toLowerCase();
+            String langQ = lang == null ? null : lang.trim().toLowerCase();
+            String ptQ = powertrain == null ? null : powertrain.trim().toLowerCase();
+            List<Article> only = candidates.stream().filter(a -> {
+                if (carQ != null && !carQ.isBlank()) {
+                    String cm = a.getCarModel() == null ? "" : a.getCarModel().toLowerCase();
+                    String cc = a.getCarCode() == null ? "" : a.getCarCode().toLowerCase();
+                    if (!cm.contains(carQ) && !cc.contains(carQ)) return false;
+                }
+                if (year != null && (a.getYear() == null || !a.getYear().equals(year))) return false;
+                if (langQ != null && !langQ.isBlank()
+                        && (a.getLang() == null || !a.getLang().equalsIgnoreCase(langQ))) return false;
+                if (ptQ != null && !ptQ.isBlank()
+                        && (a.getPowertrain() == null || !a.getPowertrain().equalsIgnoreCase(ptQ))) return false;
+                return true;
+            }).collect(Collectors.toList());
+            if (!only.isEmpty()) candidates = only;
+            else log.warn("[rag] meta filter(car={}, year={}, lang={}, pt={}) 매칭 청크 없음 — 전체 후보로 진행",
+                    car, year, lang, powertrain);
         }
         // Sub-linear retrieval via the in-memory vector index (LSH + exact fallback).
         //List<Article> topArticles = vectorIndex.search(ns, questionEmbedding, TOP_K);

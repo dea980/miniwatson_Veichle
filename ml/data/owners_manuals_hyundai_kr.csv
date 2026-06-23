@@ -1,0 +1,48 @@
+url,filename,model,projCode,year
+# 현대 한국 디지털 취급설명서(공식) 직접 PDF. 패턴: ownersmanual.hyundai.com/full_pdf/{projectCode}/{year}/ko_KR
+# 파일명 규칙 통일: hyundai_<연식>_<모델슬러그>_owners_kr.pdf
+#   - "owners" 토큰 → KnowledgeBasePanel.categoryOf 가 '매뉴얼'로 분류
+#   - 모델슬러그(영문) → vehicleOf 가 차종으로 그룹핑(분류기 MODELS 목록과 일치시킴)
+# ── 전기/수소 (EV/FCEV) ──
+https://ownersmanual.hyundai.com/full_pdf/NH2/2026/ko_KR,hyundai_2026_nexo_owners_kr.pdf,NEXO,NH2,2026
+https://ownersmanual.hyundai.com/full_pdf/FE/2024/ko_KR,hyundai_2024_nexo_fe_owners_kr.pdf,넥쏘,FE,2024
+https://ownersmanual.hyundai.com/full_pdf/A01/2025/ko_KR,hyundai_2025_st1_owners_kr.pdf,ST1,A01,2025
+https://ownersmanual.hyundai.com/full_pdf/NE1/2025/ko_KR,hyundai_2025_ioniq5_owners_kr.pdf,아이오닉 5,NE1,2025
+https://ownersmanual.hyundai.com/full_pdf/CE1/2025/ko_KR,hyundai_2025_ioniq6_owners_kr.pdf,아이오닉 6,CE1,2025
+https://ownersmanual.hyundai.com/full_pdf/ME/2025/ko_KR,hyundai_2025_ioniq9_owners_kr.pdf,아이오닉 9,ME,2025
+https://ownersmanual.hyundai.com/full_pdf/AEEV/2020/ko_KR,hyundai_2020_ioniq_electric_owners_kr.pdf,아이오닉 Electric,AEEV,2020
+https://ownersmanual.hyundai.com/full_pdf/AXEV/2025/ko_KR,hyundai_2025_casper_electric_owners_kr.pdf,캐스퍼 일렉트릭,AXEV,2025
+https://ownersmanual.hyundai.com/full_pdf/SX2EV/2025/ko_KR,hyundai_2025_kona_electric_owners_kr.pdf,코나 Electric,SX2EV,2025
+https://ownersmanual.hyundai.com/full_pdf/HREV/2025/ko_KR,hyundai_2025_porter_electric_owners_kr.pdf,포터 II Electric,HREV,2025
+# ── 하이브리드/PHEV ──
+https://ownersmanual.hyundai.com/full_pdf/MX5HEV/2025/ko_KR,hyundai_2025_santafe_hybrid_owners_kr.pdf,싼타페 Hybrid,MX5HEV,2025
+https://ownersmanual.hyundai.com/full_pdf/SX2HEV/2025/ko_KR,hyundai_2025_kona_hybrid_owners_kr.pdf,코나 Hybrid,SX2HEV,2025
+https://ownersmanual.hyundai.com/full_pdf/NX4HEV/2025/ko_KR,hyundai_2025_tucson_hybrid_owners_kr.pdf,투싼 Hybrid,NX4HEV,2025
+https://ownersmanual.hyundai.com/full_pdf/NX4PHEV/2023/ko_KR,hyundai_2023_tucson_phev_owners_kr.pdf,투싼 Plugin Hybrid,NX4PHEV,2023
+https://ownersmanual.hyundai.com/full_pdf/LX3HEV/2026/ko_KR,hyundai_2026_palisade_hybrid_owners_kr.pdf,팰리세이드 Hybrid,LX3HEV,2026
+https://ownersmanual.hyundai.com/full_pdf/GN7HEV/2025/ko_KR,hyundai_2025_grandeur_hybrid_owners_kr.pdf,그랜저 Hybrid,GN7HEV,2025
+https://ownersmanual.hyundai.com/full_pdf/DN8HEV/2025/ko_KR,hyundai_2025_sonata_hybrid_owners_kr.pdf,쏘나타 Hybrid,DN8HEV,2025
+https://ownersmanual.hyundai.com/full_pdf/CN7HEV/2025/ko_KR,hyundai_2025_avante_hybrid_owners_kr.pdf,아반떼 Hybrid,CN7HEV,2025
+https://ownersmanual.hyundai.com/full_pdf/AEPHEV/2020/ko_KR,hyundai_2020_ioniq_phev_owners_kr.pdf,아이오닉 Plugin Hybrid,AEPHEV,2020
+https://ownersmanual.hyundai.com/full_pdf/US4HEV/2024/ko_KR,hyundai_2024_staria_hybrid_owners_kr.pdf,스타리아 Hybrid,US4HEV,2024
+# ── SUV (내연) ──
+https://ownersmanual.hyundai.com/full_pdf/MX5/2025/ko_KR,hyundai_2025_santafe_owners_kr.pdf,싼타페,MX5,2025
+https://ownersmanual.hyundai.com/full_pdf/NX4/2025/ko_KR,hyundai_2025_tucson_owners_kr.pdf,투싼,NX4,2025
+https://ownersmanual.hyundai.com/full_pdf/LX3/2025/ko_KR,hyundai_2025_palisade_owners_kr.pdf,팰리세이드,LX3,2025
+https://ownersmanual.hyundai.com/full_pdf/SX2/2025/ko_KR,hyundai_2025_kona_owners_kr.pdf,코나,SX2,2025
+https://ownersmanual.hyundai.com/full_pdf/QX/2025/ko_KR,hyundai_2025_venue_owners_kr.pdf,베뉴,QX,2025
+https://ownersmanual.hyundai.com/full_pdf/AX/2025/ko_KR,hyundai_2025_casper_owners_kr.pdf,캐스퍼,AX,2025
+# ── 승용 (내연) ──
+https://ownersmanual.hyundai.com/full_pdf/GN7/2025/ko_KR,hyundai_2025_grandeur_owners_kr.pdf,그랜저,GN7,2025
+https://ownersmanual.hyundai.com/full_pdf/DN8/2025/ko_KR,hyundai_2025_sonata_owners_kr.pdf,쏘나타,DN8,2025
+https://ownersmanual.hyundai.com/full_pdf/CN7/2025/ko_KR,hyundai_2025_avante_owners_kr.pdf,아반떼,CN7,2025
+https://ownersmanual.hyundai.com/full_pdf/PD/2020/ko_KR,hyundai_2020_i30_owners_kr.pdf,i30,PD,2020
+https://ownersmanual.hyundai.com/full_pdf/BU/2022/ko_KR,hyundai_2022_veloster_owners_kr.pdf,벨로스터,BU,2022
+# ── N (고성능) ──
+https://ownersmanual.hyundai.com/full_pdf/NE1N/2025/ko_KR,hyundai_2025_ioniq5_n_owners_kr.pdf,아이오닉 5 N,NE1N,2025
+https://ownersmanual.hyundai.com/full_pdf/CE1N/2025/ko_KR,hyundai_2025_ioniq6_n_owners_kr.pdf,아이오닉 6 N,CE1N,2025
+https://ownersmanual.hyundai.com/full_pdf/CN7N/2025/ko_KR,hyundai_2025_avante_n_owners_kr.pdf,아반떼 N,CN7N,2025
+https://ownersmanual.hyundai.com/full_pdf/OSN/2022/ko_KR,hyundai_2022_kona_n_owners_kr.pdf,코나 N,OSN,2022
+# ── MPV ──
+https://ownersmanual.hyundai.com/full_pdf/US4/2025/ko_KR,hyundai_2025_staria_owners_kr.pdf,스타리아,US4,2025
+https://ownersmanual.hyundai.com/full_pdf/TQ/2021/ko_KR,hyundai_2021_starex_owners_kr.pdf,스타렉스,TQ,2021

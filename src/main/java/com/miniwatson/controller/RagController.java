@@ -33,7 +33,11 @@ public class RagController {
                             request.getModel(),
                             request.getRerank(), // EVAL-ONLY
                             request.getHybrid(), //EVAL-ONLY
-                            request.getTitle()); // 문서 전용(선택)
+                            request.getTitle(), // 문서 전용(선택)
+                            request.getCar(),       // 메타 필터(매뉴얼 KB 정확도)
+                            request.getYear(),
+                            request.getLang(),
+                            request.getPowertrain());
     }
 
     /** Multi-LLM: list selectable chat models and the default. */

@@ -137,6 +137,12 @@ public class TabularSqlService {
                                   "CREATE", "ATTACH", "COPY", "PRAGMA", "INSTALL", "LOAD")) {
             if (up.contains(bad)) throw new IllegalArgumentException("금지 키워드: " + bad);
         }
+        // DuckDB는 SELECT 안에서도 로컬/원격 파일을 읽는 함수를 제공한다.
+        // 키워드 차단만으론 read_csv_auto('/etc/passwd') 같은 임의 파일 읽기를 못 막으므로 함수도 차단.
+        for (String fn : List.of("READ_CSV", "READ_PARQUET", "READ_JSON", "READ_TEXT",
+                                 "READ_BLOB", "GLOB", "HTTPFS", "HTTP_GET", "HTTP_POST")) {
+            if (up.contains(fn)) throw new IllegalArgumentException("금지 함수: " + fn);
+        }
     }
 
     /** SELECT/WITH만 허용, 위험 키워드 차단, 최대 100행.

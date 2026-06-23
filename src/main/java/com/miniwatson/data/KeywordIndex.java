@@ -34,6 +34,12 @@ public class KeywordIndex {
     public synchronized void hydrate() {
         try {
             rebuild(store.loadAll());
+            // 한글 토크나이저 망가짐 같은 다음 회귀를 즉시 감지하려고 어휘 통계도 같이 로그.
+            for (var e : namespaces.entrySet()) {
+                NsIndex idx = e.getValue();
+                log.info("[KeywordIndex] ns='{}' docs={} vocab={} avgTokens={}",
+                        e.getKey(), idx.docs.size(), idx.df.size(), String.format("%.1f", idx.avgdl));
+            }
             log.info("[KeywordIndex] hydrated {} namespace(s)", namespaces.size());
         } catch (IOException e) {
             log.warn("[KeywordIndex] hydrate failed: {}", e.getMessage());
@@ -88,11 +94,32 @@ public class KeywordIndex {
         return out;
     }
 
+    // 토큰 경계 = 한글/영숫자 외 모든 문자. 이전 [^a-z0-9]+ 는 한글 전부를 split해 BM25가 한국어에서 0점이었음.
+    // 한국어는 교착어라 어절 끝 조사·어미("타이어를" vs "타이어")가 매칭을 깨므로,
+    // 한글 어절은 어절 자체 + char-2gram을 함께 색인해 부분일치를 회복한다. 색인 크기 ~2배.
+    private static final java.util.regex.Pattern SEP =
+            java.util.regex.Pattern.compile("[^\\p{IsHangul}\\p{IsAlphabetic}\\p{IsDigit}]+");
+
     private List<String> tokenize(String text) {
         if (text == null) return List.of();
         List<String> out = new ArrayList<>();
-        for (String t : text.toLowerCase().split("[^a-z0-9]+")) if (!t.isBlank()) out.add(t);
+        for (String t : SEP.split(text.toLowerCase())) {
+            if (t.isBlank()) continue;
+            out.add(t);
+            // 한글 포함 어절이면 char-2gram도 추가(조사·어미 무시 효과). 쿼리·문서 모두 동일 함수라 일관.
+            if (t.length() >= 2 && containsHangul(t)) {
+                for (int i = 0; i + 2 <= t.length(); i++) out.add(t.substring(i, i + 2));
+            }
+        }
         return out;
+    }
+
+    private static boolean containsHangul(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= 0xAC00 && c <= 0xD7A3) return true;
+        }
+        return false;
     }
 
     private Map<String, Long> termFreq(List<String> tokens) {

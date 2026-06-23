@@ -1,0 +1,14 @@
+
+=== RAGAS-lite (6 cases, judge=ibm/granite4:latest) ===
+
+id                       faith  ans-rel  ctx-prec  ctx-rec
+------------------------------------------------------------
+ioniq5-tpms             ERR: <urlopen error [Errno 61] Connection refused>
+ioniq5-v2l              ERR: <urlopen error [Errno 61] Connection refused>
+ioniq5-charging         ERR: <urlopen error [Errno 61] Connection refused>
+ioniq5-regen            ERR: <urlopen error [Errno 61] Connection refused>
+ioniq5-precond          ERR: <urlopen error [Errno 61] Connection refused>
+ioniq5-scc              ERR: <urlopen error [Errno 61] Connection refused>
+------------------------------------------------------------
+avg                          -        -         -        -
+
