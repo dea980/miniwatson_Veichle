@@ -190,6 +190,16 @@ T0의 가장 큰 신호는:
 
 → **T1(앱 재기동, 백필 잡 + 한글 토크나이저)** 측정은 의미 있는 비교가 가능하나, **T2(메타 필터) / T3(BM25)는 매뉴얼 추가 적재 후 측정 권장**. 또는 골든셋을 ioniq5 범위 안으로 좁혀 재실행.
 
-원본 출력: 백그라운드 잡 `bfixiekrr` (확보됨, 본 표에 정리).
+원본 출력: 백그라운드 잡 `bfixiekrr` (확보됨, 본 표에 정리). 보존: `eval/ragas_T0_baseline.txt`.
+
+### T0' — ioniq5-narrowed 골든셋 (대기 중)
+
+골든셋을 ioniq5 적재 범위 안으로 좁힌 [`eval/golden_vehicle_ioniq5.json`](../eval/golden_vehicle_ioniq5.json)(6 케이스: TPMS·V2L·고전압 충전·회생제동·프리컨디셔닝·SCC) 준비 완료. **시도 시점에 앱이 :8080에서 응답 없음(Connection refused)으로 측정 보류**. 앱 재기동 후 1회 실행:
+
+```bash
+python3 eval/run_ragas.py --golden eval/golden_vehicle_ioniq5.json | tee eval/ragas_T0_ioniq5.txt
+```
+
+기대: KB 범위 안 질문만 있으므로 T0(0.52/0.30/0.60/1.00) 대비 faithfulness·answer_relevance가 의미있게 오를 것(환각 케이스 제거). 결과 확보 후 본 섹션에 행 추가.
 
 

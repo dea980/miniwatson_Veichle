@@ -123,3 +123,63 @@ for (String fn : List.of("READ_CSV","READ_PARQUET","READ_JSON","READ_TEXT",
 1. **즉시(HIGH)** — `requireReadOnly()`에 DuckDB 파일시스템 함수 차단 추가 (Vuln 2). LLM이 유도되면 임의 서버 파일을 읽을 수 있음.
 2. **즉시(HIGH)** — `TabularController.load()`의 `path`를 `data/` 하위로 검증 (Vuln 1).
 3. **방어 심화** — 가능하면 DuckDB `enable_external_access=false`, 등록 테이블명 화이트리스트로 SQL 검증.
+
+---
+
+## 조치 내역 (2026-06-24 적용)
+
+| 항목 | 파일 | 변경 |
+|------|------|------|
+| Vuln 1 가드 | `TabularController.java` | `/load`의 `path`를 `resolveAllowed()`로 정규화 후 `sample/`·`data/` 하위만 허용. `IllegalArgumentException`→400 매핑(`@ExceptionHandler`) 추가. |
+| Vuln 2 가드 | `TabularSqlService.java` | `requireReadOnly()`에 파일시스템/네트워크 함수(`READ_CSV/READ_PARQUET/READ_JSON/READ_TEXT/READ_BLOB/GLOB/HTTPFS/HTTP_GET/HTTP_POST`) 차단 추가. |
+| 회귀 테스트 | `TabularSqlServiceTest.java` | V2 가드 케이스 6건 추가(read_csv_auto·read_text·read_parquet·glob·httpfs 거부 + 정상 SELECT 통과). |
+
+> 설계 메모: 가드는 외부 입력 진입점인 컨트롤러 `/load`에만 둔다. `registerCsv()` 내부에 넣지 않는 이유 — `/upload`(temp 경로)와 내부 호출자(Report/Analytics/Estimate/Agent)는 신뢰 경로라 깨지면 안 됨.
+
+---
+
+## 검증 / 테스트 가이드
+
+### A. Vuln 1 — 경로 탐색 가드 (라이브 HTTP)
+
+앱 구동(dev 프로필, 인증 off) 상태에서:
+
+```bash
+B=http://localhost:8080/api/tabular
+
+# 1) 임의 절대경로 → 거부
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "$B/load?table=pwn&path=/etc/passwd"
+
+# 2) ../ 탈출 → 거부
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "$B/load?table=pwn2&path=sample/../../../../etc/passwd"
+
+# 3) 정상 경로 → 성공
+curl -s -X POST "$B/load?table=revenue&path=sample/quarterly-revenue-2025.csv"
+```
+
+**기대 결과**
+
+| 케이스 | 기대 | 관찰(2026-06-24) |
+|--------|------|------------------|
+| `/etc/passwd` | 거부 (4xx, body에 `허용되지 않은 경로`) | **차단됨** — `IllegalArgumentException: 허용되지 않은 경로…` |
+| `../` 탈출 | 거부 | **차단됨** |
+| `sample/...csv` | 200 + 스키마 | **200** — `{"schema":"_quarter VARCHAR…","table":"revenue"}` |
+
+> ⚠️ `@ExceptionHandler`(400 매핑)는 **앱 재기동 후** 반영된다. 재기동 전 구버전 빌드는 동일하게 차단하되 HTTP 500으로 응답한다(보안상 차단은 동일, 상태코드만 다름). 재기동 후 위 1·2번은 `400`이 된다.
+
+### B. Vuln 2 — SQL 가드 (단위 테스트)
+
+`/api/tabular/ask`는 LLM이 SQL을 생성하므로 파일읽기 SQL을 결정적으로 재현하기 어렵다. 대신 가드가 순수 함수(`requireReadOnly`)로 분리돼 있어 단위 테스트로 검증한다.
+
+```bash
+mvn -Dtest=TabularSqlServiceTest test
+```
+
+**기대**: `Tests run: 14, Failures: 0, Errors: 0` — read_csv_auto/read_text/read_parquet/glob/httpfs 거부 + 정상 SELECT 통과.
+**관찰(2026-06-24)**: `Tests run: 14, Failures: 0, Errors: 0` → **BUILD SUCCESS**.
+
+> 알려진 베이스라인 이슈: test 소스셋에 무관하게 **기존부터 컴파일이 깨진 테스트 2건**(`KeywordIndexTest`, `PiiRedactionServiceTest`, 커밋 `c21e1d1`)이 있어 전체 `mvn test`는 testCompile 단계에서 실패한다. 본 가드와 무관하며, 위 검증은 해당 2파일을 일시 제외하고 `TabularSqlServiceTest`만 실행해 통과를 확인했다. 별도 트랙으로 수정 필요.
+
+### C. (수정 후) Vuln 2 라이브 스모크 — 선택
+
+가드 우회가 막혔는지 빠르게 보려면, 모델이 read 함수를 쓰도록 유도하는 질문을 던져 응답에 파일 내용 대신 `금지 함수` 오류가 도는지 확인한다(모델 출력에 의존해 비결정적).

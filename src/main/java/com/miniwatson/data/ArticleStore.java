@@ -32,13 +32,22 @@ import java.util.Map;
 @Component
 public class ArticleStore {
 
-    private static final String STORAGE_DIR = "./data/articles_hot";
-    private static final String LEGACY_PATH = "./data/articles.json";
+    private static final String DEFAULT_STORAGE_DIR = "./data/articles_hot";
+    private static final String DEFAULT_LEGACY_PATH = "./data/articles.json";
     private static final String EXT = ".jsonl";
 
+    private final String STORAGE_DIR;
+    private final String LEGACY_PATH;
     private final ObjectMapper objectMapper;
 
     public ArticleStore() {
+        this(DEFAULT_STORAGE_DIR, DEFAULT_LEGACY_PATH);
+    }
+
+    /** 테스트용 — 경로를 임의 디렉터리로 격리한다. */
+    ArticleStore(String storageDir, String legacyPath) {
+        this.STORAGE_DIR = storageDir;
+        this.LEGACY_PATH = legacyPath;
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
         this.objectMapper.addMixIn(Article.class, EmbeddingPersistMixin.class);
