@@ -36,16 +36,25 @@ import java.util.Map;
 @Component
 public class ArticleParquetStore {
 
-    private static final String STORAGE_DIR = "./data/articles";
-    private static final String LEGACY_PATH = "./data/articles.parquet";
+    private static final String DEFAULT_STORAGE_DIR = "./data/articles";
+    private static final String DEFAULT_LEGACY_PATH = "./data/articles.parquet";
     private static final String EXT = ".parquet";
 
+    private final String STORAGE_DIR;
+    private final String LEGACY_PATH;
     private final Schema schema;
     private volatile List<Article> cache;
     // 파티션 키 -> 마지막 기록된 시그니처(정렬 id 문자열). 동일하면 재작성 생략.
     private final Map<String, String> partitionSig = new LinkedHashMap<>();
 
     public ArticleParquetStore() throws IOException {
+        this(DEFAULT_STORAGE_DIR, DEFAULT_LEGACY_PATH);
+    }
+
+    /** 테스트용 — 경로를 임의 디렉터리로 격리한다. */
+    ArticleParquetStore(String storageDir, String legacyPath) throws IOException {
+        this.STORAGE_DIR = storageDir;
+        this.LEGACY_PATH = legacyPath;
         try (InputStream is = getClass().getClassLoader().getResourceAsStream("article.avsc")) {
             if (is == null) throw new IOException("article.avsc not found in classpath");
             this.schema = new Schema.Parser().parse(is);
