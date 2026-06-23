@@ -31,8 +31,9 @@ server:
 
 ollama:
   url: ${OLLAMA_URL:http://localhost:11434}
-  chat-model: ${OLLAMA_CHAT_MODEL:ibm/granite4:latest}
-  chat-models: ${OLLAMA_CHAT_MODELS:ibm/granite4:latest,gemma4,vehicle-qwen2.5-1.5b,qwen2.5:1.5b-instruct-fp16,qwen2.5:7b-instruct}
+  chat-model: ${OLLAMA_CHAT_MODEL:qwen3:8b}   # 자동 eval 1등(RESULTS §2.2): 누수0·점수0.97. granite4는 chat-models로 선택 가능(IBM 내러티브 유지)
+  # 모델 비교군: 우리 FT(vehicle-*) + 베이스(qwen2.5) + 한국어 특화/신형 후보(exaone3.5, qwen3) — 'ollama pull' 후 드롭다운에서 A/B. 근거 docs/RESULTS.md
+  chat-models: ${OLLAMA_CHAT_MODELS:ibm/granite4:latest,gemma4,vehicle-qwen2.5-1.5b,qwen2.5:1.5b-instruct-fp16,qwen2.5:7b-instruct,exaone3.5:7.8b,qwen3:8b}
   vision-model: ${OLLAMA_VISION_MODEL:llava:latest}
   embed-model: ${OLLAMA_EMBED_MODEL:granite-embedding:278m}  # 비교 승자: 한+영 코퍼스서 recall 97%(한국어 11/11). 근거 docs/EMBEDDINGS.md 7절
   num-predict: ${OLLAMA_NUM_PREDICT:512}   # 256은 진단서·종합 답변이 문장 중간에 잘려서 상향

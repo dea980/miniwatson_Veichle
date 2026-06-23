@@ -302,10 +302,9 @@ public class IngestionService {
             return switch (formatOf(filename)) {
                 case HWPX -> hwpExtractor.fromHwpx(in);
                 case HWP  -> hwpExtractor.fromHwp(in);
-                case TIKA -> tika.parseToString(in);         // pdf/docx/pptx/xlsx/html/txt/md
-                // 표 보존 경로(2세대): PdfTableExtractor.toTextWithTables(PdfTableExtractor.toXhtml(in)) 로 교체.
-                //   - toTextWithTables의 TODO를 구현하면 <table>가 마크다운 표로 청크에 남는다(INGESTION §5.1~5.3).
-                //   - 폴백 구현이라 지금 교체해도 회귀는 없지만, TODO 완성 전엔 표 이득이 없으니 그대로 둠.
+                // 표 보존 경로(2세대): XHTML로 받아 <table>를 마크다운으로(INGESTION §5.1~5.5).
+                // pdf/docx/pptx 표가 구조 그대로 청크에 남는다. txt/md는 태그가 없어 평문과 동일.
+                case TIKA -> PdfTableExtractor.toTextWithTables(PdfTableExtractor.toXhtml(in));
             };
         } catch (Exception e) {
             throw new RuntimeException("Failed to extract text from file: " + e.getMessage());

@@ -30,6 +30,7 @@ export type EstimateItem = {
 export type EstimateResult = {
   car: string; problem: string; laborRate: number; items: EstimateItem[];
   partsTotal: number; laborTotal: number; grandTotal: number; note: string;
+  supplyAmount?: number; vat?: number; total?: number; sample?: boolean;   // 견적서: 공급가액·부가세(10%)·합계
 };
 export type Stats = {
   totalCalls: number; avgLatencyMs: number; totalPii: number; totalDocs: number;

@@ -166,6 +166,43 @@ PDFBox/Tika로 텍스트만. 빠르고 단순하나 표는 평탄화, 그림은 
 
 결론: **표는 현재 영역으로 정확하게 가능(GPU 0)** → 우선 구현. 다이어그램은 "정확도 vs 인프라/주권"의 선택이라 스케일 칸. (학습/서빙 예산과 같은 논리 [DECISIONS.md](DECISIONS.md) §7.5.)
 
+## 5.5 포맷이 늘어도 표 코드는 안 늘어난다 (xlsx 그래프 = 데이터)
+
+"PDF 말고 docx·pptx·xlsx에도 표·그래프가 있다"는 우려 — 실제론 경로가 **3개로 수렴**한다.
+
+- **표**: Tika가 포맷을 통일한다. PDF·DOCX·PPTX 모두 XHTML로 받으면 똑같이 `<table><tr><td>` → **`PdfTableExtractor.toTextWithTables` 하나가 전 포맷의 표를 처리**한다(포맷별 표 코드 불필요).
+- **스프레드시트(xlsx·csv)**: 표 자체라 RAG가 아니라 **text-to-SQL**이 정답(`registerXlsx`/`registerCsv` → DuckDB, [TABULAR-SQL.md](TABULAR-SQL.md)). 그리고 **Excel 차트는 셀을 참조하는 객체라 그 데이터가 시트에 살아있다** → 그래프의 *데이터*는 SQL로 그대로 잡힌다(렌더된 그림만 별개). 즉 분석에 중요한 건 데이터고, 그건 복구된다.
+- **픽셀 차트·다이어그램**: 어느 포맷이든 *이미지로* 박힌 차트는 vision(스케일 칸, §5.2~5.4). 단 OOXML 차트 객체는 데이터가 묻어 일부 복구.
+
+| 요소 | 경로 | 포맷 |
+|---|---|---|
+| 표 | Tika XHTML → 마크다운 (코드 1개) | pdf·docx·pptx 공통 |
+| 스프레드시트 + 차트 *데이터* | text-to-SQL (이미 구현) | xlsx·csv |
+| 픽셀 차트·다이어그램 | vision (스케일) | 전 포맷 공통 |
+
+핵심: **§5.3 "요소별 경로" × §6 "포맷별 추출기"의 교차**다. 요소 판단(표/차트/산문)은 포맷과 무관하고, 추출 도구만 포맷 따라 갈린다. **xlsx는 운 좋은 케이스** — 그래프 데이터가 셀에 살아있어 SQL로 잡힌다.
+
+## 5.6 표 추출 검증 절차
+
+표가 마크다운으로 보존되는지 확인하는 재현 가능한 테스트.
+
+테스트 자산: `data/vehicle/manuals/test_torque_table.html` (토크값 표 3행).
+
+```bash
+# 1) 인제스트 (TIKA 분기 → XHTML → 마크다운 표)
+curl -s -X POST localhost:8080/api/data/ingest-file \
+  -F "file=@data/vehicle/manuals/test_torque_table.html" -F "namespace=vehicle" | python3 -m json.tool
+
+# 2) 그 문서로 한정해 질의 → 근거(청크)에 마크다운 표가 보이면 성공
+curl -s -X POST localhost:8080/api/rag/ask -H 'Content-Type: application/json' \
+  -d '{"question":"oil drain plug torque value","namespace":"vehicle","title":"test_torque_table.html"}' \
+  | python3 -m json.tool
+```
+
+판정: 응답 `sources[].summary`(청크 본문)에 `| Oil drain plug | 35 |` 같은 **마크다운 표**가 보이고, 답변이 `35 N·m`를 집어내면 통과. 평탄화 추출이면 셀이 붙어 뭉개진다(전/후 대비).
+
+UI 경로: 지식베이스 업로드 → 그 문서 "열기" → 전용 채팅에서 "drain plug 토크값?" → 근거에 표.
+
 ## 6. 새 포맷 추가법
 
 extractText 분기에 확장자 한 줄과 전용 추출기 호출만 더하면 된다.

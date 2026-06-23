@@ -1,0 +1,9 @@
+# DDP (DistributedDataParallel) — 가장 단순. 2× T4.
+# 모델을 각 GPU에 *복제*하고, 데이터를 나눠 학습한 뒤 그래디언트를 all-reduce로 동기.
+# 모델이 1-GPU에 들어갈 때 쓴다(1.5B는 들어감) → 처리량 ~2배.
+compute_environment: LOCAL_MACHINE
+distributed_type: MULTI_GPU
+mixed_precision: fp16        # T4는 fp16 (bf16은 Ampere+)
+num_machines: 1
+num_processes: 2             # GPU 2개
+use_cpu: false

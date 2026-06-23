@@ -61,7 +61,9 @@ public class EstimateService {
             it.put("lineTotal", line);
             items.add(it);
         }
-        long grand = partsTotal + laborTotal;
+        long grand = partsTotal + laborTotal;       // 공급가액(부품계+공임계, 부가세 전)
+        long vat = Math.round(grand * 0.1);          // 부가세 10% (정비 견적서 표준)
+        long total = grand + vat;                    // 최종 합계(부가세 포함)
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("car", car == null ? "" : car);
@@ -70,7 +72,11 @@ public class EstimateService {
         out.put("items", items);
         out.put("partsTotal", partsTotal);
         out.put("laborTotal", laborTotal);
-        out.put("grandTotal", grand);
+        out.put("grandTotal", grand);                // = 공급가액(하위호환)
+        out.put("supplyAmount", grand);              // 공급가액
+        out.put("vat", vat);                         // 부가세(10%)
+        out.put("total", total);                     // 합계(부가세 포함)
+        out.put("sample", true);                     // 샘플 단가 플래그 — 실제 청구액 아님
 
         // 3) 한 줄 안내(LLM, 금액은 위 결정값 인용)
         try {

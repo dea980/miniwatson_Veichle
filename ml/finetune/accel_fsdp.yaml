@@ -1,0 +1,19 @@
+# FSDP (Fully Sharded Data Parallel) — 모델/옵티마이저/그래드를 GPU에 *샤딩*. 2× T4.
+# 모델이 1-GPU에 안 들어갈 때 쓴다. 여기선 1.5B라 필요는 없지만 *메커니즘 시연*.
+# DeepSpeed ZeRO-3와 개념 동일(샤딩). DeepSpeed로 바꾸려면 distributed_type: DEEPSPEED + zero_stage 설정.
+compute_environment: LOCAL_MACHINE
+distributed_type: FSDP
+mixed_precision: fp16        # T4는 fp16
+num_machines: 1
+num_processes: 2
+use_cpu: false
+fsdp_config:
+  fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
+  fsdp_transformer_layer_cls_to_wrap: Qwen2DecoderLayer   # 베이스가 Qwen일 때. exaone이면 해당 디코더층 클래스명으로
+  fsdp_sharding_strategy: FULL_SHARD                       # ZeRO-3 상당(파라미터·그래드·옵티마이저 다 샤딩)
+  fsdp_backward_prefetch: BACKWARD_PRE
+  fsdp_state_dict_type: SHARDED_STATE_DICT
+  fsdp_offload_params: false
+  fsdp_cpu_ram_efficient_loading: true
+  fsdp_sync_module_states: true
+  fsdp_use_orig_params: true

@@ -6,6 +6,10 @@ import org.apache.tika.parser.ParseContext;
 import org.apache.tika.sax.ToXMLContentHandler;
 
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 표-인식 추출 (2세대 — INGESTION-FORMATS.md §5.1~5.3 결정).
@@ -44,10 +48,67 @@ public final class PdfTableExtractor {
      * 검증: 표 많은 매뉴얼 페이지 인제스트 후, 문서 전용 채팅에서 "토크값 표" 질문 →
      *       답에 셀 값(숫자·단위)이 보이면 성공. (전/후 같은 질문으로 비교)
      */
+    private static final Pattern TABLE = Pattern.compile("(?s)<table\\b.*?</table>");
+    private static final Pattern ROW   = Pattern.compile("(?s)<tr\\b.*?</tr>");
+    private static final Pattern CELL  = Pattern.compile("(?s)<t[hd]\\b[^>]*>(.*?)</t[hd]>");
+
     public static String toTextWithTables(String xhtml) {
-        // 임시 안전 폴백: 태그만 제거해 평문 반환(기존 parseToString 수준). 위 TODO로 교체하라.
-        if (xhtml == null) return "";
-        return xhtml.replaceAll("(?s)<[^>]+>", " ").replaceAll("[ \\t]+", " ").trim();
+        if (xhtml == null || xhtml.isBlank()) return "";
+        // 1) <table> 블록을 마크다운 표로 치환 (quoteReplacement: 마크다운의 $/\ 보호)
+        Matcher mt = TABLE.matcher(xhtml);
+        StringBuffer sb = new StringBuffer();
+        while (mt.find()) {
+            String md = tableToMarkdown(mt.group());
+            mt.appendReplacement(sb, Matcher.quoteReplacement("\n" + md + "\n"));
+        }
+        mt.appendTail(sb);
+        // 2) 남은 태그 제거 → 평문(표는 이미 마크다운이라 영향 없음) + 엔티티 복원
+        String text = unescape(sb.toString().replaceAll("(?s)<[^>]+>", " "));
+        // 3) 줄별 공백 정리 (마크다운 표의 '|' 줄은 그대로 유지됨)
+        StringBuilder out = new StringBuilder();
+        for (String line : text.split("\n")) {
+            String t = line.replaceAll("[ \\t]+", " ").trim();
+            if (!t.isEmpty()) out.append(t).append("\n");
+        }
+        return out.toString().trim();
+    }
+
+    /** <table> 한 개 → 마크다운 표. 첫 행을 헤더로 보고 구분자(--- )를 넣는다. */
+    private static String tableToMarkdown(String tableHtml) {
+        List<List<String>> rows = new ArrayList<>();
+        Matcher mr = ROW.matcher(tableHtml);
+        while (mr.find()) {
+            List<String> cells = new ArrayList<>();
+            Matcher mc = CELL.matcher(mr.group());
+            while (mc.find()) cells.add(cleanCell(mc.group(1)));
+            if (!cells.isEmpty()) rows.add(cells);
+        }
+        if (rows.isEmpty()) return "";
+        int cols = rows.stream().mapToInt(List::size).max().orElse(0);
+        StringBuilder md = new StringBuilder();
+        for (int r = 0; r < rows.size(); r++) {
+            List<String> row = rows.get(r);
+            md.append("|");
+            for (int c = 0; c < cols; c++) md.append(" ").append(c < row.size() ? row.get(c) : "").append(" |");
+            md.append("\n");
+            if (r == 0) {                       // 헤더 구분자
+                md.append("|");
+                for (int c = 0; c < cols; c++) md.append(" --- |");
+                md.append("\n");
+            }
+        }
+        return md.toString();
+    }
+
+    private static String cleanCell(String s) {
+        return unescape(s.replaceAll("(?s)<[^>]+>", " "))
+                .replace("|", "\\|")            // 셀 내부 파이프는 이스케이프(표 깨짐 방지)
+                .replaceAll("\\s+", " ").trim();
+    }
+
+    private static String unescape(String s) {
+        return s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+                .replace("&quot;", "\"").replace("&#39;", "'").replace("&nbsp;", " ");
     }
 
     private PdfTableExtractor() {}

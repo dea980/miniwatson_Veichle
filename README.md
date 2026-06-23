@@ -37,6 +37,7 @@
 | 영역 | 지금 (PoC) | 다음 | 스케일 |
 |---|---|---|---|
 | 모델 | 1.5B LoRA(MLX) Q4 | **7B QLoRA + DPO(Colab) Q4 — 완료** | 13B QLoRA |
+| 학습 인프라 | 단일 GPU(Colab T4) | **2× T4 분산(Kaggle, DDP/FSDP)** | 멀티노드 FSDP·DeepSpeed·Megatron |
 | 서빙 | Ollama(온디바이스) | **vLLM-Metal(맥) / vLLM CUDA** | sglang·Triton/TRT-LLM |
 | 벡터 저장 | 인메모리 + load-once 캐시 | pgvector(HNSW, 이미 구현) | 오브젝트스토리지 + 파티션 Parquet 레이크하우스 |
 | 문서 파싱 | Tika 텍스트 | **표 구조추출**(마크다운) | 비전(ColQwen) — 다이어그램 |
@@ -222,7 +223,9 @@ curl -X POST http://localhost:8080/api/tabular/ask \
 - [x] **V16 UI 고도화** — 홈 대시보드(멀티턴 채팅·차종 사진), 케이스/정비 탭, 다크모드·가독성, 오너스 매뉴얼 13차종 코퍼스
 - [ ] **V17 서빙 트랙** — vLLM-Metal 로컬 서빙 + `llm.provider=vllm`, prefix-cache/배칭 벤치 ([docs/SERVING.md](docs/SERVING.md) 로드맵 P1~P4)
 - [ ] **V18 문서 파싱 고도화** — 표 구조추출(스캐폴드 `PdfTableExtractor`), 다이어그램 비전 경로 ([docs/INGESTION-FORMATS.md](docs/INGESTION-FORMATS.md) §5)
-- [ ] **V19 (옵션)** — 임베딩 파인튜닝, 로컬 TTS·웨이크워드, 라이브 배포, GraphRAG 통합
+- [ ] **V19 커넥티드카 개인화 (로드맵, JD #2)** — 차량별 정비이력 + **텔레매틱스/ECU**(속도·급가속·급제동·주행거리)로 운전 스타일 추론 → 예측 정비·개인화 견적. 데이터 요건: 텔레매틱스/ECU(딜러 독점) — 정비 기록만으론 운전 스타일 직접 추론 불가([docs/AS-OPERATIONS.md](docs/AS-OPERATIONS.md))
+- [ ] **V20 분산 학습 (Kaggle 2× T4)** — DDP(복제·처리량)/FSDP(샤딩·메모리)를 `accelerate`로 구성·실행. 스캐폴드: `ml/finetune/train_distributed.py` + `accel_ddp.yaml`/`accel_fsdp.yaml`. JD 우대(분산 학습) — "분산은 모델 코드가 아니라 런처/설정"이 요지 ([ml/finetune/DISTRIBUTED.md](ml/finetune/DISTRIBUTED.md))
+- [ ] **V21 (옵션)** — 임베딩 파인튜닝, 로컬 TTS·웨이크워드, 라이브 배포, GraphRAG 통합
 
 > GraphRAG는 지금 설계서만 있고 구현은 안 됐다. 실제 RAG는 벡터+BM25 하이브리드로 동작한다. 고도화 방향은 [docs/GRAPHRAG_VEHICLE.md](docs/GRAPHRAG_VEHICLE.md)에 정리했다.
 

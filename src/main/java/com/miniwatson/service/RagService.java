@@ -101,7 +101,10 @@ public class RagService {
         if (candidates.isEmpty()) throw new RuntimeException("No articles in knowledge base for namespace '" + ns + "'.");
         if (scoped) {
             String t = title.trim();
-            List<Article> only = candidates.stream().filter(a -> t.equalsIgnoreCase(a.getTitle())).collect(Collectors.toList());
+            // 청크 제목은 "<문서명> #N" 형태라, 접미사를 떼고 문서명으로 비교한다.
+            List<Article> only = candidates.stream()
+                    .filter(a -> a.getTitle() != null && t.equalsIgnoreCase(a.getTitle().replaceAll(" #\\d+$", "")))
+                    .collect(Collectors.toList());
             if (!only.isEmpty()) candidates = only;          // 이 문서 청크만 → 문서 전용 어시스턴트
             else log.warn("[rag] title='{}' 매칭 청크 없음 — 전체 후보로 진행", t);
         }

@@ -268,7 +268,15 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
                           ))}
                         </tbody></table>
                       )}
-                      {d.items.length > 0 && <div className="hint" style={{ marginTop: 4 }}>참고 합계 <b>{won(d.grandTotal)}</b> (샘플 단가)</div>}
+                      {d.items.length > 0 && (
+                        <div style={{ marginTop: 6, fontSize: 12 }}>
+                          <div className="row" style={{ justifyContent: "space-between" }}><span className="muted">부품계</span><span>{won(d.partsTotal)}</span></div>
+                          <div className="row" style={{ justifyContent: "space-between" }}><span className="muted">공임계</span><span>{won(d.laborTotal)}</span></div>
+                          <div className="row" style={{ justifyContent: "space-between" }}><span className="muted">부가세(10%)</span><span>{won(d.vat ?? 0)}</span></div>
+                          <div className="row" style={{ justifyContent: "space-between", fontWeight: 700, borderTop: "1px solid var(--border)", paddingTop: 3, marginTop: 3 }}><span>합계</span><span>{won(d.total ?? d.grandTotal)}</span></div>
+                          <div className="hint" style={{ marginTop: 4 }}>샘플 단가(예시) — 실제 청구액 아님. 운영은 현대모비스 부품가·표준공임 연동.</div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

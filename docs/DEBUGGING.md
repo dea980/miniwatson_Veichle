@@ -525,3 +525,26 @@ grep -rnE "\[[^]]*\]|\.get\(|subList|substring|charAt" \
 - 네이티브 크래시(SIGSEGV) — 이 경우만 진짜 문제. `hs_err_pid*.log`/`javacore*.txt`가 남는다(§11.1·11.2).
 
 판별: **크래시 로그(hs_err_pid)가 없고 앱이 한동안 정상 처리했다면 = 수동/절전 종료(정상).** 있으면 네이티브 크래시로 다룬다. "BUILD FAILURE + 255"라는 문구만 보고 컴파일/설정 문제로 단정하지 말 것 — 기동 전에 죽었는지(컴파일/포트), 한참 돌다 죽었는지(종료/크래시)를 로그의 `Total time`과 요청 로그로 먼저 가른다.
+
+### 11.5 새 모델만 HTTP 500 — 모델 화이트리스트 + 설정 reload
+
+증상: `/api/rag/ask`에 새로 받은 모델(예: `exaone3.5`, `qwen3`)을 주면 500, **기존 모델(qwen2.5 등)은 정상**.
+
+진단 (되는 것 vs 안 되는 것으로 변수 좁히기): Ollama/네트워크 문제면 *전부* 죽어야 한다. **새 모델만** 죽으면 = "모델 이름"을 기준으로 *앱*이 막는 것. model 파라미터를 코드에서 따라가면 게이트가 나온다:
+```java
+// OllamaLlmClient.resolveModel — 화이트리스트(chat-models) 검증
+if (!availableModels().contains(requested))
+    throw new IllegalArgumentException("Model '...' is not allowed");  // → 500
+```
+
+원인: `ollama.chat-models`(거버넌스용 모델 화이트리스트)에 없는 모델은 거부. 게다가 `@Value`는 **기동 시 1회 주입**이라, yaml에 모델을 추가해도 *떠 있는* 프로세스는 옛 값을 들고 있다 → **재시작해야 반영.**
+
+해결: chat-models에 모델 추가 → **백엔드 재시작** → `curl /api/rag/models`로 `available`에 보이는지 확인.
+
+교훈: (1) **"전부 죽나 일부만 죽나"가 첫 분기점** — 일부면 그 *차이나는 입력*을 코드에서 추적하면 거의 항상 게이트가 나온다. (2) `@Value`/`@ConfigurationProperties`는 기동 주입 → **설정 변경은 재시작 필요**(코드 문제와 구분). 이 화이트리스트는 사실 **모델 거버넌스**(승인된 모델만 서빙) 기능이기도 하다.
+
+### 11.6 셸 명령이 코드 파일에 — `';' expected`
+
+증상: `PdfTableExtractor.java:[32,16] ';' expected` 같은 컴파일 에러. 32번 줄을 열면 `ollama pull exaone3.5:7.8b`(셸 명령)가 자바 파일에 들어가 있었다 — 터미널에 칠 것을 에디터에 잘못 붙여넣은 것.
+
+교훈: **컴파일 에러는 파일·줄·열을 정확히 찍어준다**(`[32,16]`). 그 줄을 먼저 열어볼 것. *"`;` expected"* / *"`<identifier>` expected"* 는 보통 "여기 자바 문법이 아닌 무언가가 있다"는 신호 — 오타·잘못 붙여넣은 텍스트를 의심한다.
