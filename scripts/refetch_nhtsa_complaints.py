@@ -32,17 +32,15 @@ MODELS_API = "https://api.nhtsa.gov/products/vehicle/models"
 
 
 def make_ssl_context():
-    """macOS 파이썬은 루트 인증서가 없어 SSL 검증이 실패하는 경우가 많다.
-    certifi가 있으면 그 번들로 검증하고, 없으면 미검증 컨텍스트로 폴백(공개·읽기전용 정부 API)."""
+    """certifi가 있으면 그 번들, 없으면 시스템 trust store로 폴백.
+    TLS 검증은 끄지 않는다 — 공개·읽기전용 API라도 응답 위변조 가능성을 막아야 다운스트림(DuckDB)
+    데이터 신뢰성을 보장. 두 경로 모두 실패하면 연결이 명시적으로 끊겨 운영자가 인지하게 한다."""
     try:
         import certifi
         return ssl.create_default_context(cafile=certifi.where())
-    except Exception:
-        print("[refetch] certifi 없음 — SSL 검증 생략(공개 API, 읽기전용)")
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return ctx
+    except ImportError:
+        print("[refetch] certifi 없음 — 시스템 trust store 사용(검증 유지). 실패 시 `pip install certifi`")
+        return ssl.create_default_context()
 
 
 SSL_CTX = make_ssl_context()

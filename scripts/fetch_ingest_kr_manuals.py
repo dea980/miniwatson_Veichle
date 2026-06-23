@@ -34,15 +34,15 @@ INGEST_URL = "http://localhost:8080/api/data/ingest-file"
 
 
 def make_ssl_context():
+    # certifi 번들이 있으면 그걸 쓰고, 없으면 시스템 trust store로 폴백.
+    # TLS 검증은 절대 끄지 않는다(중간자 위변조 PDF 적재 차단). certifi/시스템 모두 실패하면
+    # 연결이 명시적으로 실패하도록 둔다 → 운영자가 `pip install certifi` 로 해결.
     try:
         import certifi
         return ssl.create_default_context(cafile=certifi.where())
-    except Exception:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        print("[kr-manuals] certifi 없음 — SSL 검증 생략(공개 PDF)")
-        return ctx
+    except ImportError:
+        print("[kr-manuals] certifi 없음 — 시스템 trust store 사용(검증 유지). 실패 시 `pip install certifi`")
+        return ssl.create_default_context()
 
 
 SSL_CTX = make_ssl_context()
