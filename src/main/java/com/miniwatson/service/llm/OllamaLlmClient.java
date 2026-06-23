@@ -35,6 +35,11 @@ public class OllamaLlmClient implements RawLlmProvider {
     @Value("${ollama.num-predict}")
     private int numPredict;
 
+    /** 컨텍스트 윈도(토큰). 미설정 시 Ollama 기본(모델별, 보통 2048~4096)이라 RAG 프롬프트가 넘쳐 답이 깨지거나 빈다.
+     *  명시적으로 키워(기본 8192) 리포트/RAG의 긴 프롬프트를 안정적으로 수용한다. */
+    @Value("${ollama.num-ctx:8192}")
+    private int numCtx;
+
     private final RestTemplate restTemplate = buildTimeoutRestTemplate();
 
     /** 타임아웃 없는 RestTemplate은 Ollama가 멈추면 요청이 무한대기 -> 가용성 구멍. 연결 5s/읽기 120s. */
@@ -99,7 +104,7 @@ public class OllamaLlmClient implements RawLlmProvider {
         request.setPrompt(prompt);
         request.setStream(false);
         request.setThink(false);
-        request.setOptions(Map.of("num_predict", numPredict));
+        request.setOptions(Map.of("num_predict", numPredict, "num_ctx", numCtx));
         request.setKeepAlive("10m");
         if (images != null && !images.isEmpty()) {
             request.setImages(images);

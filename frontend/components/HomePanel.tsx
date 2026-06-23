@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { api, type Summary, type Source, type Models, type CaseRecord } from "@/lib/api";
+import { api, type Summary, type Source, type Models, type CaseRecord, type RecallDetail } from "@/lib/api";
 import CarImage from "@/components/CarImage";
 
 const num = (v: unknown) => Number(v) || 0;
@@ -11,6 +11,14 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
   const [sumErr, setSumErr] = useState("");
   const [topCases, setTopCases] = useState<CaseRecord[]>([]);     // 우선 대응 케이스
   const [resolved, setResolved] = useState<Set<string>>(new Set());
+  const [recall, setRecall] = useState<RecallDetail | "loading" | null>(null);   // 리콜 상세 모달
+
+  function openRecall(id: string) {
+    setRecall("loading");
+    api.recall(id)
+      .then((r) => setRecall(r && (r.campaign || r.summary) ? r : ({ summary: "" } as RecallDetail)))
+      .catch((e) => setRecall({ summary: `__ERR__${String(e)}` } as RecallDetail));
+  }
 
   // RAG 채팅 어시스턴트 (멀티턴)
   type Msg = { role: "user" | "assistant"; text: string; sources?: Source[] };
@@ -117,15 +125,24 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
             </div>
           </div>
           {!rows && <div className="muted" style={{ marginTop: 10 }}>불러오는 중…</div>}
-          {rows?.map((r, i) => (
-            <div className="doc" key={i} style={{ alignItems: "flex-start" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div><span className="badge" style={{ marginLeft: 0 }}>{r[1]}</span> <span className="badge">{r[2]}</span></div>
-                <div className="snip" style={{ marginTop: 4 }}>{String(r[3]).slice(0, 110)}…</div>
-              </div>
-              <span className="muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>{r[0]}</span>
-            </div>
-          ))}
+          <div className="mail-list">
+            {rows?.map((r, i) => {
+              const id = String(r[0]), mdl = String(r[2]), comp = String(r[3]), open = () => feed === "recalls" ? openRecall(id) : onNavigate("triage", `${mdl}::${id}`);
+              return (
+                <div className="mail-row" key={i} onClick={open}>
+                  <span className="mail-from">{mdl}</span>
+                  <span className="mail-subject"><b>{comp}</b> <span className="mail-preview">— {String(r[4])}</span></span>
+                  <span>
+                    <span className="mail-date">{r[1]}</span>
+                    <span className="mail-actions">
+                      <button className="mail-act" onClick={(e) => { e.stopPropagation(); open(); }}>{feed === "recalls" ? "상세" : "진단"}</button>
+                      <button className="mail-act" onClick={(e) => { e.stopPropagation(); onNavigate("report", mdl); }}>차종 리포트</button>
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* 차종 현황 — 차종 클릭 → 차종 진단 리포트, 트리아지 바로가기 */}
@@ -195,6 +212,41 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
         </div>
       </div>
     </div>
+
+    {/* 리콜 상세 모달 — 결함내용·위험·시정조치 */}
+    {recall && (
+      <div onClick={() => setRecall(null)}
+        style={{ position: "fixed", inset: 0, background: "rgba(13,27,42,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 20 }}>
+        <div className="card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640, width: "100%", maxHeight: "85vh", overflowY: "auto", margin: 0 }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+            <h2 style={{ margin: 0 }}>리콜 상세</h2>
+            <button className="ghost" style={{ fontSize: 13 }} onClick={() => setRecall(null)}>✕ 닫기</button>
+          </div>
+          {recall === "loading" ? <div className="muted" style={{ marginTop: 12 }}>불러오는 중…</div>
+            : String(recall.summary || "").startsWith("__ERR__") ? (
+              <div className="err" style={{ marginTop: 12 }}>리콜 상세를 불러오지 못했습니다. 백엔드가 새 코드로 재시작됐는지 확인하세요(/api/analytics/recall).
+                <div className="hint" style={{ marginTop: 6 }}>{String(recall.summary).replace("__ERR__", "")}</div></div>)
+            : (!recall.campaign && !recall.summary) ? (
+              <div className="muted" style={{ marginTop: 12 }}>해당 리콜 정보를 찾지 못했습니다(접수번호 불일치 또는 데이터 없음).</div>)
+            : (
+            <>
+              <div className="row" style={{ gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+                <span className="badge" style={{ marginLeft: 0 }}>{recall.model}{recall.year ? ` · ${recall.year}년` : ""}</span>
+                <span className="badge">{recall.component}</span>
+                {String(recall.parkIt) === "true" && <span className="pill bad">주차 권고(화재위험)</span>}
+              </div>
+              <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>캠페인 #{recall.campaign} · 접수일 {recall.date}</div>
+              {recall.summary && (<><div className="label" style={{ marginTop: 14 }}>결함 내용</div><div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{recall.summary}</div></>)}
+              {recall.consequence && (<><div className="label" style={{ marginTop: 14 }}>위험 (Consequence)</div><div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{recall.consequence}</div></>)}
+              {recall.remedy && (<><div className="label" style={{ marginTop: 14 }}>시정 조치 (Remedy)</div><div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{recall.remedy}</div></>)}
+              <div className="row" style={{ justifyContent: "flex-end", marginTop: 16 }}>
+                <button className="ghost" style={{ fontSize: 13 }} onClick={() => { const m = String(recall.model || ""); setRecall(null); if (m) onNavigate("report", m); }}>차종 종합 리포트 →</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    )}
     </>
   );
 }

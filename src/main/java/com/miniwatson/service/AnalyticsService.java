@@ -26,13 +26,16 @@ public class AnalyticsService {
     private final OllamaService ollama;
     private final VehicleDataProperties data;
     private final double laborRate;
+    private final com.miniwatson.cases.ResolvedCaseRepository resolvedRepo;
 
     public AnalyticsService(TabularSqlService tabular, OllamaService ollama,
                             VehicleDataProperties data,
+                            com.miniwatson.cases.ResolvedCaseRepository resolvedRepo,
                             @org.springframework.beans.factory.annotation.Value("${estimate.labor-rate-krw:50000}") double laborRate) {
         this.tabular = tabular;
         this.ollama = ollama;
         this.data = data;
+        this.resolvedRepo = resolvedRepo;
         this.laborRate = laborRate;
     }
 
@@ -111,12 +114,17 @@ public class AnalyticsService {
                 "fires",      scalar("SELECT COUNT(*) FROM complaints WHERE lower(cast(fire AS varchar)) IN ('true','1','yes','y')"),
                 "injuries",   scalar("SELECT COALESCE(SUM(TRY_CAST(numberofinjuries AS INTEGER)),0) FROM complaints")));
         // 최근 리콜/불만 (날짜 DD/MM/YYYY → try_strptime로 안전 정렬). "뉴스 피드"를 실데이터로.
+        // 피드: id를 첫 컬럼으로(클릭→상세). 같은 캠페인이 차종/연식마다 중복 들어와 캠페인+차종 단위 1행만.
         out.put("recentRecalls", rows(
-            "SELECT reportreceiveddate, model, component, substr(summary,1,140) "
-            + "FROM recalls ORDER BY reportreceiveddate DESC NULLS LAST LIMIT 6"));
+            "SELECT nhtsacampaignnumber, reportreceiveddate, model, component, substr(summary,1,160) "
+            + "FROM recalls "
+            + "QUALIFY row_number() OVER (PARTITION BY nhtsacampaignnumber, model ORDER BY reportreceiveddate DESC) = 1 "
+            + "ORDER BY reportreceiveddate DESC NULLS LAST LIMIT 6"));
         out.put("recentComplaints", rows(
-            "SELECT datecomplaintfiled, model, components, substr(summary,1,140) "
-            + "FROM complaints ORDER BY datecomplaintfiled DESC NULLS LAST LIMIT 6"));
+            "SELECT odinumber, datecomplaintfiled, model, components, substr(summary,1,160) "
+            + "FROM complaints "
+            + "QUALIFY row_number() OVER (PARTITION BY odinumber ORDER BY datecomplaintfiled DESC) = 1 "
+            + "ORDER BY datecomplaintfiled DESC NULLS LAST LIMIT 6"));
         // 차종별 현황: [차종, 불만, 리콜] — 차종별 업무 진입점
         out.put("byModel", rows(
             "SELECT c.model, c.n AS complaints, COALESCE(r.n,0) AS recalls FROM "
@@ -145,9 +153,16 @@ public class AnalyticsService {
             + "ORDER BY priority DESC, datecomplaintfiled DESC NULLS LAST LIMIT 20").rows();
     }
 
-    /** 케이스 우선순위 트리아지(전 차종) — 필터(차종/부위) + 우선순위 정렬.
-     *  [접수번호, 날짜, 차종, 부위, 연식, 요약, 우선순위, 화재, 사고, 부상, 사망] */
-    public List<List<Object>> cases(String model, String component) throws Exception {
+    /** 케이스 우선순위 트리아지(전 차종) — 필터(차종/부위) + 우선순위 정렬 + 서버 페이지네이션 + 해결 제외.
+     *  반환: { cases: [[접수번호,날짜,차종,부위,연식,요약,우선순위,화재,사고,부상,사망]...], total }
+     *  - 해결(resolved_case)된 접수번호는 NOT IN으로 제외 → "해결하면 큐에서 사라짐"을 DB로 영속.
+     *  - OFFSET/LIMIT로 1·2·3… 페이지 분할. ORDER에 odinumber 타이브레이커로 페이지 경계 안정화. */
+    public Map<String, Object> cases(String model, String component, int offset, int limit) {
+        return cases(model, component, offset, limit, "priority");
+    }
+
+    /** sort: "priority"(전체 심각도순) | "model"(차종별 그룹 후 심각도순). */
+    public Map<String, Object> cases(String model, String component, int offset, int limit, String sort) {
         ensure("complaints");
         String fireT  = "CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
         String crashT = "CASE WHEN lower(cast(crash AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
@@ -158,12 +173,60 @@ public class AnalyticsService {
             where.append(" AND upper(model)='").append(model.replace("'", "''").toUpperCase()).append("'");
         if (component != null && !component.isBlank())
             where.append(" AND upper(components) LIKE '%").append(component.replace("'", "''").toUpperCase()).append("%'");
-        return tabular.runSelect(
+        // 해결된 케이스 제외 (DB 영속)
+        List<String> resolved = resolvedRepo.findAll().stream()
+            .map(com.miniwatson.cases.ResolvedCase::getCaseNumber)
+            .filter(s -> s != null && !s.isBlank()).toList();
+        if (!resolved.isEmpty()) {
+            String in = resolved.stream().map(s -> "'" + s.replace("'", "''") + "'")
+                .reduce((a, b) -> a + "," + b).orElse("");
+            where.append(" AND odinumber NOT IN (").append(in).append(")");
+        }
+        long total = scalar("SELECT COUNT(*) FROM complaints " + where);
+        int lim = limit <= 0 ? 50 : Math.min(limit, 200);
+        int off = Math.max(0, offset);
+        // 정렬: 기본은 전체 심각도순. "model"이면 차종 알파벳 그룹 후 그 안에서 심각도순.
+        String orderBy = "model".equalsIgnoreCase(sort)
+            ? "ORDER BY model, priority DESC, datecomplaintfiled DESC NULLS LAST, odinumber"
+            : "ORDER BY priority DESC, datecomplaintfiled DESC NULLS LAST, odinumber";
+        List<List<Object>> rows = rows(
             "SELECT odinumber, datecomplaintfiled, model, components, modelyear, substr(summary,1,2000), "
             + "(" + dea + "*100 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3) AS priority, "
             + fireT + " AS fire, " + crashT + " AS crash, " + inj + " AS injuries, " + dea + " AS deaths "
             + "FROM complaints " + where + " "
-            + "ORDER BY priority DESC, datecomplaintfiled DESC NULLS LAST LIMIT 60").rows();
+            + orderBy + " LIMIT " + lim + " OFFSET " + off);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("cases", rows);
+        out.put("total", total);
+        out.put("offset", off);
+        out.put("limit", lim);
+        return out;
+    }
+
+    /** 케이스 해결 처리(영속). 이미 있으면 무시(멱등). */
+    public void resolveCase(String caseNumber, String note) {
+        if (caseNumber == null || caseNumber.isBlank()) return;
+        if (resolvedRepo.existsByCaseNumber(caseNumber)) return;
+        com.miniwatson.cases.ResolvedCase rc = new com.miniwatson.cases.ResolvedCase();
+        rc.setCaseNumber(caseNumber);
+        rc.setNote(note);
+        resolvedRepo.save(rc);
+    }
+
+    /** 해결 처리 취소(되돌리기). */
+    public void unresolveCase(String caseNumber) {
+        resolvedRepo.findByCaseNumber(caseNumber).ifPresent(resolvedRepo::delete);
+    }
+
+    /** 해결된 케이스 목록 (접수번호·시각·메모). */
+    public List<Map<String, Object>> resolvedCases() {
+        return resolvedRepo.findAll().stream().map(rc -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("caseNumber", rc.getCaseNumber());
+            m.put("note", rc.getNote() == null ? "" : rc.getNote());
+            m.put("resolvedAt", rc.getResolvedAt() == null ? "" : rc.getResolvedAt().toString());
+            return m;
+        }).toList();
     }
 
     private static final java.util.Set<String> TBL = java.util.Set.of("recalls", "complaints");
@@ -183,6 +246,35 @@ public class AnalyticsService {
             w.append(" AND upper(model)='").append(model.replace("'", "''").toUpperCase()).append("'");
         return rows("SELECT " + bucket + " AS bucket, COUNT(*) n FROM " + table + " " + w
             + " GROUP BY bucket ORDER BY bucket LIMIT 120");
+    }
+
+    /** 단일 리콜 상세 (캠페인번호) — 결함내용·위험·시정조치 포함. */
+    public Map<String, Object> recall(String id) {
+        ensure("recalls");
+        String esc = (id == null ? "" : id).replace("'", "''");
+        List<List<Object>> r = rows("SELECT nhtsacampaignnumber, reportreceiveddate, model, modelyear, component, "
+            + "summary, consequence, remedy, cast(parkit AS varchar), cast(parkoutside AS varchar) "
+            + "FROM recalls WHERE nhtsacampaignnumber='" + esc + "' LIMIT 1");
+        if (r.isEmpty()) return new LinkedHashMap<>();
+        List<Object> row = r.get(0);
+        String[] keys = {"campaign", "date", "model", "year", "component", "summary", "consequence", "remedy", "parkIt", "parkOutside"};
+        Map<String, Object> m = new LinkedHashMap<>();
+        for (int i = 0; i < keys.length && i < row.size(); i++) m.put(keys[i], row.get(i) == null ? "" : row.get(i));
+        return m;
+    }
+
+    /** 단일 케이스(접수번호) — cases()와 동일 11열 형태(상세 진단 열기용). */
+    public List<List<Object>> caseById(String id) {
+        ensure("complaints");
+        String esc = (id == null ? "" : id).replace("'", "''");
+        String fireT = "CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
+        String crashT = "CASE WHEN lower(cast(crash AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
+        String inj = "COALESCE(TRY_CAST(numberofinjuries AS INTEGER),0)";
+        String dea = "COALESCE(TRY_CAST(numberofdeaths AS INTEGER),0)";
+        return rows("SELECT odinumber, datecomplaintfiled, model, components, modelyear, substr(summary,1,2000), "
+            + "(" + dea + "*100 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3) AS priority, "
+            + fireT + ", " + crashT + ", " + inj + ", " + dea + " "
+            + "FROM complaints WHERE odinumber='" + esc + "' LIMIT 1");
     }
 
     // ── 점검 체크리스트: 공통(표준 성능·상태점검) + 차종별 추가(리콜·불만 부위 → 점검 항목) ──

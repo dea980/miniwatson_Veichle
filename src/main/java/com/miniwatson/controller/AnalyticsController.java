@@ -54,6 +54,22 @@ public class AnalyticsController {
         return Map.of("refreshed", true);
     }
 
+    /** 단일 리콜 상세 (캠페인번호). */
+    @GetMapping("/recall")
+    public Map<String, Object> recall(@RequestParam String id) {
+        try { return analytics.recall(id); }
+        catch (Throwable t) { return Map.of("error", t.toString()); }
+    }
+
+    /** 단일 케이스(접수번호) 상세 — cases와 동일 형태. */
+    @GetMapping("/case")
+    public Map<String, Object> caseById(@RequestParam String id) {
+        try {
+            var r = analytics.caseById(id);
+            return Map.of("case", r.isEmpty() ? java.util.List.of() : r.get(0));
+        } catch (Throwable t) { return Map.of("case", java.util.List.of(), "error", t.toString()); }
+    }
+
     /** 시계열 추세 — table=recalls|complaints, by=year|month|day, model(선택). */
     @GetMapping("/trend")
     public Map<String, Object> trend(@RequestParam String table,
@@ -71,14 +87,41 @@ public class AnalyticsController {
         catch (Throwable t) { return Map.of("model", model, "common", java.util.List.of(), "additional", java.util.List.of(), "error", t.toString()); }
     }
 
-    /** 케이스 우선순위 트리아지(전 차종) — 필터(차종/부위) + 심각도 우선순위 정렬. */
+    /** 케이스 우선순위 트리아지(전 차종) — 필터(차종/부위) + 심각도 정렬 + 페이지네이션 + 해결제외.
+     *  반환: { cases, total, offset, limit }. */
     @GetMapping("/cases")
     public Map<String, Object> cases(@RequestParam(required = false) String model,
-                                     @RequestParam(required = false) String component) {
+                                     @RequestParam(required = false) String component,
+                                     @RequestParam(defaultValue = "0") int offset,
+                                     @RequestParam(defaultValue = "50") int limit,
+                                     @RequestParam(defaultValue = "priority") String sort) {
         try {
-            return Map.of("cases", analytics.cases(model, component));
+            return analytics.cases(model, component, offset, limit, sort);
         } catch (Throwable t) {
-            return Map.of("cases", java.util.List.of(), "error", t.toString());
+            return Map.of("cases", java.util.List.of(), "total", 0, "error", t.toString());
         }
+    }
+
+    /** 케이스 해결 처리(영속) — 트리아지/홈 큐에서 사라짐. body: {id, note?}. */
+    @PostMapping("/resolve")
+    public Map<String, Object> resolve(@RequestBody Map<String, String> body) {
+        try {
+            analytics.resolveCase(body.get("id"), body.get("note"));
+            return Map.of("resolved", true, "id", body.getOrDefault("id", ""));
+        } catch (Throwable t) { return Map.of("resolved", false, "error", t.toString()); }
+    }
+
+    /** 해결 처리 취소(되돌리기). */
+    @DeleteMapping("/resolve/{id}")
+    public Map<String, Object> unresolve(@PathVariable String id) {
+        try { analytics.unresolveCase(id); return Map.of("unresolved", true, "id", id); }
+        catch (Throwable t) { return Map.of("unresolved", false, "error", t.toString()); }
+    }
+
+    /** 해결된 케이스 목록. */
+    @GetMapping("/resolved")
+    public Map<String, Object> resolved() {
+        try { return Map.of("resolved", analytics.resolvedCases()); }
+        catch (Throwable t) { return Map.of("resolved", java.util.List.of(), "error", t.toString()); }
     }
 }

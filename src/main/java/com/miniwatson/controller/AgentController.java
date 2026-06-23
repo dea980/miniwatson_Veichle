@@ -41,10 +41,36 @@ public class AgentController {
 
     @PostMapping("/report")
     public Map<String, Object> report(@RequestBody Map<String, String> body) throws Exception {
+        boolean force = "true".equalsIgnoreCase(body.getOrDefault("force", "false"));
         return report.generate(
                 body.get("car"),
                 body.getOrDefault("namespace", "vehicle"),
-                body.get("model"));
+                body.get("model"),
+                force);
+    }
+
+    /** 적재된(생성·저장된) 리포트 목록 — 차종·생성일·모델. */
+    @GetMapping("/reports")
+    public Map<String, Object> reports() {
+        return Map.of("reports", report.savedReports());
+    }
+
+    /** 접수번호별 리포트 — AI 진단+견적+점검 스냅샷(적재 캐시). force=true면 재생성(메모 보존). */
+    @GetMapping("/case-report")
+    public Map<String, Object> caseReport(@RequestParam String id,
+                                          @RequestParam(defaultValue = "vehicle") String namespace,
+                                          @RequestParam(required = false) String model,
+                                          @RequestParam(defaultValue = "false") boolean force) {
+        try { return report.caseReport(id, namespace, model, force); }
+        catch (Throwable t) { return Map.of("caseNumber", id, "error", t.toString()); }
+    }
+
+    /** 정비사 메모 저장(문서화·적재). body: {id, note, model?} */
+    @PostMapping("/case-report/note")
+    public Map<String, Object> saveCaseNote(@RequestBody Map<String, String> body) {
+        try { return report.saveCaseNote(body.get("id"), body.get("note"),
+                body.getOrDefault("namespace", "vehicle"), body.get("model")); }
+        catch (Throwable t) { return Map.of("id", body.getOrDefault("id", ""), "error", t.toString()); }
     }
 
     /** 증상/진단 → 필요 부품 명세(+ 참고 견적). body: {"problem","car","model"} */

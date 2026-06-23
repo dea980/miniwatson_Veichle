@@ -20,6 +20,7 @@ export type ReportResult = {
   complaintTotal: number; complaintTopComponents: [string, number][];
   fires: number; injuries: number;
   manualNotes: string; sources: string[]; report: string;
+  generatedAt?: string; cached?: boolean;   // 적재(생성일)·캐시 여부
 };
 export type DiagnoseResult = {
   caption: string; ocr: string; diagnosis: string; problem: string; sources: string[];
@@ -53,14 +54,29 @@ export type Analytics = {
 
 export type Summary = {
   totals: { recalls: number; complaints: number; fires: number; injuries: number };
-  recentRecalls: [string, string, string, string][];      // date, model, component, summary
-  recentComplaints: [string, string, string, string][];   // date, model, components, summary
+  recentRecalls: [string, string, string, string, string][];      // id(campaign), date, model, component, summary
+  recentComplaints: [string, string, string, string, string][];   // id(odiNumber), date, model, components, summary
   byModel: [string, number, number][];                    // model, complaints, recalls
 };
 // id, date, components, year, summary, priority, fire(0/1), crash(0/1), injuries, deaths
 export type VehicleRecord = [string, string, string, string, string, number, number, number, number, number];
 // id, date, model, components, year, summary, priority, fire, crash, injuries, deaths
 export type CaseRecord = [string, string, string, string, string, string, number, number, number, number, number];
+
+export type CaseChecklist = { model?: string; common: [string, string][]; additional: [string, number, string][] };
+export type CaseReport = {
+  caseNumber: string; model?: string; component?: string; year?: string; date?: string;
+  summary?: string; priority?: number; fire?: number; crash?: number; injuries?: number; deaths?: number;
+  diagnosis?: string; sources?: string[];
+  estimate?: EstimateResult;
+  checklistThis?: CaseChecklist; checklistCar?: CaseChecklist;
+  note?: string; generatedAt?: string; cached?: boolean; error?: string;
+};
+
+export type RecallDetail = {
+  campaign?: string; date?: string; model?: string; year?: string; component?: string;
+  summary?: string; consequence?: string; remedy?: string; parkIt?: string; parkOutside?: string;
+};
 
 export type Maintenance = {
   id: number; model: string; caseNumber?: string; title: string;
@@ -121,9 +137,22 @@ export const api = {
   agentAsk: (question: string, namespace: string, model?: string) =>
     jpost<AgentResult>("/api/agent/ask", { question, namespace, model }),
 
-  // 차종 종합 진단서 (리콜 + 불만 + 매뉴얼 종합)
-  report: (car: string, namespace: string, model?: string) =>
-    jpost<ReportResult>("/api/agent/report", { car, namespace, model }),
+  // 차종 종합 진단서 (리콜 + 불만 + 매뉴얼 종합) — 적재 캐시 우선, force=true면 재생성
+  report: (car: string, namespace: string, model?: string, force?: boolean) =>
+    jpost<ReportResult>("/api/agent/report", { car, namespace, model, force: force ? "true" : "false" }),
+  // 적재된 리포트 목록 (차종·생성일·모델)
+  savedReports: () =>
+    jget<{ reports: { key: string; model: string; generatedAt: string }[] }>("/api/agent/reports"),
+  // 접수번호별 리포트 (AI 진단+견적+점검 스냅샷, 적재 캐시) — force=true면 재생성
+  caseReport: (id: string, model?: string, force?: boolean) => {
+    const p = new URLSearchParams({ id });
+    if (model) p.set("model", model);
+    if (force) p.set("force", "true");
+    return jget<CaseReport>(`/api/agent/case-report?${p.toString()}`);
+  },
+  // 정비사 메모 저장(문서화·적재)
+  saveCaseNote: (id: string, note: string, model?: string) =>
+    jpost<CaseReport>("/api/agent/case-report/note", { id, note, model }),
 
   // 이미지 진단 (경고등/부품 사진 → Vision+OCR+RAG)
   diagnoseImage: (image: File, namespace: string, model?: string) => {
@@ -157,14 +186,30 @@ export const api = {
   checklist: (model: string, component?: string) =>
     jget<{ model: string; common: [string, string][]; additional: [string, number, string][]; error?: string }>(
       `/api/analytics/checklist?model=${encodeURIComponent(model)}${component ? `&component=${encodeURIComponent(component)}` : ""}`),
-  // 케이스 우선순위 트리아지(전 차종, 필터)
-  cases: (model?: string, component?: string) => {
+  // 케이스 우선순위 트리아지(전 차종, 필터 + 페이지네이션 + 해결제외)
+  cases: (model?: string, component?: string, offset = 0, limit = 50, sort: "priority" | "model" = "priority") => {
     const p = new URLSearchParams();
     if (model) p.set("model", model);
     if (component) p.set("component", component);
-    const qs = p.toString();
-    return jget<{ cases: CaseRecord[]; error?: string }>(`/api/analytics/cases${qs ? `?${qs}` : ""}`);
+    p.set("offset", String(offset));
+    p.set("limit", String(limit));
+    p.set("sort", sort);
+    return jget<{ cases: CaseRecord[]; total: number; offset: number; limit: number; error?: string }>(
+      `/api/analytics/cases?${p.toString()}`);
   },
+  // 케이스 해결 처리(영속) / 취소 / 목록
+  resolveCase: (id: string, note?: string) =>
+    jpost<{ resolved: boolean; id: string }>("/api/analytics/resolve", { id, note }),
+  unresolveCase: (id: string) =>
+    fetch(`/api/analytics/resolve/${encodeURIComponent(id)}`, { method: "DELETE" }).then((r) => r.json()),
+  resolvedCases: () =>
+    jget<{ resolved: { caseNumber: string; note: string; resolvedAt: string }[] }>("/api/analytics/resolved"),
+  // 단일 리콜 상세 (캠페인번호)
+  recall: (id: string) =>
+    jget<RecallDetail>(`/api/analytics/recall?id=${encodeURIComponent(id)}`),
+  // 단일 케이스(접수번호) 상세
+  caseById: (id: string) =>
+    jget<{ case: CaseRecord | []; error?: string }>(`/api/analytics/case?id=${encodeURIComponent(id)}`),
 
   // 정비 스케줄 (캘린더, 백엔드 JPA 영속)
   maintenanceList: () => jget<Maintenance[]>("/api/maintenance"),

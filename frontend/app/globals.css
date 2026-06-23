@@ -132,12 +132,12 @@ a:hover { text-decoration: underline; }
 .cal-chip { font-size: 11px; line-height: 1.3; padding: 2px 5px; margin-bottom: 3px; background: var(--surface-2); border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .main { padding: 0; width: 100%; }
-.hero { padding: 40px 40px 24px; max-width: 1040px; }
+.hero { padding: 40px 40px 24px; max-width: 1440px; }
 .hero h2 { font-size: 30px; font-weight: 700; letter-spacing: -.03em; margin: 0 0 8px; line-height: 1.2; }
 .hero p { color: var(--muted); font-size: 15px; margin: 0; max-width: 640px; }
 .hero .kicker { color: var(--accent-2); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 10px; }
-.panels { padding: 0 40px 56px; max-width: 1040px; }
-.footer { border-top: 1px solid var(--border); padding: 22px 40px; color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; max-width: 1040px; }
+.panels { padding: 0 40px 56px; max-width: 1440px; }
+.footer { border-top: 1px solid var(--border); padding: 22px 40px; color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; max-width: 1440px; }
 .footer b { color: var(--text); font-weight: 600; }
 
 /* ---- Card ---- */
@@ -182,6 +182,22 @@ button.ghost.listening { background: color-mix(in srgb, var(--danger) 12%, trans
 .doc { display: flex; align-items: center; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .doc .name { font-weight: 600; }
 .spacer { flex: 1; }
+
+/* Gmail식 dense 리스트 — 발신(차종) | 제목·미리보기 | 날짜, hover 시 액션 */
+.mail-list { margin-top: 10px; border-top: 1px solid var(--border); }
+.mail-row { display: grid; grid-template-columns: 132px 1fr auto; align-items: center; gap: 12px;
+  padding: 9px 8px; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 13.5px; }
+.mail-row:hover { background: var(--surface-2); box-shadow: inset 1px 0 0 var(--accent); }
+.mail-from { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mail-subject { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mail-subject b { font-weight: 600; }
+.mail-preview { color: var(--muted); font-weight: 400; }
+.mail-date { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.mail-actions { display: none; gap: 6px; align-items: center; }
+.mail-row:hover .mail-actions { display: flex; }
+.mail-row:hover .mail-date { display: none; }
+.mail-act { font-size: 12px; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; background: var(--surface); white-space: nowrap; }
+.mail-act:hover { color: var(--accent); border-color: var(--accent); }
 
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
 .stat { background: var(--surface-2); border: 1px solid var(--border); padding: 16px; border-radius: 10px; }

@@ -54,12 +54,12 @@ export default function ReportPanel({ initialCar, onNavigate }: { initialCar?: s
     api.summary().then((s) => setCarModels((s.byModel || []).map((m) => String(m[0])))).catch(() => {});
   }, []);
 
-  async function gen(carOverride?: string) {
+  async function gen(carOverride?: string, force = false) {
     const c = (carOverride ?? car).trim().toUpperCase();
     if (!c) return;
     setLoading(true); setErr(""); setRes(null); setCases([]); setCaseQ(""); setChk(null);
     try {
-      const r = await api.report(c, NS, model || undefined);
+      const r = await api.report(c, NS, model || undefined, force);
       setRes(r);
       loadCases(c, "");
       api.checklist(c).then((k) => setChk({ common: k.common || [], additional: k.additional || [] })).catch(() => setChk(null));
@@ -122,7 +122,7 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
 
   return (
     <div className="card">
-      <h2>차종 진단 리포트</h2>
+      <h2>차종 카테고리 <span className="muted" style={{ fontSize: 13, fontWeight: 400 }}>· 케이스 빠른 조회</span></h2>
       <div className="row">
         <input className="grow" list="car-options" value={car} placeholder="차종 검색(타이핑)…"
           onChange={(e) => setCar(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === "Enter" && gen()} />
@@ -132,9 +132,9 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
         <select value={model} onChange={(e) => setModel(e.target.value)} title="응답 생성 LLM">
           {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
-        <button className="btn" onClick={() => gen()} disabled={loading}>{loading ? "생성 중…" : "진단서 생성"}</button>
+        <button className="btn" onClick={() => gen()} disabled={loading}>{loading ? "조회 중…" : "조회"}</button>
       </div>
-      <div className="hint">차종 하나에 대해 리콜(SQL)·불만(SQL)·매뉴얼(RAG)을 모아 한국어 진단서로 종합하고, 아래에서 그 차종의 개별 케이스를 검색·진단합니다.</div>
+      <div className="hint">차종은 <b>접수번호(케이스)를 빠르게 찾는 카테고리</b>입니다. 차종별 집계(리콜·불만·점검표)는 참고용이고, 실제 진단·견적·점검·정비사 메모는 아래 케이스를 눌러 <b>접수번호별 리포트</b>에서 작성·적재합니다.</div>
 
       {err && <div className="err">{err}</div>}
 
@@ -181,17 +181,13 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
           {(res.complaintTopComponents?.length > 0) && (<><div className="label">불만 주요 부품</div><Bars rows={res.complaintTopComponents} /></>)}
 
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-            <div className="label" style={{ margin: "18px 0 8px" }}>진단서</div>
+            <div className="label" style={{ margin: "18px 0 8px" }}>차종 개요 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(참고 · 결정적 집계)</span></div>
             <div className="row" style={{ gap: 6 }}>
               <button className="ghost" onClick={printPdf}>PDF로 저장</button>
               <button className="ghost" onClick={download}>HTML 다운로드</button>
             </div>
           </div>
           <div className="answer"><Markdown text={res.report} /></div>
-
-          {res.sources && res.sources.length > 0 && (
-            <div className="hint">매뉴얼 근거: {res.sources.join(" · ")}</div>
-          )}
 
           {/* 이 차종의 케이스 — 건별 점검 체크리스트 + 필요 부품 */}
           <div className="label" style={{ marginTop: 22 }}>이 차종의 케이스 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>({res.car} · 심각도 우선순위순)</span></div>

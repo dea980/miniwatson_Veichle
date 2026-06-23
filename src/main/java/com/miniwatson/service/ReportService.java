@@ -24,16 +24,33 @@ public class ReportService {
     private final RagService ragService;
     private final OllamaService ollama;
     private final VehicleDataProperties data;
+    private final com.miniwatson.reports.GeneratedReportRepository reportRepo;
+    private final EstimateService estimateService;
+    private final AnalyticsService analytics;
+    private final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public ReportService(TabularSqlService tabular, RagService ragService,
-                         OllamaService ollama, VehicleDataProperties data) {
+                         OllamaService ollama, VehicleDataProperties data,
+                         com.miniwatson.reports.GeneratedReportRepository reportRepo,
+                         EstimateService estimateService, AnalyticsService analytics) {
         this.tabular = tabular;
         this.ragService = ragService;
         this.ollama = ollama;
         this.data = data;
+        this.reportRepo = reportRepo;
+        this.estimateService = estimateService;
+        this.analytics = analytics;
     }
 
+    /** 차종 리포트 = 빠른 카테고리(전부 결정적 SQL). LLM·캐시 없이 즉시. force는 무시(호환용). */
     public Map<String, Object> generate(String carModel, String namespace, String llmModel) throws Exception {
+        return buildCarReport(carModel, namespace, llmModel);
+    }
+    public Map<String, Object> generate(String carModel, String namespace, String llmModel, boolean force) throws Exception {
+        return buildCarReport(carModel, namespace, llmModel);
+    }
+
+    private Map<String, Object> buildCarReport(String carModel, String namespace, String llmModel) throws Exception {
         String car = (carModel == null ? "" : carModel.trim());
         String ns = (namespace == null || namespace.isBlank()) ? "vehicle" : namespace;
         ensure("recalls"); ensure("complaints"); ensure("inspection");
@@ -64,22 +81,11 @@ public class ReportService {
         out.put("fires", fires);
         out.put("injuries", injuries);
 
-        // ── 매뉴얼 안전수칙(RAG) ──
-        String manualNotes = "";
-        List<String> sources = new ArrayList<>();
-        try {
-            var rag = ragService.ask(car + " 안전 및 정비 시 주의사항", ns, llmModel);
-            manualNotes = rag.answer();
-            rag.sources().forEach(a -> sources.add(a.getTitle()));
-        } catch (Throwable t) {
-            // Exception뿐 아니라 Error(OOM 등 — 대형 모델 첫 호출 시 모델 로딩에서 메모리 초과)도 잡아 500 방지
-            log.warn("[report] RAG 실패({}): {}", llmModel, t.toString());
-        }
-        out.put("manualNotes", manualNotes);
-        out.put("sources", sources);
+        // 차종 = 빠른 카테고리: LLM/RAG 미사용(서술형 진단은 접수번호별 리포트로 이관). 매뉴얼 근거는 케이스 진단에서.
+        out.put("manualNotes", "");
+        out.put("sources", new ArrayList<>());
 
-        // ── LLM 종합(섹션 구조) ──
-        // 점검표에서 '양호' 아닌 항목(정비필요/교환/판금 등) 요약
+        // 점검표 지적사항(양호 아님) 요약 — 결정적
         @SuppressWarnings("unchecked")
         List<List<Object>> insp = (List<List<Object>>) out.get("inspection");
         StringBuilder issues = new StringBuilder();
@@ -87,34 +93,118 @@ public class ReportService {
             String result = String.valueOf(r.get(2));
             if (!"양호".equals(result)) issues.append(r.get(0)).append("/").append(r.get(1)).append("(").append(result).append(") ");
         }
-
-        String manualClean = manualNotes == null ? "" : manualNotes.replaceAll("\\s+", " ").trim();
-        if (manualClean.length() > 300) manualClean = manualClean.substring(0, 300);
-        String stats = "차종: " + car + "\n"
-                + "리콜 총 " + recallTotal + "건. 주요 부품: " + fmtTop(recallTop) + "\n"
-                + "불만 총 " + complaintTotal + "건. 주요 부품: " + fmtTop(complaintTop) + "\n"
-                + "화재 신고 " + fires + "건, 부상 합계 " + injuries + "명\n"
-                + "점검 지적사항: " + (issues.length() == 0 ? "없음(전 항목 양호)" : issues.toString().trim())
-                + (manualClean.isBlank() ? "" : "\n매뉴얼 주의: " + manualClean);
-        String prompt = "당신은 현대자동차 A/S 진단 어시스턴트입니다. 아래 통계만 근거로 '" + car
-                + "' 차량의 진단 의견을 한국어 서술형으로 작성하세요.\n"
-                + "규칙: 주어진 수치만 인용하고 없는 내용은 지어내지 마세요. "
-                + "대괄호([]), 표, 코드 기호를 쓰지 말고 자연스러운 완결된 문장으로만 4~6문장 이내로 간결하게 쓰세요.\n\n"
-                + "통계:\n" + stats + "\n\n진단 의견:";
-        String report;
-        try {
-            report = ollama.ask(prompt, llmModel, "진단서:" + car);
-        } catch (Throwable t) {
-            // Exception뿐 아니라 Error(OutOfMemoryError 등 — 9.6GB gemma4 같은 대형 모델이 M2 메모리 초과)도 잡아
-            // 500으로 터지지 않게 한다. 집계(KPI·표·차트)는 이미 결정적 SQL로 만들어졌으니 부분 리포트로라도 응답.
-            log.warn("[report] 종합 생성 실패({}): {} — 부분 리포트 반환", llmModel, t.toString());
-            report = "## 종합 의견 (자동 생성 실패)\n\n"
-                + "선택 모델(" + (llmModel == null ? "기본" : llmModel) + ")로 종합 서술 생성에 실패했습니다. "
-                + "집계 수치는 위 KPI와 표를 참고하세요. 더 가벼운 모델(qwen2.5:7b-instruct, granite4)을 권장합니다.\n\n"
-                + "- 리콜 " + recallTotal + "건, 불만 " + complaintTotal + "건, 화재 " + fires + "건, 부상 " + injuries + "명.";
-        }
+        // 차종 개요(참고) — 결정적 한 줄 요약(LLM 없음). 개별 서술 진단은 케이스(접수번호) 리포트에서.
+        String report = "차종 개요(참고): 리콜 " + recallTotal + "건, 불만 " + complaintTotal + "건"
+                + (fires > 0 ? ", 화재 " + fires + "건" : "") + (injuries > 0 ? ", 부상 " + injuries + "명" : "") + ". "
+                + "주요 리콜 부품 " + fmtTop(recallTop) + ". 주요 불만 부품 " + fmtTop(complaintTop) + ". "
+                + (issues.length() == 0 ? "점검표 전 항목 양호." : "점검 지적: " + issues.toString().trim() + ".")
+                + " 개별 차량 진단은 아래 케이스(접수번호)에서 확인하세요.";
         out.put("report", report);
         return out;
+    }
+
+    /** 접수번호별 리포트 — AI 진단 + 견적 + 점검을 통째로 적재(스냅샷). 캐시 우선, force면 재생성(정비사 메모 보존). */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> caseReport(String caseNumber, String namespace, String llmModel, boolean force) {
+        String id = caseNumber == null ? "" : caseNumber.trim();
+        String ns = (namespace == null || namespace.isBlank()) ? "vehicle" : namespace;
+        var existing = reportRepo.findFirstByReportTypeAndReportKeyOrderByCreatedAtDesc("CASE", id);
+        if (!force && existing.isPresent()) {
+            try {
+                Map<String, Object> m = mapper.readValue(existing.get().getContentJson(), Map.class);
+                m.put("generatedAt", existing.get().getCreatedAt().toString());
+                m.put("cached", true);
+                return m;
+            } catch (Exception e) { log.warn("[case-report] 캐시 파싱 실패 — 재생성: {}", e.getMessage()); }
+        }
+        // 재생성 시 기존 정비사 메모 보존
+        String prevNote = "";
+        if (existing.isPresent()) {
+            try { Object n = mapper.readValue(existing.get().getContentJson(), Map.class).get("note"); if (n != null) prevNote = String.valueOf(n); }
+            catch (Exception ignore) {}
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        var caseRows = analytics.caseById(id);
+        if (caseRows.isEmpty()) { out.put("error", "해당 접수번호를 찾지 못함: " + id); out.put("caseNumber", id); return out; }
+        List<Object> c = caseRows.get(0);
+        String model = String.valueOf(c.get(2)), component = String.valueOf(c.get(3)), summary = String.valueOf(c.get(5));
+        out.put("caseNumber", id);
+        out.put("model", model); out.put("component", component);
+        out.put("year", c.get(4)); out.put("date", c.get(1)); out.put("summary", summary);
+        out.put("priority", c.get(6)); out.put("fire", c.get(7)); out.put("crash", c.get(8));
+        out.put("injuries", c.get(9)); out.put("deaths", c.get(10));
+
+        // AI 진단(RAG, 매뉴얼 근거) — 느린 부분, 적재로 1회만
+        String diagnosis = "";
+        try {
+            String q = model + " 차량, 증상: \"" + (summary.length() > 200 ? summary.substring(0, 200) : summary)
+                + "\" (결함 부위: " + component + "). "
+                + "정비사 관점에서 추정 원인과 점검·조치를 한국어로 3~4문장 간결히. 매뉴얼 근거에 충실하고 지어내지 말 것.";
+            var rag = ragService.ask(q, ns, llmModel);
+            diagnosis = rag.answer();
+            List<String> src = new ArrayList<>(); rag.sources().forEach(a -> src.add(a.getTitle()));
+            out.put("sources", src);
+        } catch (Throwable t) { log.warn("[case-report] 진단 실패: {}", t.toString()); out.put("sources", new ArrayList<>()); }
+        out.put("diagnosis", diagnosis);
+
+        // 견적(부품+공임+부가세) — 결정적 계산
+        try { out.put("estimate", estimateService.estimate(component, model, llmModel)); }
+        catch (Throwable t) { log.warn("[case-report] 견적 실패: {}", t.toString()); }
+        // 점검(이 건 부위 + 차종 전반) — 결정적
+        try { out.put("checklistThis", analytics.checklist(model, component)); } catch (Throwable t) { log.warn("[case-report] 점검(건) 실패: {}", t.toString()); }
+        try { out.put("checklistCar", analytics.checklist(model, null)); } catch (Throwable t) { log.warn("[case-report] 점검(차종) 실패: {}", t.toString()); }
+
+        out.put("note", prevNote);   // 정비사 메모(보존)
+
+        try {
+            com.miniwatson.reports.GeneratedReport gr = existing.orElseGet(com.miniwatson.reports.GeneratedReport::new);
+            gr.setReportType("CASE"); gr.setReportKey(id); gr.setModel(llmModel);
+            gr.setContentJson(mapper.writeValueAsString(out));
+            gr.setCreatedAt(java.time.LocalDateTime.now());
+            var saved = reportRepo.save(gr);
+            out.put("generatedAt", saved.getCreatedAt().toString());
+        } catch (Exception e) { log.warn("[case-report] 적재 실패: {}", e.getMessage()); }
+        out.put("cached", false);
+        return out;
+    }
+
+    /** 정비사 메모 저장 — 적재된 케이스 리포트에 병합(없으면 먼저 생성). */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> saveCaseNote(String caseNumber, String note, String namespace, String llmModel) {
+        String id = caseNumber == null ? "" : caseNumber.trim();
+        var existing = reportRepo.findFirstByReportTypeAndReportKeyOrderByCreatedAtDesc("CASE", id);
+        Map<String, Object> m;
+        com.miniwatson.reports.GeneratedReport gr;
+        if (existing.isPresent()) {
+            gr = existing.get();
+            try { m = mapper.readValue(gr.getContentJson(), Map.class); } catch (Exception e) { m = new LinkedHashMap<>(); }
+        } else {
+            caseReport(id, namespace, llmModel, true);   // 없으면 먼저 생성·적재
+            var created = reportRepo.findFirstByReportTypeAndReportKeyOrderByCreatedAtDesc("CASE", id);
+            gr = created.orElseGet(com.miniwatson.reports.GeneratedReport::new);
+            try { m = mapper.readValue(gr.getContentJson() == null ? "{}" : gr.getContentJson(), Map.class); } catch (Exception e) { m = new LinkedHashMap<>(); }
+        }
+        m.put("note", note == null ? "" : note);
+        m.remove("generatedAt"); m.remove("cached");
+        try {
+            gr.setReportType("CASE"); gr.setReportKey(id);
+            gr.setContentJson(mapper.writeValueAsString(m));
+            var saved = reportRepo.save(gr);
+            m.put("generatedAt", saved.getCreatedAt().toString());
+        } catch (Exception e) { log.warn("[case-report] 메모 저장 실패: {}", e.getMessage()); }
+        m.put("cached", true);
+        return m;
+    }
+
+    /** 적재된 리포트 목록(차종·생성일) — 최신순. */
+    public List<Map<String, Object>> savedReports() {
+        return reportRepo.findByReportTypeOrderByCreatedAtDesc("CAR").stream().map(r -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("key", r.getReportKey());
+            m.put("model", r.getModel() == null ? "" : r.getModel());
+            m.put("generatedAt", r.getCreatedAt() == null ? "" : r.getCreatedAt().toString());
+            return m;
+        }).toList();
     }
 
     private void ensure(String table) {
