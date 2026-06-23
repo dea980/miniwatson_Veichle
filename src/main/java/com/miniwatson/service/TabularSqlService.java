@@ -18,6 +18,8 @@ import java.util.*;
 public class TabularSqlService {
 
     private Connection conn;
+    // 등록 캐시: table -> path. read 경로가 매 요청 재등록(쓰기)하지 않게 1회만 등록한다.
+    private final java.util.Map<String, String> registered = new java.util.concurrent.ConcurrentHashMap<>();
 
     @PostConstruct
     void init() throws SQLException {
@@ -41,8 +43,19 @@ public class TabularSqlService {
         }
     }
 
+    /** 1회만 등록 (같은 경로면 스킵). 읽기 경로가 매 요청 CREATE OR REPLACE(쓰기)를 유발하지 않게 한다.
+     *  → 쓰기/읽기 충돌 제거 + CSV 재스캔 낭비 제거. 데이터 변경 시 invalidateRegistrations()로 갱신. */
+    public synchronized void registerCsvOnce(String table, String path) throws SQLException {
+        if (path != null && path.equals(registered.get(table))) return;   // 이미 같은 경로로 등록됨
+        registerCsv(table, path);
+        registered.put(table, path);
+    }
+
+    /** 데이터가 바뀌었을 때: 등록 캐시 비움 → 다음 접근에 read_csv_auto가 최신 파일을 다시 읽는다. */
+    public synchronized void invalidateRegistrations() { registered.clear(); }
+
     /** 컬럼명 + 타입 — LLM에 줄 스키마 컨텍스트. */
-    public String schema(String table) throws SQLException {
+    public synchronized String schema(String table) throws SQLException {
         StringBuilder sb = new StringBuilder();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery("DESCRIBE " + safeIdent(table))) {
@@ -95,7 +108,7 @@ public class TabularSqlService {
     }
 
     /** 샘플 행 n개 — LLM이 실제 값(예: quarter=Q3)을 보고 올바른 리터럴을 쓰게. */
-    public String sample(String table, int n) throws SQLException {
+    public synchronized String sample(String table, int n) throws SQLException {
         StringBuilder sb = new StringBuilder();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery("SELECT * FROM " + safeIdent(table) + " LIMIT " + Math.max(1, n))) {
@@ -126,8 +139,10 @@ public class TabularSqlService {
         }
     }
 
-    /** SELECT/WITH만 허용, 위험 키워드 차단, 최대 100행. */
-    public QueryResult runSelect(String sql) throws SQLException {
+    /** SELECT/WITH만 허용, 위험 키워드 차단, 최대 100행.
+     *  synchronized: DuckDB 단일 커넥션은 스레드 안전이 아니라, 동시 호출 시 DB가 "invalidated"로 죽는다.
+     *  모든 쿼리를 직렬화하고, 치명 오류면 커넥션을 재생성해 자가복구(analytics가 다음 호출에 CSV 재등록). */
+    public synchronized QueryResult runSelect(String sql) throws SQLException {
         requireReadOnly(sql);
         String q = sql.strip();
         try (Statement st = conn.createStatement();
@@ -143,7 +158,18 @@ public class TabularSqlService {
                 rows.add(row);
             }
             return new QueryResult(cols, rows);
+        } catch (SQLException e) {
+            String m = String.valueOf(e.getMessage());
+            if (m.contains("invalidated") || m.contains("FATAL")) reconnect();   // 죽은 DB 재생성 → 이후 호출 복구
+            throw e;
         }
+    }
+
+    /** DuckDB 인메모리 DB가 치명 오류로 죽었을 때 커넥션 재생성(테이블은 비므로 호출부가 재등록). */
+    private void reconnect() {
+        try { if (conn != null) conn.close(); } catch (Exception ignore) {}
+        try { conn = DriverManager.getConnection("jdbc:duckdb:"); } catch (SQLException ignore) {}
+        registered.clear();   // 새 인메모리 DB는 비었으므로 등록 캐시도 무효화 → 호출부가 재등록
     }
 
     private String safeIdent(String s) {

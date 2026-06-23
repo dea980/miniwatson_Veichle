@@ -47,6 +47,21 @@ public class AnalyticsController {
         }
     }
 
+    /** 데이터(CSV) 변경 후 재등록 — 등록 1회 정책에서 최신 파일을 반영한다. */
+    @PostMapping("/refresh")
+    public Map<String, Object> refresh() {
+        analytics.refresh();
+        return Map.of("refreshed", true);
+    }
+
+    /** 점검 체크리스트: 공통(표준) + 차종별 추가(리콜·불만 부위 → 점검항목). */
+    @GetMapping("/checklist")
+    public Map<String, Object> checklist(@RequestParam String model,
+                                         @RequestParam(required = false) String component) {
+        try { return analytics.checklist(model, component); }
+        catch (Throwable t) { return Map.of("model", model, "common", java.util.List.of(), "additional", java.util.List.of(), "error", t.toString()); }
+    }
+
     /** 케이스 우선순위 트리아지(전 차종) — 필터(차종/부위) + 심각도 우선순위 정렬. */
     @GetMapping("/cases")
     public Map<String, Object> cases(@RequestParam(required = false) String model,

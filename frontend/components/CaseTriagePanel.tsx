@@ -1,12 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, type CaseRecord, type Models, type EstimateResult } from "@/lib/api";
+import { api, type CaseRecord, type EstimateResult } from "@/lib/api";
 
 const num = (v: unknown) => Number(v) || 0;
 const won = (n: number) => Math.round(Number(n) || 0).toLocaleString("ko-KR") + "원";
 
 export default function CaseTriagePanel() {
-  const [models, setModels] = useState<Models | null>(null);
+  const [carModels, setCarModels] = useState<string[]>([]);   // 차종 목록(불만 데이터 기준)
   const [model, setModel] = useState("");        // "" = 전체
   const [component, setComponent] = useState(""); // 부위 키워드
   const [cases, setCases] = useState<CaseRecord[]>([]);
@@ -16,7 +16,7 @@ export default function CaseTriagePanel() {
   // 케이스별 필요 부품(차량 진단) 인라인
   const [diag, setDiag] = useState<Record<string, EstimateResult | "loading">>({});
 
-  useEffect(() => { api.models().then(setModels).catch(() => {}); }, []);
+  useEffect(() => { api.summary().then((s) => setCarModels((s.byModel || []).map((m) => String(m[0])))).catch(() => {}); }, []);
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
   async function load() {
@@ -44,7 +44,7 @@ export default function CaseTriagePanel() {
         <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
           <select value={model} onChange={(e) => setModel(e.target.value)}>
             <option value="">전체 차종</option>
-            {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
+            {carModels.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
           <input type="text" placeholder="부위 키워드 (예: ENGINE, AIR BAG)" value={component}
             onChange={(e) => setComponent(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} style={{ width: 220 }} />

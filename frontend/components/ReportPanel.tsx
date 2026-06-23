@@ -1,8 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, type ReportResult, type Models } from "@/lib/api";
+import { api, type ReportResult, type Models, type CaseRecord, type EstimateResult } from "@/lib/api";
 import Markdown from "@/components/Markdown";
 import CarImage from "@/components/CarImage";
+
+const num = (v: unknown) => Number(v) || 0;
+const won = (n: number) => Math.round(Number(n) || 0).toLocaleString("ko-KR") + "원";
+const NS = "vehicle";   // 자동차 도메인 고정 (사용자에게 노출하지 않음)
 
 function Bars({ rows }: { rows: [string, number][] }) {
   const max = Math.max(1, ...rows.map((r) => Number(r[1]) || 0));
@@ -31,26 +35,60 @@ function resultPill(result: string) {
 
 export default function ReportPanel({ initialCar }: { initialCar?: string }) {
   const [car, setCar] = useState("PALISADE");
-  const [namespace, setNamespace] = useState("vehicle");
-  const [models, setModels] = useState<Models | null>(null);
+  const [carModels, setCarModels] = useState<string[]>([]);   // 실제 차종 목록(불만 데이터)
+  const [models, setModels] = useState<Models | null>(null);  // LLM 모델
   const [model, setModel] = useState("");
   const [res, setRes] = useState<ReportResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
+  // 점검 체크리스트(공통 + 차종별 추가)
+  const [chk, setChk] = useState<{ common: [string, string][]; additional: [string, number, string][] } | null>(null);
+  // 이 차종의 케이스(개별 차량) 검색 + 진단
+  const [cases, setCases] = useState<CaseRecord[]>([]);
+  const [caseQ, setCaseQ] = useState("");
+  const [caseLoading, setCaseLoading] = useState(false);
+  const [diag, setDiag] = useState<Record<string, EstimateResult | "loading">>({});
+  const [chkCase, setChkCase] = useState<Record<string, string[]>>({});   // 건별 점검 항목
+
   useEffect(() => {
     api.models().then((m) => { setModels(m); setModel(m.default); }).catch(() => {});
+    api.summary().then((s) => setCarModels((s.byModel || []).map((m) => String(m[0])))).catch(() => {});
   }, []);
 
   async function gen(carOverride?: string) {
     const c = (carOverride ?? car).trim().toUpperCase();
     if (!c) return;
-    setLoading(true); setErr(""); setRes(null);
-    try { setRes(await api.report(c, namespace, model || undefined)); }
-    catch (e) { setErr(String(e)); } finally { setLoading(false); }
+    setLoading(true); setErr(""); setRes(null); setCases([]); setDiag({}); setCaseQ(""); setChk(null);
+    try {
+      const r = await api.report(c, NS, model || undefined);
+      setRes(r);
+      loadCases(c, "");
+      api.checklist(c).then((k) => setChk({ common: k.common || [], additional: k.additional || [] })).catch(() => setChk(null));
+    } catch (e) { setErr(String(e)); } finally { setLoading(false); }
   }
 
-  // 홈 "차종별 업무"에서 넘어오면 차종 세팅 + 자동 생성
+  async function loadCases(c: string, kw: string) {
+    setCaseLoading(true);
+    try { const r = await api.cases(c, kw || undefined); setCases(r.cases || []); }
+    catch { setCases([]); } finally { setCaseLoading(false); }
+  }
+
+  async function diagnose(id: string, comp: string, mdl: string) {
+    if (diag[id] && diag[id] !== "loading") {
+      setDiag((d) => { const n = { ...d }; delete n[id]; return n; });
+      setChkCase((s) => { const n = { ...s }; delete n[id]; return n; });
+      return;
+    }
+    setDiag((d) => ({ ...d, [id]: "loading" }));
+    // 건별 점검 체크리스트(그 건 부위 → 점검 항목)
+    api.checklist(mdl, comp).then((k) => setChkCase((s) => ({ ...s, [id]: (k.additional || []).map((a) => String(a[0])) }))).catch(() => {});
+    // 필요 부품
+    try { const e = await api.estimate(comp, mdl); setDiag((d) => ({ ...d, [id]: e })); }
+    catch { setDiag((d) => ({ ...d, [id]: { items: [], partsTotal: 0, laborTotal: 0, grandTotal: 0, note: "진단 실패", car: mdl, problem: comp, laborRate: 0 } })); }
+  }
+
+  // 홈 "차종 현황"에서 넘어오면 차종 세팅 + 자동 생성
   useEffect(() => {
     if (initialCar && initialCar.trim()) { setCar(initialCar); gen(initialCar); }
     // eslint-disable-next-line
@@ -60,14 +98,14 @@ export default function ReportPanel({ initialCar }: { initialCar?: string }) {
     if (!res) return "";
     const esc = (s: string) => (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
     const rows = (arr: [string, number][]) => arr.map((r) => `<tr><td>${esc(String(r[0]))}</td><td style="text-align:right">${r[1]}건</td></tr>`).join("");
-    return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${esc(res.car)} 차량 진단 리포트</title>
+    return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>${esc(res.car)} 차종 진단 리포트</title>
 <style>body{font-family:'Pretendard',-apple-system,sans-serif;max-width:720px;margin:48px auto;padding:0 20px;color:#0d1b2a;line-height:1.6}
 h1{font-size:26px;border-bottom:2px solid #002c5f;padding-bottom:10px}h2{font-size:17px;margin-top:28px;color:#002c5f}
 .kpi{display:flex;gap:14px;flex-wrap:wrap;margin:16px 0}.kpi div{flex:1;min-width:120px;border:1px solid #e3e8ef;border-radius:10px;padding:14px}
 .kpi b{font-size:24px;display:block}table{width:100%;border-collapse:collapse;font-size:14px}td{padding:6px 8px;border-bottom:1px solid #eee}
 pre{white-space:pre-wrap;font-family:inherit;background:#f5f7fa;padding:16px;border-radius:8px}footer{margin-top:36px;color:#888;font-size:12px;border-top:1px solid #eee;padding-top:12px}
 @media print{body{margin:0}}</style></head>
-<body><h1>${esc(res.car)} 차량 진단 리포트</h1>
+<body><h1>${esc(res.car)} 차종 진단 리포트</h1>
 <div class="kpi"><div><b>${res.recallTotal}</b>리콜 건수</div><div><b>${res.complaintTotal}</b>불만 건수</div><div><b>${res.fires}</b>화재 신고</div><div><b>${res.injuries}</b>부상 합계</div></div>
 <h2>주요장치 점검표</h2><p style="color:#888;font-size:12px">상태부호: X교환·W판금/용접·C부식·A흠집·U요철·T손상·– 양호</p>
 <table><tr><th style="text-align:left">장치</th><th style="text-align:left">항목</th><th style="text-align:left">결과</th><th style="text-align:left">부호</th></tr>
@@ -75,7 +113,7 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
 <h2>리콜 주요 부품</h2><table>${rows(res.recallTopComponents || [])}</table>
 <h2>불만 주요 부품</h2><table>${rows(res.complaintTopComponents || [])}</table>
 <h2>종합 진단</h2><pre>${esc(res.report)}</pre>
-<footer>MiniWatson Vehicle — Automotive Domain LLM · 생성 ${new Date().toLocaleString("ko-KR")} · 데이터: NHTSA·매뉴얼(샘플)</footer></body></html>`;
+<footer>MiniWatson Vehicle — Automotive Domain LLM · 생성 ${new Date().toLocaleString("ko-KR")} · 데이터: NHTSA·오너스 매뉴얼(샘플)</footer></body></html>`;
   }
 
   function download() {
@@ -95,24 +133,23 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
     setTimeout(() => { try { w.focus(); w.print(); } catch {} }, 500);
   }
 
-  const cars = ["PALISADE", "SANTA FE", "ELANTRA", "SONATA", "TUCSON", "KONA"];
+  const fallbackCars = ["PALISADE", "SANTA FE", "ELANTRA", "SONATA", "TUCSON", "KONA"];
+  const carOptions = carModels.length ? carModels : fallbackCars;
 
   return (
     <div className="card">
-      <h2>내 차 진단 리포트</h2>
+      <h2>차종 진단 리포트</h2>
       <div className="row">
-        <input className="grow" type="text" value={car} onChange={(e) => setCar(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && gen()} placeholder="차종 (예: PALISADE)" />
-        <input type="text" value={namespace} onChange={(e) => setNamespace(e.target.value)} style={{ width: 100 }} />
-        <select value={model} onChange={(e) => setModel(e.target.value)}>
+        <select className="grow" value={car} onChange={(e) => setCar(e.target.value)}>
+          {carOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+          {!carOptions.includes(car) && <option value={car}>{car}</option>}
+        </select>
+        <select value={model} onChange={(e) => setModel(e.target.value)} title="응답 생성 LLM">
           {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
         <button className="btn" onClick={() => gen()} disabled={loading}>{loading ? "생성 중…" : "진단서 생성"}</button>
       </div>
-      <div className="row" style={{ gap: 6, marginTop: 6 }}>
-        {cars.map((c) => <button key={c} className="ghost" style={{ fontSize: 12 }} onClick={() => setCar(c)}>{c}</button>)}
-      </div>
-      <div className="hint">차종 하나에 대해 리콜(SQL) 불만(SQL) 매뉴얼(RAG)을 모아 한국어 진단서로 종합합니다.</div>
+      <div className="hint">차종 하나에 대해 리콜(SQL)·불만(SQL)·매뉴얼(RAG)을 모아 한국어 진단서로 종합하고, 아래에서 그 차종의 개별 케이스를 검색·진단합니다.</div>
 
       {err && <div className="err">{err}</div>}
 
@@ -170,6 +207,74 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
           {res.sources && res.sources.length > 0 && (
             <div className="hint">매뉴얼 근거: {res.sources.join(" · ")}</div>
           )}
+
+          {/* 이 차종의 케이스 — 건별 점검 체크리스트 + 필요 부품 */}
+          <div className="label" style={{ marginTop: 22 }}>이 차종의 케이스 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>({res.car} · 심각도 우선순위순)</span></div>
+          {chk && chk.common.length > 0 && (
+            <div className="hint" style={{ marginTop: 0 }}>공통 점검(모든 차량 표준): {chk.common.map((r) => String(r[0])).join(", ")}. 아래 각 건을 누르면 그 건의 결함 부위에 맞춘 점검 항목과 필요 부품이 나옵니다.</div>
+          )}
+          <div className="row">
+            <input className="grow" type="text" placeholder="부위 키워드로 검색 (예: ENGINE, AIR BAG)" value={caseQ}
+              onChange={(e) => setCaseQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && loadCases(res.car, caseQ)} />
+            <button className="ghost" onClick={() => loadCases(res.car, caseQ)}>검색</button>
+          </div>
+          {caseLoading && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>케이스 불러오는 중…</div>}
+          {!caseLoading && cases.length === 0 && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>해당 케이스가 없습니다.</div>}
+          <div style={{ marginTop: 6 }}>
+            {cases.map((c, i) => {
+              const id = String(c[0]);
+              const pr = num(c[6]), fire = num(c[7]), crash = num(c[8]), inj = num(c[9]), dea = num(c[10]);
+              const accent = dea > 0 || fire > 0 ? "var(--danger)" : pr > 0 ? "var(--warn)" : "var(--border)";
+              const d = diag[id];
+              return (
+                <div key={i} style={{ padding: "10px 0 10px 12px", borderBottom: "1px solid var(--border)", borderLeft: `3px solid ${accent}` }}>
+                  <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="muted" style={{ fontSize: 12, marginBottom: 3 }}>
+                        <span className="badge" style={{ marginLeft: 0 }}>우선순위 {pr}</span> 접수 #{id} · {c[4]}년 · {c[1]}
+                      </div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{String(c[3])}</div>
+                      {pr > 0 && (
+                        <div className="row" style={{ gap: 4, marginTop: 4, flexWrap: "wrap" }}>
+                          {dea > 0 && <span className="pill bad">사망 {dea}</span>}
+                          {inj > 0 && <span className="pill warn">부상 {inj}</span>}
+                          {fire > 0 && <span className="pill bad">화재</span>}
+                          {crash > 0 && <span className="pill warn">사고</span>}
+                        </div>
+                      )}
+                      <div className="snip" style={{ marginTop: 4 }}>{String(c[5]).slice(0, 130)}…</div>
+                    </div>
+                    <button className="ghost" style={{ fontSize: 12, whiteSpace: "nowrap" }} onClick={() => diagnose(id, String(c[3]), res.car)}>
+                      {d ? "닫기" : "점검·진단"}
+                    </button>
+                  </div>
+                  {/* 이 건 점검 항목 (그 건 부위 → 점검) */}
+                  {chkCase[id] && chkCase[id].length > 0 && (
+                    <div style={{ marginTop: 6, padding: "8px 10px", background: "var(--surface-2)", borderRadius: 8 }}>
+                      <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4 }}>이 건 점검 항목 <span className="muted" style={{ fontWeight: 400 }}>(부위: {String(c[3]).slice(0, 40)})</span></div>
+                      {chkCase[id].map((it, k) => (
+                        <div key={k} style={{ fontSize: 12.5, padding: "2px 0" }}><span style={{ color: "var(--warn)" }}>☐</span> {it}</div>
+                      ))}
+                    </div>
+                  )}
+                  {d === "loading" && <div className="muted" style={{ fontSize: 12, padding: "6px 0" }}>점검·부품 산정 중…</div>}
+                  {d && d !== "loading" && (
+                    <div style={{ marginTop: 6, padding: "8px 10px", background: "var(--surface-2)", borderRadius: 8 }}>
+                      <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4 }}>필요 부품</div>
+                      {d.items.length === 0 ? <div className="muted" style={{ fontSize: 12 }}>해당 부품을 찾지 못했어요 (부위 신호가 약함)</div> : (
+                        <table style={{ fontSize: 12 }}><tbody>
+                          {d.items.map((it, k) => (
+                            <tr key={k}><td>{it.part}</td><td className="muted">{it.component}</td><td className="right">{won(it.lineTotal)}</td></tr>
+                          ))}
+                        </tbody></table>
+                      )}
+                      {d.items.length > 0 && <div className="hint" style={{ marginTop: 4 }}>참고 합계 <b>{won(d.grandTotal)}</b> (샘플 단가)</div>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </>
       )}
     </div>

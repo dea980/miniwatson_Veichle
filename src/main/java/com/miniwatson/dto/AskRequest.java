@@ -12,5 +12,7 @@ public class AskRequest {
     // Eval-Only 검색 전략 요청별 오버라이드 (평가용)
     private String rerank;
     private Boolean hybrid;
+    // 선택: 특정 문서(제목)로 검색을 한정 — "문서 전용 어시스턴트"용
+    private String title;
 
 }

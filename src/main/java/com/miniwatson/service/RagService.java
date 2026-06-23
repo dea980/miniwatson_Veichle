@@ -59,11 +59,16 @@ public class RagService {
 
     /** Backward-compatible entry point: default namespace, default chat model. */
     public RagResult ask(String question) throws IOException {
-        return ask(question, DEFAULT_NS, null, null, null);
+        return ask(question, DEFAULT_NS, null, null, null, null);
     }
 
     public RagResult ask(String question, String namespace, String model) throws IOException{
-        return ask(question, namespace, model, null,null);
+        return ask(question, namespace, model, null, null, null);
+    }
+
+    /** 5-arg 호환(평가 경로) — title 없이. */
+    public RagResult ask(String question, String namespace, String model, String rerankOverride, Boolean hybridOverride) throws IOException {
+        return ask(question, namespace, model, rerankOverride, hybridOverride, null);
     }
 
     /**
@@ -73,7 +78,7 @@ public class RagService {
      * @param namespace tenant / collection to retrieve from (null/blank → "default")
      * @param model     chat model override (null/blank → configured default)
      */
-    public RagResult ask(String question, String namespace, String model, String rerankOverride, Boolean hybridOverride) throws IOException {
+    public RagResult ask(String question, String namespace, String model, String rerankOverride, Boolean hybridOverride, String title) throws IOException {
         String ns = (namespace == null || namespace.isBlank()) ? DEFAULT_NS : namespace;
         accessChecker.check(ns);   // 격리 강제: 이 호출자가 ns 접근 가능한지 (보안 off면 통과)
         // 평가를 위한 게이트
@@ -89,8 +94,17 @@ public class RagService {
         log.info("RAG question (ns={}, model={}): {}", ns, model == null ? "default" : model, question);
 
         List<Float> questionEmbedding = embeddingService.embedQuery(question);
-        List<Article> candidates = hybridRetriever.search(ns, questionEmbedding, question, FETCH_N, hy);
+        // 문서 한정(title) 시 후보를 더 넓게 떠서 그 문서의 청크를 충분히 확보한 뒤 필터한다.
+        boolean scoped = title != null && !title.isBlank();
+        int fetchN = scoped ? FETCH_N * 6 : FETCH_N;
+        List<Article> candidates = hybridRetriever.search(ns, questionEmbedding, question, fetchN, hy);
         if (candidates.isEmpty()) throw new RuntimeException("No articles in knowledge base for namespace '" + ns + "'.");
+        if (scoped) {
+            String t = title.trim();
+            List<Article> only = candidates.stream().filter(a -> t.equalsIgnoreCase(a.getTitle())).collect(Collectors.toList());
+            if (!only.isEmpty()) candidates = only;          // 이 문서 청크만 → 문서 전용 어시스턴트
+            else log.warn("[rag] title='{}' 매칭 청크 없음 — 전체 후보로 진행", t);
+        }
         // Sub-linear retrieval via the in-memory vector index (LSH + exact fallback).
         //List<Article> topArticles = vectorIndex.search(ns, questionEmbedding, TOP_K);
         // rerank 실패(예: llm rerank의 Ollama 타임아웃)해도 검색은 살린다 — 벡터/하이브리드 후보 top-K로 fallback.

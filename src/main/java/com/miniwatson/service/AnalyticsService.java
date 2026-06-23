@@ -166,6 +166,113 @@ public class AnalyticsService {
             + "ORDER BY priority DESC, datecomplaintfiled DESC NULLS LAST LIMIT 60").rows();
     }
 
+    // ── 점검 체크리스트: 공통(표준 성능·상태점검) + 차종별 추가(리콜·불만 부위 → 점검 항목) ──
+    /** 성능·상태점검기록부 표준 공통 항목(차종 무관). [장치, 점검 포인트] */
+    private static final List<List<Object>> COMMON = List.of(
+        List.of("원동기(엔진)", "작동상태·오일 누유·경고등"),
+        List.of("변속기", "변속 충격·누유"),
+        List.of("동력전달", "클러치·드라이브샤프트·등속조인트"),
+        List.of("조향", "유격·쏠림·작동"),
+        List.of("제동", "패드·디스크·제동력·누유"),
+        List.of("전기", "배터리·등화·배선"),
+        List.of("연료", "누유·연료계통"),
+        List.of("외판·골격", "부식·판금·사고 흔적"));
+
+    /** CSV 없을 때 폴백 매핑(결함부위 부분일치 → 점검항목). CSV: data/vehicle/inspection_map.csv */
+    private static final LinkedHashMap<String, String> DEFAULT_MAP = new LinkedHashMap<>();
+    static {
+        DEFAULT_MAP.put("SEAT BELT", "안전벨트·프리텐셔너 체결/작동 점검");
+        DEFAULT_MAP.put("AIR BAG", "에어백 경고등·전개 시스템 점검");
+        DEFAULT_MAP.put("FORWARD COLLISION", "전방충돌방지보조(FCA) 작동 점검");
+        DEFAULT_MAP.put("LANE", "차로이탈방지보조(LKA) 작동 점검");
+        DEFAULT_MAP.put("BACK OVER", "후방 카메라·주차센서 점검");
+        DEFAULT_MAP.put("VEHICLE SPEED CONTROL", "정속주행·속도제어 점검");
+        DEFAULT_MAP.put("ELECTRICAL", "배선·배터리·퓨즈 점검");
+        DEFAULT_MAP.put("ENGINE", "원동기(엔진) 정밀 점검");
+        DEFAULT_MAP.put("POWER TRAIN", "변속기·동력전달 정밀 점검");
+        DEFAULT_MAP.put("TRANSMISSION", "변속기 정밀 점검");
+        DEFAULT_MAP.put("BRAKE", "제동장치(브레이크) 점검");
+        DEFAULT_MAP.put("FUEL", "연료계통 점검");
+        DEFAULT_MAP.put("STEERING", "조향장치 점검");
+        DEFAULT_MAP.put("SUSPENSION", "현가장치(서스펜션) 점검");
+        DEFAULT_MAP.put("STRUCTURE", "차체 골격·구조 점검");
+        DEFAULT_MAP.put("VISIBILITY", "와이퍼·시야 점검");
+        DEFAULT_MAP.put("TRAILER HITCH", "트레일러 히치 점검");
+        DEFAULT_MAP.put("SEATS", "시트 고정·조절 점검");
+    }
+    private volatile LinkedHashMap<String, String> inspectMapCache;
+
+    private LinkedHashMap<String, String> inspectMap() {
+        if (inspectMapCache != null) return inspectMapCache;
+        LinkedHashMap<String, String> m = new LinkedHashMap<>();
+        try {
+            java.nio.file.Path p = java.nio.file.Path.of("data/vehicle/inspection_map.csv");
+            if (java.nio.file.Files.exists(p)) {
+                for (String line : java.nio.file.Files.readAllLines(p)) {
+                    String s = line.trim();
+                    if (s.isEmpty() || s.startsWith("#") || s.toLowerCase().startsWith("keyword")) continue;
+                    int i = s.indexOf(',');
+                    if (i < 0) continue;
+                    m.put(s.substring(0, i).trim().toUpperCase(), s.substring(i + 1).trim());
+                }
+            }
+        } catch (Exception e) { log.warn("[checklist] inspection_map 로드 실패: {}", e.getMessage()); }
+        if (m.isEmpty()) m.putAll(DEFAULT_MAP);
+        inspectMapCache = m;
+        return m;
+    }
+
+    private String mapItem(String compUpper, LinkedHashMap<String, String> map) {
+        for (var e : map.entrySet()) if (compUpper.contains(e.getKey())) return e.getValue();
+        String head = compUpper.split(":")[0].trim();   // 매핑 없으면 대표 부위명만
+        return "기타 점검: " + head;
+    }
+
+    /** 점검 체크리스트.
+     *  component 지정 → 건별(그 건 부위만 매핑). 미지정 → 차종 집계(상위 부위 빈도순).
+     *  공통 항목은 항상 포함. */
+    public Map<String, Object> checklist(String model, String component) {
+        LinkedHashMap<String, String> map = inspectMap();
+        if (component != null && !component.isBlank()) {
+            // 건별: 이 건의 부위만 → 점검 항목 (콤마/세미콜론 분리, 중복 제거)
+            java.util.LinkedHashSet<String> items = new java.util.LinkedHashSet<>();
+            for (String part : component.split("[,;]")) {
+                if (part.isBlank()) continue;
+                items.add(mapItem(part.trim().toUpperCase(), map));
+            }
+            List<List<Object>> additional = new ArrayList<>();
+            for (String it : items) additional.add(List.of(it, 0, component));
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("model", model); out.put("component", component);
+            out.put("common", COMMON); out.put("additional", additional);
+            return out;
+        }
+        ensure("complaints");
+        String esc = (model == null ? "" : model).replace("'", "''").toUpperCase();
+        List<List<Object>> topComp = rows(
+            "SELECT components, COUNT(*) n FROM complaints WHERE upper(model)='" + esc + "' "
+            + "GROUP BY components ORDER BY n DESC LIMIT 25");
+        LinkedHashMap<String, Integer> agg = new LinkedHashMap<>();
+        LinkedHashMap<String, String> sample = new LinkedHashMap<>();
+        for (List<Object> r : topComp) {
+            if (r.size() < 2 || r.get(0) == null) continue;
+            String comp = r.get(0).toString();
+            int n = (int) Long.parseLong(r.get(1).toString().split("\\.")[0]);
+            String item = mapItem(comp.toUpperCase(), map);
+            agg.merge(item, n, Integer::sum);
+            sample.putIfAbsent(item, comp);
+        }
+        List<List<Object>> additional = new ArrayList<>();
+        agg.entrySet().stream()
+           .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
+           .forEach(e -> additional.add(List.of(e.getKey(), e.getValue(), sample.getOrDefault(e.getKey(), ""))));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("model", model);
+        out.put("common", COMMON);
+        out.put("additional", additional);
+        return out;
+    }
+
     @SuppressWarnings("unchecked")
     private String insight(Map<String, Object> agg, long recalls, long complaints, long fires, long injuries, String llmModel) {
         String stats = "리콜 총 " + recalls + "건, 불만 총 " + complaints + "건, 화재 " + fires + "건, 부상 " + injuries + "명.\n"
@@ -200,7 +307,14 @@ public class AnalyticsService {
     private void ensure(String table) {
         String path = data.getTables().get(table);
         if (path == null) return;
-        try { tabular.registerCsv(table, path); } catch (Exception e) { log.warn("[analytics] {} 로드 실패: {}", table, e.getMessage()); }
+        // 1회만 등록(읽기 경로가 매 요청 재등록하지 않게). 데이터 변경 시 refresh()로 갱신.
+        try { tabular.registerCsvOnce(table, path); } catch (Exception e) { log.warn("[analytics] {} 로드 실패: {}", table, e.getMessage()); }
+    }
+
+    /** 데이터(CSV) 변경 시 호출 — 등록 캐시를 비우고 핵심 테이블을 다시 등록(최신 파일 반영). */
+    public void refresh() {
+        tabular.invalidateRegistrations();
+        ensure("recalls"); ensure("complaints"); ensure("parts");
     }
 
     private long scalar(String sql) {

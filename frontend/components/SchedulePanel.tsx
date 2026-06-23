@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { api, type Maintenance, type Models } from "@/lib/api";
+import { api, type Maintenance } from "@/lib/api";
 
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
@@ -9,7 +9,7 @@ const STATUSES = ["예정", "진행", "완료"];
 
 export default function SchedulePanel() {
   const [items, setItems] = useState<Maintenance[]>([]);
-  const [models, setModels] = useState<Models | null>(null);
+  const [carModels, setCarModels] = useState<string[]>([]);   // 차종 목록(불만 데이터 기준)
   const [view, setView] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -22,7 +22,10 @@ export default function SchedulePanel() {
     try { setItems(await api.maintenanceList()); }
     catch (e) { setErr(String(e)); }
   }
-  useEffect(() => { load(); api.models().then(setModels).catch(() => {}); }, []);
+  useEffect(() => {
+    load();
+    api.summary().then((s) => setCarModels((s.byModel || []).map((m) => String(m[0])))).catch(() => {});
+  }, []);
 
   const byDate = useMemo(() => {
     const m: Record<string, Maintenance[]> = {};
@@ -103,7 +106,7 @@ export default function SchedulePanel() {
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
             <select value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })}>
               <option value="">차종 선택(선택)</option>
-              {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
+              {carModels.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
             <input type="text" placeholder="정비 항목 (예: 안전벨트 프리텐셔너 점검)" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             <input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} />

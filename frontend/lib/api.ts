@@ -83,8 +83,8 @@ async function jpost<T>(url: string, body?: unknown): Promise<T> {
 
 export const api = {
   // RAG
-  ask: (question: string, namespace: string, model?: string) =>
-    jpost<AskResult>("/api/rag/ask", { question, namespace, model }),
+  ask: (question: string, namespace: string, model?: string, title?: string) =>
+    jpost<AskResult>("/api/rag/ask", { question, namespace, model, title }),
   models: () => jget<Models>("/api/rag/models"),
 
   // Data / KB
@@ -148,6 +148,10 @@ export const api = {
   // 드릴다운: 특정 차종의 개별 차량 기록(불만)
   vehicles: (model: string) =>
     jget<{ model: string; vehicles: VehicleRecord[] }>(`/api/analytics/vehicles?model=${encodeURIComponent(model)}`),
+  // 점검 체크리스트: component 주면 건별(그 부위만), 없으면 차종 집계
+  checklist: (model: string, component?: string) =>
+    jget<{ model: string; common: [string, string][]; additional: [string, number, string][]; error?: string }>(
+      `/api/analytics/checklist?model=${encodeURIComponent(model)}${component ? `&component=${encodeURIComponent(component)}` : ""}`),
   // 케이스 우선순위 트리아지(전 차종, 필터)
   cases: (model?: string, component?: string) => {
     const p = new URLSearchParams();
