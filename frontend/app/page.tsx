@@ -50,10 +50,17 @@ export default function Home() {
   const [tab, setTab] = useState<TabId>("home");
   const [dark, setDark] = useState(false);
   const [online, setOnline] = useState<boolean | null>(null);
-  const [reportCar, setReportCar] = useState("");   // 홈 차종별 업무 → 진단 리포트 차종 전달
+  const [reportCar, setReportCar] = useState("");   // → 진단 리포트 차종 전달
+  const [triageModel, setTriageModel] = useState("");   // → 트리아지 차종 필터
+  const [triageCase, setTriageCase] = useState("");     // → 트리아지 특정 케이스 자동 오픈
 
+  // payload: report=차종 / triage="차종::접수번호"(케이스 상세 자동 오픈) 또는 빈값(큐)
   function navigate(id: string, payload?: string) {
-    if (payload) setReportCar(payload);
+    if (id === "report" && payload) setReportCar(payload);
+    if (id === "triage") {
+      const parts = (payload || "").split("::");
+      setTriageModel(parts[0] || ""); setTriageCase(parts[1] || "");
+    }
     setTab(id as TabId);
   }
 
@@ -95,7 +102,7 @@ export default function Home() {
         </div>
         <nav className="nav">
           {TABS.map((t) => (
-            <button key={t.id} className={`navitem ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>
+            <button key={t.id} className={`navitem ${tab === t.id ? "active" : ""}`} onClick={() => navigate(t.id)}>
               <span className="ic"><Icon id={t.id} /></span>{t.label}
             </button>
           ))}
@@ -126,12 +133,12 @@ export default function Home() {
             {tab === "home" && <HomePanel onNavigate={navigate} />}
             {tab === "ask" && <AskPanel />}
             {tab === "agent" && <AgentPanel />}
-            {tab === "report" && <ReportPanel initialCar={reportCar} />}
+            {tab === "report" && <ReportPanel initialCar={reportCar} onNavigate={navigate} />}
             {tab === "diag" && <DiagnosePanel />}
             {tab === "kb" && <KnowledgeBasePanel />}
             {tab === "sql" && <TabularPanel />}
             {tab === "analytics" && <AnalyticsPanel />}
-            {tab === "triage" && <CaseTriagePanel />}
+            {tab === "triage" && <CaseTriagePanel onNavigate={navigate} initialModel={triageModel} initialCaseId={triageCase} />}
             {tab === "schedule" && <SchedulePanel />}
             {tab === "gov" && <GovernancePanel />}
           </div>

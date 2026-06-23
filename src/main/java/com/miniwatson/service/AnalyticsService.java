@@ -138,7 +138,7 @@ public class AnalyticsService {
         String inj    = "COALESCE(TRY_CAST(numberofinjuries AS INTEGER),0)";
         String dea    = "COALESCE(TRY_CAST(numberofdeaths AS INTEGER),0)";
         return tabular.runSelect(
-            "SELECT odinumber, datecomplaintfiled, components, modelyear, substr(summary,1,160), "
+            "SELECT odinumber, datecomplaintfiled, components, modelyear, substr(summary,1,2000), "
             + "(" + dea + "*100 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3) AS priority, "
             + fireT + " AS fire, " + crashT + " AS crash, " + inj + " AS injuries, " + dea + " AS deaths "
             + "FROM complaints WHERE upper(model)='" + esc + "' "
@@ -159,11 +159,30 @@ public class AnalyticsService {
         if (component != null && !component.isBlank())
             where.append(" AND upper(components) LIKE '%").append(component.replace("'", "''").toUpperCase()).append("%'");
         return tabular.runSelect(
-            "SELECT odinumber, datecomplaintfiled, model, components, modelyear, substr(summary,1,160), "
+            "SELECT odinumber, datecomplaintfiled, model, components, modelyear, substr(summary,1,2000), "
             + "(" + dea + "*100 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3) AS priority, "
             + fireT + " AS fire, " + crashT + " AS crash, " + inj + " AS injuries, " + dea + " AS deaths "
             + "FROM complaints " + where + " "
             + "ORDER BY priority DESC, datecomplaintfiled DESC NULLS LAST LIMIT 60").rows();
+    }
+
+    private static final java.util.Set<String> TBL = java.util.Set.of("recalls", "complaints");
+
+    /** 시계열 추세 — 연/월/일 그래뉼래리티 + 차종 필터. [버킷, 건수] */
+    public List<List<Object>> trend(String table, String by, String model) {
+        if (!TBL.contains(table)) return new ArrayList<>();
+        ensure(table);
+        String dc = "recalls".equals(table) ? "reportreceiveddate" : "datecomplaintfiled";
+        String bucket = switch (by == null ? "year" : by) {
+            case "day"   -> "cast(" + dc + " AS varchar)";
+            case "month" -> "year(" + dc + ") || '-' || lpad(cast(month(" + dc + ") AS varchar), 2, '0')";
+            default       -> "cast(year(" + dc + ") AS varchar)";
+        };
+        StringBuilder w = new StringBuilder("WHERE " + dc + " IS NOT NULL");
+        if (model != null && !model.isBlank())
+            w.append(" AND upper(model)='").append(model.replace("'", "''").toUpperCase()).append("'");
+        return rows("SELECT " + bucket + " AS bucket, COUNT(*) n FROM " + table + " " + w
+            + " GROUP BY bucket ORDER BY bucket LIMIT 120");
     }
 
     // ── 점검 체크리스트: 공통(표준 성능·상태점검) + 차종별 추가(리콜·불만 부위 → 점검 항목) ──

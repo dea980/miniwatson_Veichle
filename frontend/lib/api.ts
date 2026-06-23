@@ -149,6 +149,10 @@ export const api = {
   // 드릴다운: 특정 차종의 개별 차량 기록(불만)
   vehicles: (model: string) =>
     jget<{ model: string; vehicles: VehicleRecord[] }>(`/api/analytics/vehicles?model=${encodeURIComponent(model)}`),
+  // 시계열 추세 (연/월/일 + 차종)
+  trend: (table: "recalls" | "complaints", by: "year" | "month" | "day", model?: string) =>
+    jget<{ trend: [string, number][]; error?: string }>(
+      `/api/analytics/trend?table=${table}&by=${by}${model ? `&model=${encodeURIComponent(model)}` : ""}`),
   // 점검 체크리스트: component 주면 건별(그 부위만), 없으면 차종 집계
   checklist: (model: string, component?: string) =>
     jget<{ model: string; common: [string, string][]; additional: [string, number, string][]; error?: string }>(

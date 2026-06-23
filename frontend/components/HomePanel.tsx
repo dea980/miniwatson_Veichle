@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { api, type Summary, type Source, type Models } from "@/lib/api";
+import { api, type Summary, type Source, type Models, type CaseRecord } from "@/lib/api";
 import CarImage from "@/components/CarImage";
 
 const num = (v: unknown) => Number(v) || 0;
@@ -9,6 +9,8 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
   const [sum, setSum] = useState<Summary | null>(null);
   const [feed, setFeed] = useState<"recalls" | "complaints">("recalls");
   const [sumErr, setSumErr] = useState("");
+  const [topCases, setTopCases] = useState<CaseRecord[]>([]);     // 우선 대응 케이스
+  const [resolved, setResolved] = useState<Set<string>>(new Set());
 
   // RAG 채팅 어시스턴트 (멀티턴)
   type Msg = { role: "user" | "assistant"; text: string; sources?: Source[] };
@@ -21,6 +23,8 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
 
   useEffect(() => {
     api.summary().then(setSum).catch((e) => setSumErr(String(e)));
+    api.cases().then((r) => setTopCases(r.cases || [])).catch(() => {});
+    try { setResolved(new Set(JSON.parse(localStorage.getItem("mw-resolved-cases") || "[]"))); } catch {}
     // 기본 모델: 지시 잘 따르는 instruct/7B 우선(약한 모델은 프롬프트를 메아리치는 경우가 있음)
     api.models().then((m) => {
       setModels(m);
@@ -75,6 +79,32 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
             <div className={`stat ${num(t?.injuries) > 0 ? "warn" : ""}`}><div className="v">{num(t?.injuries)}</div><div className="l">부상 합계</div></div>
           </div>
           <div className="hint">전체 플릿 집계. 자세한 분석은 <a onClick={() => onNavigate("analytics")} style={{ cursor: "pointer" }}>분석 대시보드</a>에서.</div>
+        </div>
+
+        {/* 우선 대응 케이스 — 클릭 → 차량 케이스 진단 (스파인으로 연결) */}
+        <div className="card" style={{ margin: 0 }}>
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <h2 style={{ margin: 0 }}>우선 대응 케이스</h2>
+            <button className="ghost" style={{ fontSize: 12 }} onClick={() => onNavigate("triage")}>트리아지 전체 →</button>
+          </div>
+          <div className="hint">심각도 우선순위 상위. 누르면 차량 케이스 진단으로.</div>
+          {topCases.filter((c) => !resolved.has(String(c[0]))).slice(0, 5).map((c, i) => {
+            const fire = num(c[7]), inj = num(c[9]), dea = num(c[10]);
+            const accent = dea > 0 || fire > 0 ? "var(--danger)" : num(c[6]) > 0 ? "var(--warn)" : "var(--border)";
+            return (
+              <div className="doc" key={i} style={{ cursor: "pointer", borderLeft: `3px solid ${accent}`, paddingLeft: 10 }}
+                onClick={() => onNavigate("triage", `${c[2]}::${c[0]}`)}>
+                <span className="badge" style={{ marginLeft: 0 }}>{num(c[6])}</span>
+                <span className="name" style={{ fontSize: 13 }}>{c[2]} · {String(c[3]).slice(0, 26)}</span>
+                <span className="spacer" />
+                {dea > 0 && <span className="pill bad">사망 {dea}</span>}
+                {inj > 0 && <span className="pill warn">부상 {inj}</span>}
+                {fire > 0 && <span className="pill bad">화재</span>}
+                <span className="muted" style={{ fontSize: 12 }}>진단 →</span>
+              </div>
+            );
+          })}
+          {topCases.filter((c) => !resolved.has(String(c[0]))).length === 0 && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>대기 케이스 없음.</div>}
         </div>
 
         {/* 최근 리콜/불만 피드 (= 도메인 뉴스) */}

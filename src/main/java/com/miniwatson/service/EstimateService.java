@@ -78,16 +78,8 @@ public class EstimateService {
         out.put("total", total);                     // 합계(부가세 포함)
         out.put("sample", true);                     // 샘플 단가 플래그 — 실제 청구액 아님
 
-        // 3) 한 줄 안내(LLM, 금액은 위 결정값 인용)
-        try {
-            String note = ollama.ask(
-                "다음 수리 견적을 고객에게 한국어 1~2문장으로 안내하세요(금액 그대로 인용, 과장 금지). "
-                + "차종:" + car + " / 증상:" + problem + " / 합계:" + grand + "원(부품 " + partsTotal + " + 공임 " + laborTotal + ").",
-                model);
-            out.put("note", note);
-        } catch (Exception e) {
-            out.put("note", "예상 견적 합계 " + grand + "원 (부품 " + partsTotal + " + 공임 " + laborTotal + "). 데모용 샘플 단가 기준.");
-        }
+        // 3) 안내문 — 결정적(추가 LLM 호출 제거로 응답 단축, 케이스 상세는 자체 견적표 사용)
+        out.put("note", "예상 합계 " + total + "원 (부품 " + partsTotal + " + 공임 " + laborTotal + " + 부가세 " + vat + "). 데모용 샘플 단가 기준.");
         return out;
     }
 

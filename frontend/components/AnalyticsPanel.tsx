@@ -29,19 +29,39 @@ export default function AnalyticsPanel() {
   const [err, setErr] = useState("");
   const [insight, setInsight] = useState("");
   const [insLoading, setInsLoading] = useState(false);
+  // 시계열 추세 (연/월/일)
+  const [by, setBy] = useState<"year" | "month" | "day">("year");
+  const [recallTrend, setRecallTrend] = useState<[string, number][]>([]);
+  const [complaintTrend, setComplaintTrend] = useState<[string, number][]>([]);
 
   useEffect(() => { api.models().then((m) => { setModels(m); setModel(m.default); }).catch(() => {}); }, []);
 
+  async function loadTrends(g = by) {
+    try {
+      const [rc, cp] = await Promise.all([
+        api.trend("recalls", g, model || undefined),
+        api.trend("complaints", g, model || undefined),
+      ]);
+      setRecallTrend(rc.trend || []); setComplaintTrend(cp.trend || []);
+    } catch { /* 무시 */ }
+  }
+
   async function load() {
-    setLoading(true); setErr("");
+    setLoading(true); setErr(""); setInsight("");   // 데이터 바뀌면 이전 인사이트 비움
     try { setRes(await api.analytics(model || undefined)); }   // 집계(차트) — 빠름
     catch (e) { setErr(String(e)); } finally { setLoading(false); }
-    // AI 인사이트는 별도로(느린 LLM이 차트를 막지 않게)
+    loadTrends();
+  }
+
+  // AI 인사이트는 *요청 시에만* 생성(느린 LLM 호출이라 자동 X)
+  async function genInsight() {
     setInsLoading(true); setInsight("");
     try { const r = await api.analyticsInsight(model || undefined); setInsight(r.insight); }
     catch { setInsight("(인사이트 생성 실패)"); } finally { setInsLoading(false); }
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  // 그래뉼래리티 바꾸면 추세만 다시
+  useEffect(() => { if (res) loadTrends(by); /* eslint-disable-next-line */ }, [by]);
 
   const t = res?.totals;
 
@@ -90,9 +110,20 @@ export default function AnalyticsPanel() {
           </div>
           <div className="hint">수요=불만에 해당 부위가 등장한 횟수(프록시). 예상비용=수요×(단가+공임). 정확 청구액 아닌 운영 우선순위용.</div>
 
-          {/* 추세 */}
-          {res.recallByYear?.length > 0 && (<><div className="label">리콜 추세 (연도별)</div><Bars rows={res.recallByYear} unit="건" /></>)}
-          {res.complaintByYear?.length > 0 && (<><div className="label">불만 추세 (연도별)</div><Bars rows={res.complaintByYear} unit="건" /></>)}
+          {/* 추세 분석 — 연/월/일 그래뉼래리티 (분석가용) */}
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
+            <div className="label" style={{ margin: 0 }}>추세 분석 {model && <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>· {model}</span>}</div>
+            <div className="row" style={{ gap: 4 }}>
+              {(["year", "month", "day"] as const).map((g) => (
+                <button key={g} className={by === g ? "btn" : "ghost"} style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setBy(g)}>
+                  {g === "year" ? "연도별" : g === "month" ? "월별" : "일별"}
+                </button>
+              ))}
+            </div>
+          </div>
+          {recallTrend.length > 0 && (<><div className="label">리콜 추세</div><Bars rows={recallTrend} unit="건" /></>)}
+          {complaintTrend.length > 0 && (<><div className="label">불만 추세</div><Bars rows={complaintTrend} unit="건" /></>)}
+          {recallTrend.length === 0 && complaintTrend.length === 0 && <div className="muted" style={{ fontSize: 13 }}>추세 데이터 없음</div>}
 
           {/* 결함 부위 */}
           {res.recallTopComponents?.length > 0 && (<><div className="label">리콜 주요 부위</div><Bars rows={res.recallTopComponents} unit="건" /></>)}
@@ -121,11 +152,16 @@ export default function AnalyticsPanel() {
             </>
           )}
 
-          {/* AI 인사이트 (별도 로드) */}
-          <div className="label">AI 운영 인사이트</div>
+          {/* AI 인사이트 — 요청 시에만 생성(버튼) */}
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
+            <div className="label" style={{ margin: 0 }}>AI 운영 인사이트</div>
+            {!insLoading && <button className="btn" style={{ fontSize: 12 }} onClick={genInsight}>{insight ? "다시 생성" : "AI 인사이트 생성"}</button>}
+          </div>
           {insLoading
             ? <div className="empty"><div className="empty-ic"><svg className="spin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /></svg></div><div>집계를 바탕으로 AI가 인사이트를 작성 중…</div></div>
-            : <div className="answer"><Markdown text={insight || "(인사이트 없음)"} /></div>}
+            : insight
+              ? <div className="answer"><Markdown text={insight} /></div>
+              : <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>버튼을 누르면 위 집계를 근거로 AI가 운영 인사이트를 서술합니다(느린 LLM 호출이라 요청 시에만).</div>}
         </>
       )}
     </div>

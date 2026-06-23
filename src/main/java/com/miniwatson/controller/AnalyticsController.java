@@ -54,6 +54,15 @@ public class AnalyticsController {
         return Map.of("refreshed", true);
     }
 
+    /** 시계열 추세 — table=recalls|complaints, by=year|month|day, model(선택). */
+    @GetMapping("/trend")
+    public Map<String, Object> trend(@RequestParam String table,
+                                     @RequestParam(defaultValue = "year") String by,
+                                     @RequestParam(required = false) String model) {
+        try { return Map.of("trend", analytics.trend(table, by, model)); }
+        catch (Throwable t) { return Map.of("trend", java.util.List.of(), "error", t.toString()); }
+    }
+
     /** 점검 체크리스트: 공통(표준) + 차종별 추가(리콜·불만 부위 → 점검항목). */
     @GetMapping("/checklist")
     public Map<String, Object> checklist(@RequestParam String model,

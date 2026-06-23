@@ -33,7 +33,7 @@ function resultPill(result: string) {
   return <span className={`pill ${cls}`}>{result || "양호"}</span>;
 }
 
-export default function ReportPanel({ initialCar }: { initialCar?: string }) {
+export default function ReportPanel({ initialCar, onNavigate }: { initialCar?: string; onNavigate?: (id: string, payload?: string) => void }) {
   const [car, setCar] = useState("PALISADE");
   const [carModels, setCarModels] = useState<string[]>([]);   // 실제 차종 목록(불만 데이터)
   const [models, setModels] = useState<Models | null>(null);  // LLM 모델
@@ -48,8 +48,6 @@ export default function ReportPanel({ initialCar }: { initialCar?: string }) {
   const [cases, setCases] = useState<CaseRecord[]>([]);
   const [caseQ, setCaseQ] = useState("");
   const [caseLoading, setCaseLoading] = useState(false);
-  const [diag, setDiag] = useState<Record<string, EstimateResult | "loading">>({});
-  const [chkCase, setChkCase] = useState<Record<string, string[]>>({});   // 건별 점검 항목
 
   useEffect(() => {
     api.models().then((m) => { setModels(m); setModel(m.default); }).catch(() => {});
@@ -59,7 +57,7 @@ export default function ReportPanel({ initialCar }: { initialCar?: string }) {
   async function gen(carOverride?: string) {
     const c = (carOverride ?? car).trim().toUpperCase();
     if (!c) return;
-    setLoading(true); setErr(""); setRes(null); setCases([]); setDiag({}); setCaseQ(""); setChk(null);
+    setLoading(true); setErr(""); setRes(null); setCases([]); setCaseQ(""); setChk(null);
     try {
       const r = await api.report(c, NS, model || undefined);
       setRes(r);
@@ -72,20 +70,6 @@ export default function ReportPanel({ initialCar }: { initialCar?: string }) {
     setCaseLoading(true);
     try { const r = await api.cases(c, kw || undefined); setCases(r.cases || []); }
     catch { setCases([]); } finally { setCaseLoading(false); }
-  }
-
-  async function diagnose(id: string, comp: string, mdl: string) {
-    if (diag[id] && diag[id] !== "loading") {
-      setDiag((d) => { const n = { ...d }; delete n[id]; return n; });
-      setChkCase((s) => { const n = { ...s }; delete n[id]; return n; });
-      return;
-    }
-    setDiag((d) => ({ ...d, [id]: "loading" }));
-    // 건별 점검 체크리스트(그 건 부위 → 점검 항목)
-    api.checklist(mdl, comp).then((k) => setChkCase((s) => ({ ...s, [id]: (k.additional || []).map((a) => String(a[0])) }))).catch(() => {});
-    // 필요 부품
-    try { const e = await api.estimate(comp, mdl); setDiag((d) => ({ ...d, [id]: e })); }
-    catch { setDiag((d) => ({ ...d, [id]: { items: [], partsTotal: 0, laborTotal: 0, grandTotal: 0, note: "진단 실패", car: mdl, problem: comp, laborRate: 0 } })); }
   }
 
   // 홈 "차종 현황"에서 넘어오면 차종 세팅 + 자동 생성
@@ -140,10 +124,11 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
     <div className="card">
       <h2>차종 진단 리포트</h2>
       <div className="row">
-        <select className="grow" value={car} onChange={(e) => setCar(e.target.value)}>
-          {carOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-          {!carOptions.includes(car) && <option value={car}>{car}</option>}
-        </select>
+        <input className="grow" list="car-options" value={car} placeholder="차종 검색(타이핑)…"
+          onChange={(e) => setCar(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === "Enter" && gen()} />
+        <datalist id="car-options">
+          {carOptions.map((c) => <option key={c} value={c} />)}
+        </datalist>
         <select value={model} onChange={(e) => setModel(e.target.value)} title="응답 생성 LLM">
           {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
         </select>
@@ -211,7 +196,7 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
           {/* 이 차종의 케이스 — 건별 점검 체크리스트 + 필요 부품 */}
           <div className="label" style={{ marginTop: 22 }}>이 차종의 케이스 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>({res.car} · 심각도 우선순위순)</span></div>
           {chk && chk.common.length > 0 && (
-            <div className="hint" style={{ marginTop: 0 }}>공통 점검(모든 차량 표준): {chk.common.map((r) => String(r[0])).join(", ")}. 아래 각 건을 누르면 그 건의 결함 부위에 맞춘 점검 항목과 필요 부품이 나옵니다.</div>
+            <div className="hint" style={{ marginTop: 0 }}>공통 점검(모든 차량 표준): {chk.common.map((r) => String(r[0])).join(", ")}. 각 건을 누르면 <b>차량 케이스 진단 페이지</b>(부품 이미지·점검·견적)로 이동합니다.</div>
           )}
           <div className="row">
             <input className="grow" type="text" placeholder="부위 키워드로 검색 (예: ENGINE, AIR BAG)" value={caseQ}
@@ -225,9 +210,9 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
               const id = String(c[0]);
               const pr = num(c[6]), fire = num(c[7]), crash = num(c[8]), inj = num(c[9]), dea = num(c[10]);
               const accent = dea > 0 || fire > 0 ? "var(--danger)" : pr > 0 ? "var(--warn)" : "var(--border)";
-              const d = diag[id];
               return (
-                <div key={i} style={{ padding: "10px 0 10px 12px", borderBottom: "1px solid var(--border)", borderLeft: `3px solid ${accent}` }}>
+                <div key={i} onClick={() => onNavigate && onNavigate("triage", `${res.car}::${id}`)}
+                  style={{ padding: "10px 0 10px 12px", borderBottom: "1px solid var(--border)", borderLeft: `3px solid ${accent}`, cursor: onNavigate ? "pointer" : "default" }}>
                   <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
                     <div style={{ minWidth: 0 }}>
                       <div className="muted" style={{ fontSize: 12, marginBottom: 3 }}>
@@ -244,41 +229,8 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
                       )}
                       <div className="snip" style={{ marginTop: 4 }}>{String(c[5]).slice(0, 130)}…</div>
                     </div>
-                    <button className="ghost" style={{ fontSize: 12, whiteSpace: "nowrap" }} onClick={() => diagnose(id, String(c[3]), res.car)}>
-                      {d ? "닫기" : "점검·진단"}
-                    </button>
+                    <span className="muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>차량 케이스 진단 →</span>
                   </div>
-                  {/* 이 건 점검 항목 (그 건 부위 → 점검) */}
-                  {chkCase[id] && chkCase[id].length > 0 && (
-                    <div style={{ marginTop: 6, padding: "8px 10px", background: "var(--surface-2)", borderRadius: 8 }}>
-                      <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4 }}>이 건 점검 항목 <span className="muted" style={{ fontWeight: 400 }}>(부위: {String(c[3]).slice(0, 40)})</span></div>
-                      {chkCase[id].map((it, k) => (
-                        <div key={k} style={{ fontSize: 12.5, padding: "2px 0" }}><span style={{ color: "var(--warn)" }}>☐</span> {it}</div>
-                      ))}
-                    </div>
-                  )}
-                  {d === "loading" && <div className="muted" style={{ fontSize: 12, padding: "6px 0" }}>점검·부품 산정 중…</div>}
-                  {d && d !== "loading" && (
-                    <div style={{ marginTop: 6, padding: "8px 10px", background: "var(--surface-2)", borderRadius: 8 }}>
-                      <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4 }}>필요 부품</div>
-                      {d.items.length === 0 ? <div className="muted" style={{ fontSize: 12 }}>해당 부품을 찾지 못했어요 (부위 신호가 약함)</div> : (
-                        <table style={{ fontSize: 12 }}><tbody>
-                          {d.items.map((it, k) => (
-                            <tr key={k}><td>{it.part}</td><td className="muted">{it.component}</td><td className="right">{won(it.lineTotal)}</td></tr>
-                          ))}
-                        </tbody></table>
-                      )}
-                      {d.items.length > 0 && (
-                        <div style={{ marginTop: 6, fontSize: 12 }}>
-                          <div className="row" style={{ justifyContent: "space-between" }}><span className="muted">부품계</span><span>{won(d.partsTotal)}</span></div>
-                          <div className="row" style={{ justifyContent: "space-between" }}><span className="muted">공임계</span><span>{won(d.laborTotal)}</span></div>
-                          <div className="row" style={{ justifyContent: "space-between" }}><span className="muted">부가세(10%)</span><span>{won(d.vat ?? 0)}</span></div>
-                          <div className="row" style={{ justifyContent: "space-between", fontWeight: 700, borderTop: "1px solid var(--border)", paddingTop: 3, marginTop: 3 }}><span>합계</span><span>{won(d.total ?? d.grandTotal)}</span></div>
-                          <div className="hint" style={{ marginTop: 4 }}>샘플 단가(예시) — 실제 청구액 아님. 운영은 현대모비스 부품가·표준공임 연동.</div>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               );
             })}
