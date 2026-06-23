@@ -32,7 +32,13 @@
 5. [Tabular (text-to-SQL)](#5-tabular-text-to-sql)
    - `POST /api/tabular/load`
    - `POST /api/tabular/ask`
-6. [Health](#6-health)
+6. [Agent (진단·견적·이미지 진단)](#6-agent)
+   - `POST /api/agent/ask` · `/report` · `/estimate` · `/diagnose-image`
+7. [Analytics (자동차 분석·케이스·점검)](#7-analytics)
+   - `GET /overview` · `/insight` · `/summary` · `/vehicles` · `/cases` · `/checklist` · `/trend` · `POST /refresh`
+8. [Maintenance (정비 스케줄)](#8-maintenance)
+   - `GET/POST /api/maintenance` · `PUT /{id}/status` · `DELETE /{id}`
+9. [Health](#9-health)
 
 ---
 
@@ -69,6 +75,7 @@ curl -X POST http://localhost:8080/api/rag/ask \
 | model     | string  | No       | Chat model override. Falls back to server default.                |
 | rerank    | string  | No       | Eval-only rerank strategy override (e.g. `mmr`, `cross`, `none`). |
 | hybrid    | boolean | No       | Eval-only toggle for hybrid (dense + lexical) retrieval.          |
+| title     | string  | No       | **문서 한정** — 이 제목의 문서 청크로만 검색(문서 전용 어시스턴트). |
 
 **Response — 200 OK** (`RagResult`)
 ```json
@@ -547,7 +554,74 @@ curl -X POST http://localhost:8080/api/tabular/ask \
 
 ---
 
-## 6. Health
+## 6. Agent
+
+Controller: `AgentController` — `@RequestMapping("/api/agent")`. 도구 라우팅(RAG/SQL/복합) + 진단·견적·이미지 진단. 상세: [AGENT.md](AGENT.md).
+
+### `POST /api/agent/ask`
+질문을 분석해 도구(매뉴얼 RAG / 리콜 SQL / 복합)를 자동 선택·실행 후 한국어 종합 + 트레이스.
+```bash
+curl -X POST localhost:8080/api/agent/ask -H 'Content-Type: application/json' \
+  -d '{"question":"PALISADE 리콜 많은 부위는?","namespace":"vehicle"}'
+```
+Body: `{question, namespace?, model?}`. Response: `{answer, tool, trace[], sources[], sql?, rows?, logId}`.
+
+### `POST /api/agent/report`
+차종 종합 진단서 — 리콜(SQL)·불만(SQL)·매뉴얼(RAG) 집계 + LLM 서술. 집계는 결정적 SQL.
+```bash
+curl -X POST localhost:8080/api/agent/report -H 'Content-Type: application/json' \
+  -d '{"car":"PALISADE","namespace":"vehicle"}'
+```
+Body: `{car, namespace?, model?}`. Response(`ReportResult`): `{car, inspection[], recallTotal, recallTopComponents[], complaintTotal, complaintTopComponents[], fires, injuries, manualNotes, sources[], report}`.
+
+### `POST /api/agent/estimate`
+증상/부위 → 부품 선택(LLM) + 금액 계산(결정적). 부가세 포함 견적.
+```bash
+curl -X POST localhost:8080/api/agent/estimate -H 'Content-Type: application/json' \
+  -d '{"problem":"AIR BAGS","car":"PALISADE"}'
+```
+Body: `{problem, car, model?}`. Response(`EstimateResult`): `{items[], partsTotal, laborTotal, grandTotal(공급가액), vat, total, sample, note}`. 단가는 샘플(`parts_pricing.csv`).
+
+### `POST /api/agent/diagnose-image`
+경고등·부품 사진 → Vision+OCR+RAG 진단 (multipart: `image`, `namespace?`, `model?`). Response: `{caption, ocr, diagnosis, problem, sources[]}`.
+
+---
+
+## 7. Analytics
+
+Controller: `AnalyticsController` — `@RequestMapping("/api/analytics")`. 리콜·불만·부품 집계(결정적 SQL, DuckDB). 동시성·등록정책: [TABULAR-SQL.md](TABULAR-SQL.md) §4.5. 케이스 중심 기능: [AS-OPERATIONS.md](AS-OPERATIONS.md).
+
+| Endpoint | 설명 |
+|---|---|
+| `GET /overview?model=` | 총계 KPI + 추세·결함부위·부품수요·안전핫스팟 (집계, LLM 미사용·빠름) |
+| `GET /insight?model=` | 위 집계 기반 **AI 운영 인사이트**(느린 LLM, 요청 시에만). `{insight}` |
+| `GET /summary` | 홈용 경량 — 총계 + 최근 리콜/불만 피드 + 차종별 |
+| `GET /vehicles?model=` | 그 차종 개별 케이스(불만) — 우선순위순 `[id,날짜,부위,연식,요약,우선순위,화재,사고,부상,사망]` |
+| `GET /cases?model=&component=` | **전 차종 케이스 트리아지** — 필터 + 심각도 우선순위. 케이스에 model 포함(11열) |
+| `GET /checklist?model=&component=` | 점검 체크리스트 — `component` 있으면 **건별**(그 부위), 없으면 차종 집계. `{common[], additional[]}` |
+| `GET /trend?table=recalls\|complaints&by=year\|month\|day&model=` | 시계열 추세 `[버킷, 건수]` |
+| `POST /refresh` | 데이터(CSV) 변경 후 재등록(등록 1회 정책). `{refreshed:true}` |
+
+우선순위 = 사망×100 + 부상×10 + 화재×5 + 사고×3 (결정적 SQL).
+
+---
+
+## 8. Maintenance
+
+Controller: `MaintenanceController` — `@RequestMapping("/api/maintenance")`. 정비 스케줄(캘린더). **새 DB 없이 기존 JPA 데이터소스에 `maintenance_schedule` 테이블** (H2 dev / PostgreSQL prod).
+
+| Method | Endpoint | 설명 |
+|---|---|---|
+| GET | `/api/maintenance` (`?from=&to=`) | 일정 목록(날짜순), 기간 필터 옵션 |
+| POST | `/api/maintenance` | 추가. Body `{model, caseNumber?, title, scheduledDate(YYYY-MM-DD), technician?, note?, status?}` |
+| PUT | `/api/maintenance/{id}/status?value=` | 상태 변경(예정/진행/완료) |
+| DELETE | `/api/maintenance/{id}` | 삭제 |
+
+`MaintenanceSchedule`: `{id, model, caseNumber, title, scheduledDate, status, technician, note, createdAt}`.
+
+---
+
+## 9. Health
 
 ### `GET /actuator/health`
 
@@ -634,5 +708,5 @@ curl http://localhost:8080/actuator/health
 
 - **Local-only**: Wikipedia REST + Ollama localhost:11434. No external paid APIs.
 - **Anti-corruption**: `@JsonIgnoreProperties(ignoreUnknown=true)` on Wikipedia DTOs.
-- **Defaults**: chat-model `ibm/granite4:latest` (available `ibm/granite4:latest`, `gemma4`); rerank strategy `mmr`; chunking `recursive`; hybrid retrieval enabled; `num-predict` 256.
+- **Defaults**: chat-model **`qwen3:8b`** (자동 eval 1등 — [RESULTS.md](RESULTS.md) §2.2; available에 granite4·exaone3.5·qwen2.5 등 포함); rerank `mmr`; chunking `recursive`; hybrid 활성; `num-predict` 512.
 - **Profiles**: `dev` (H2 in-memory), `demo` (H2 file), `prod` (PostgreSQL).
