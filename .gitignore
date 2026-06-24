@@ -91,6 +91,18 @@ data/vehicle/**
 # KB 리셋 백업 (커밋 금지)
 data_backup_*/
 
+# 매뉴얼 중복 백업 (정규화 시 생성)
+_manuals_dups/
+data/vehicle/_manuals_dups/
+
+# 파일 백업/타임스탬프 (.bak, .bak.20260624_... 등)
+*.bak
+*.bak.*
+
+# 대용량 발표/참고 자료 — 레포 비대 방지(로컬 보관). 작은 샘플 CSV/문서는 커밋 허용
+sample/*.pptx
+sample/*.pdf
+
 # 참고용 외부 보고서(저작권·대용량) — 커밋 금지
 현대자동차 지속가능성 보고서/
 *지속가능성 보고서*/
