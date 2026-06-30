@@ -145,9 +145,15 @@ public class AnalyticsService {
         String crashT = "CASE WHEN lower(cast(crash AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
         String inj    = "COALESCE(TRY_CAST(numberofinjuries AS INTEGER),0)";
         String dea    = "COALESCE(TRY_CAST(numberofdeaths AS INTEGER),0)";
+        // 최신성 가중: 접수일이 최근일수록 가산(반감 180일, W=12). YYYYMMDD/ISO 둘 다 파싱, 실패 시 0.
+        String recDate = "COALESCE("
+            + "CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%m/%d/%Y') AS DATE), "  // 실제 NHTSA 포맷 MM/DD/YYYY
+            + "CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%Y%m%d') AS DATE), "      // YYYYMMDD 폴백
+            + "TRY_CAST(CAST(datecomplaintfiled AS VARCHAR) AS DATE))";                          // ISO 폴백
+        String rec     = "COALESCE(ROUND(12 * exp(-date_diff('day', " + recDate + ", current_date) / 180.0)), 0)";
         return tabular.runSelect(
             "SELECT odinumber, datecomplaintfiled, components, modelyear, substr(summary,1,2000), "
-            + "(" + dea + "*100 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3) AS priority, "
+            + "(" + dea + "*100 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3 + " + rec + ") AS priority, "
             + fireT + " AS fire, " + crashT + " AS crash, " + inj + " AS injuries, " + dea + " AS deaths "
             + "FROM complaints WHERE upper(model)='" + esc + "' "
             + "ORDER BY priority DESC, datecomplaintfiled DESC NULLS LAST LIMIT 20").rows();
@@ -168,6 +174,12 @@ public class AnalyticsService {
         String crashT = "CASE WHEN lower(cast(crash AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
         String inj    = "COALESCE(TRY_CAST(numberofinjuries AS INTEGER),0)";
         String dea    = "COALESCE(TRY_CAST(numberofdeaths AS INTEGER),0)";
+        // 최신성 가중: 접수일이 최근일수록 가산(반감 180일, W=12). YYYYMMDD/ISO 둘 다 파싱, 실패 시 0.
+        String recDate = "COALESCE("
+            + "CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%m/%d/%Y') AS DATE), "  // 실제 NHTSA 포맷 MM/DD/YYYY
+            + "CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%Y%m%d') AS DATE), "      // YYYYMMDD 폴백
+            + "TRY_CAST(CAST(datecomplaintfiled AS VARCHAR) AS DATE))";                          // ISO 폴백
+        String rec     = "COALESCE(ROUND(12 * exp(-date_diff('day', " + recDate + ", current_date) / 180.0)), 0)";
         StringBuilder where = new StringBuilder("WHERE 1=1");
         if (model != null && !model.isBlank())
             where.append(" AND upper(model)='").append(model.replace("'", "''").toUpperCase()).append("'");
@@ -191,7 +203,7 @@ public class AnalyticsService {
             : "ORDER BY priority DESC, datecomplaintfiled DESC NULLS LAST, odinumber";
         List<List<Object>> rows = rows(
             "SELECT odinumber, datecomplaintfiled, model, components, modelyear, substr(summary,1,2000), "
-            + "(" + dea + "*100 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3) AS priority, "
+            + "(" + dea + "*100 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3 + " + rec + ") AS priority, "
             + fireT + " AS fire, " + crashT + " AS crash, " + inj + " AS injuries, " + dea + " AS deaths "
             + "FROM complaints " + where + " "
             + orderBy + " LIMIT " + lim + " OFFSET " + off);
@@ -271,8 +283,14 @@ public class AnalyticsService {
         String crashT = "CASE WHEN lower(cast(crash AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
         String inj = "COALESCE(TRY_CAST(numberofinjuries AS INTEGER),0)";
         String dea = "COALESCE(TRY_CAST(numberofdeaths AS INTEGER),0)";
+        // 최신성 가중(반감 180일, W=12). YYYYMMDD/ISO/MM-DD-YYYY 모두 파싱, 실패 시 0.
+        String recDate = "COALESCE("
+            + "CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%m/%d/%Y') AS DATE), "
+            + "CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%Y%m%d') AS DATE), "
+            + "TRY_CAST(CAST(datecomplaintfiled AS VARCHAR) AS DATE))";
+        String rec = "COALESCE(ROUND(12 * exp(-date_diff('day', " + recDate + ", current_date) / 180.0)), 0)";
         return rows("SELECT odinumber, datecomplaintfiled, model, components, modelyear, substr(summary,1,2000), "
-            + "(" + dea + "*100 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3) AS priority, "
+            + "(" + dea + "*100 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3 + " + rec + ") AS priority, "
             + fireT + ", " + crashT + ", " + inj + ", " + dea + " "
             + "FROM complaints WHERE odinumber='" + esc + "' LIMIT 1");
     }

@@ -209,14 +209,14 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
           {/* 이 건 점검 항목 */}
           <div className="label" style={{ marginTop: 18 }}>이 건 점검 항목 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(부위: {String(c[3]).slice(0, 40)})</span></div>
           {thisChk.length === 0 ? <div className="muted" style={{ fontSize: 13 }}>매핑된 점검 항목 없음</div>
-            : thisChk.map((it, i) => <div key={i} style={{ fontSize: 13.5, padding: "3px 0" }}><span style={{ color: "var(--warn)" }}>☐</span> {it}</div>)}
+            : thisChk.map((it, i) => <div key={i} className="chk" style={{ fontSize: 13.5, padding: "3px 0" }}>{it}</div>)}
 
           {/* 차종 추가 점검 (참고) */}
           <div className="label" style={{ marginTop: 18 }}>차종 추가 점검 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(참고 · {mdl} 전반 빈도순)</span></div>
           {carChk.length === 0 ? <div className="muted" style={{ fontSize: 13 }}>—</div>
             : carChk.slice(0, 6).map((r, i) => (
               <div key={i} className="row" style={{ justifyContent: "space-between", fontSize: 13, padding: "2px 0" }}>
-                <span>☐ {r[0]}</span><span className="badge" style={{ marginLeft: 0 }}>{r[1]}건</span>
+                <span className="chk">{r[0]}</span><span className="badge" style={{ marginLeft: 0 }}>{r[1]}건</span>
               </div>
             ))}
         </>)}
@@ -233,8 +233,8 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
         <h2 style={{ margin: 0 }}>케이스 트리아지 <span className="muted" style={{ fontSize: 13 }}>· 우선순위 큐</span></h2>
         <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
           <select value={sort} onChange={(e) => { const s = e.target.value as "priority" | "model"; setSort(s); load(0, s); }} title="정렬 기준">
-            <option value="priority">전체 심각도순</option>
-            <option value="model">차종별</option>
+            <option value="priority">우선순위순</option>
+            <option value="model">차종별 · 우선순위순</option>
           </select>
           <select value={model} onChange={(e) => setModel(e.target.value)}>
             <option value="">전체 차종</option>
@@ -245,7 +245,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
         </div>
       </div>
       <div className="hint">
-        <b>우선순위 = 사망×100 + 부상×10 + 화재×5 + 사고×3</b> (높을수록 시급). {sort === "model" ? "차종별로 묶어" : "전체 심각도순으로"} 정렬 · 총 <b>{total.toLocaleString("ko-KR")}건</b> · 페이지 {page + 1}/{lastPage}. 카드를 누르면 접수번호 리포트로, "해결"하면 큐에서 사라집니다(서버 저장).
+        <b>우선순위 = 사망×100 + 부상×10 + 화재×5 + 사고×3 + 최신성</b> (높을수록 시급 · 최신성=최근 접수일수록 가산, 반감 180일). {sort === "model" ? "차종별로 묶어 그 안에서 우선순위순" : "우선순위순으로"} 정렬 · 총 <b>{total.toLocaleString("ko-KR")}건</b> · 페이지 {page + 1}/{lastPage}. 카드를 누르면 접수번호 리포트로, "해결"하면 큐에서 사라집니다(서버 저장).
         {resolvedCount > 0 && <> · <a onClick={toggleResolved} style={{ cursor: "pointer" }}>해결 내역 {resolvedCount}건 {showResolved ? "닫기" : "보기"}</a></>}
       </div>
 

@@ -43,10 +43,12 @@ export default function DiagnosePanel() {
       <h2>사진으로 진단받기</h2>
       <div className="row">
         <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-        <input type="text" value={namespace} onChange={(e) => setNamespace(e.target.value)} style={{ width: 100 }} placeholder="namespace" />
-        <select value={model} onChange={(e) => setModel(e.target.value)}>
-          {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
+        <label className="field-model" title="진단에 사용할 멀티모달 LLM">
+          <span>모델</span>
+          <select value={model} onChange={(e) => setModel(e.target.value)}>
+            {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </label>
         <button className="btn" onClick={diagnose} disabled={busy}>{busy ? "처리 중…" : "이미지 진단"}</button>
       </div>
       <div className="hint">계기판 경고등 | 파손 부품 사진 → Vision+OCR 식별 → 매뉴얼 RAG 진단. (멀티모달 모델 필요: llava 등)</div>

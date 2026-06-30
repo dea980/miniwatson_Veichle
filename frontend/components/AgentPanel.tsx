@@ -36,10 +36,12 @@ export default function AgentPanel() {
         <input className="grow" type="text" placeholder="질문 (매뉴얼 | 리콜 통계 자동 분기)"
           value={question} onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && ask()} />
-        <input type="text" value={namespace} onChange={(e) => setNamespace(e.target.value)} style={{ width: 110 }} />
-        <select value={model} onChange={(e) => setModel(e.target.value)}>
-          {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
+        <label className="field-model" title="답변 생성에 사용할 LLM">
+          <span>모델</span>
+          <select value={model} onChange={(e) => setModel(e.target.value)}>
+            {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </label>
         <button className="btn" onClick={ask} disabled={loading}>{loading ? "처리 중…" : "질문"}</button>
       </div>
       <div className="row" style={{ gap: 6, marginTop: 6 }}>
