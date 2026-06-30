@@ -56,6 +56,11 @@ public class RagCacheService {
             String question, String namespace, String model, String title,
             String car, Integer year, String lang, String powertrain, boolean force) throws IOException {
 
+        // pre-가드: 빈/무의미 질문(예: "", " ", "?")이면 LLM 호출 없이 즉시 안내(비용·UX). 소스 없음.
+        if (isBlankQuestion(question)) {
+            return new RagService.RagResult("질문을 입력해 주세요.", List.of(), null);
+        }
+
         long kbVersion = catalogRepo.count();
         String key = sha256(String.join("|",
                 nz(question), nz(namespace), nz(model), nz(car),
@@ -67,7 +72,7 @@ public class RagCacheService {
             try {
                 CachedAnswer dto = mapper.readValue(hit.get().getContentJson(), CachedAnswer.class);
                 log.info("[ask-cache] HIT key={}…", key.substring(0, 8));
-                return new RagService.RagResult(dto.answer(), toArticles(dto.sources()), null);
+                return postProcess(new RagService.RagResult(dto.answer(), toArticles(dto.sources()), null));
             } catch (Exception e) {
                 log.warn("[ask-cache] 캐시 파싱 실패 — 재생성: {}", e.getMessage());
             }
@@ -94,7 +99,32 @@ public class RagCacheService {
         } catch (Exception e) {
             log.warn("[ask-cache] 캐시 적재 실패: {}", e.getMessage());
         }
-        return r;   // 첫 호출은 원본 그대로(출처에 임베딩 포함되지만 표출엔 무관)
+        return postProcess(r);   // post-가드: non-answer면 소스 제거
+    }
+
+    // ───────── 응답 가드(미들웨어) ─────────
+    /** pre-가드: 글자/숫자가 하나도 없으면(예: "", " ", "?") 무의미 질문으로 본다. */
+    private static boolean isBlankQuestion(String q) {
+        return q == null || q.replaceAll("[^\\p{L}\\p{N}]", "").isBlank();
+    }
+
+    /** post-가드: 실질 답이 아니면(빈 답/해명·회피) 소스를 제거 — "헛근거" 표시 방지. */
+    private RagService.RagResult postProcess(RagService.RagResult r) {
+        if (r == null) return null;
+        if (isNonAnswer(r.answer())) {
+            return new RagService.RagResult(r.answer(), List.of(), r.logId());
+        }
+        return r;
+    }
+
+    /** 해명/회피(non-answer) 판별 — 보수적으로(실답 소스 안 지우게). */
+    private static boolean isNonAnswer(String a) {
+        if (a == null || a.isBlank()) return true;
+        String s = a.trim();
+        if (s.contains("질문을 알려") || s.contains("질문을 입력") || s.contains("질문을 말씀")
+                || s.contains("질문이 없") || s.contains("질문을 다시")) return true;
+        if (s.contains("죄송") && s.contains("질문")) return true;
+        return false;
     }
 
     /** 경량 Src → 표출용 Article(임베딩 null). RAG 표출은 title/summary/url 만 사용. */
