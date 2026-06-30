@@ -11,6 +11,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public class OllamaRequest {
     private String model;
     private String prompt;
+    // 시스템 프롬프트(Ollama /api/generate의 system) — 출력 형식 제약(한국어만·한자금지·반복금지)
+    private String system;
     private boolean stream;
     private Map<String, Object> options;
     private Boolean think;
