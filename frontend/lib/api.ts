@@ -100,8 +100,10 @@ async function jpost<T>(url: string, body?: unknown): Promise<T> {
 
 export const api = {
   // RAG
-  ask: (question: string, namespace: string, model?: string, title?: string) =>
-    jpost<AskResult>("/api/rag/ask", { question, namespace, model, title }),
+  // car(차종 부분일치)·year(연식)·powertrain 으로 검색 범위를 좁힐 수 있음(백엔드 메타 1차 필터)
+  ask: (question: string, namespace: string, model?: string, title?: string,
+        car?: string, year?: number, powertrain?: string) =>
+    jpost<AskResult>("/api/rag/ask", { question, namespace, model, title, car, year, powertrain }),
   models: () => jget<Models>("/api/rag/models"),
 
   // Data / KB
@@ -210,6 +212,10 @@ export const api = {
   // 단일 케이스(접수번호) 상세
   caseById: (id: string) =>
     jget<{ case: CaseRecord | []; error?: string }>(`/api/analytics/case?id=${encodeURIComponent(id)}`),
+  // 불만 접수 내용 한국어 요약 (처음 1회만 LLM, 이후 캐시)
+  caseSummary: (id: string, model?: string) =>
+    jget<{ caseNumber: string; fullText?: string; gist?: string; cached?: boolean; generatedAt?: string; error?: string }>(
+      `/api/agent/case-summary?id=${encodeURIComponent(id)}${model ? `&model=${encodeURIComponent(model)}` : ""}`),
 
   // 정비 스케줄 (캘린더, 백엔드 JPA 영속)
   maintenanceList: () => jget<Maintenance[]>("/api/maintenance"),

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api, type Analytics, type Models } from "@/lib/api";
 import Markdown from "@/components/Markdown";
+import Donut from "@/components/Donut";
 
 const won = (n: number) => Math.round(Number(n) || 0).toLocaleString("ko-KR") + "원";
 const num = (v: unknown) => Number(v) || 0;
@@ -126,8 +127,8 @@ export default function AnalyticsPanel() {
           {recallTrend.length === 0 && complaintTrend.length === 0 && <div className="muted" style={{ fontSize: 13 }}>추세 데이터 없음</div>}
 
           {/* 결함 부위 */}
-          {res.recallTopComponents?.length > 0 && (<><div className="label">리콜 주요 부위</div><Bars rows={res.recallTopComponents} unit="건" /></>)}
-          {res.complaintTopComponents?.length > 0 && (<><div className="label">불만 주요 부위</div><Bars rows={res.complaintTopComponents} unit="건" /></>)}
+          {res.recallTopComponents?.length > 0 && (<><div className="label">리콜 주요 부위</div><Donut rows={res.recallTopComponents} unit="건" /></>)}
+          {res.complaintTopComponents?.length > 0 && (<><div className="label">불만 주요 부위</div><Donut rows={res.complaintTopComponents} unit="건" /></>)}
           {res.complaintByModel?.length > 0 && (<><div className="label">차종별 불만</div><Bars rows={res.complaintByModel} unit="건" /></>)}
 
           {/* 안전 핫스팟 */}

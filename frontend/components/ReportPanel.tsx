@@ -3,10 +3,17 @@ import { useEffect, useState } from "react";
 import { api, type ReportResult, type Models, type CaseRecord, type EstimateResult } from "@/lib/api";
 import Markdown from "@/components/Markdown";
 import CarImage from "@/components/CarImage";
+import Donut from "@/components/Donut";
 
 const num = (v: unknown) => Number(v) || 0;
 const won = (n: number) => Math.round(Number(n) || 0).toLocaleString("ko-KR") + "원";
 const NS = "vehicle";   // 자동차 도메인 고정 (사용자에게 노출하지 않음)
+
+// 점검 결과 → 의미색 (양호=초록, 정비·교환·판금·흠집 등은 주황·빨강 계열)
+const INS_COLOR: Record<string, string> = {
+  "양호": "#1a7f37", "교환": "#c01825", "판금": "#b45309", "판금/용접": "#b45309",
+  "부식": "#92400e", "흠집": "#a16207", "손상": "#c2410c", "요철": "#9a6700", "정비필요": "#d97706",
+};
 
 function Bars({ rows }: { rows: [string, number][] }) {
   const max = Math.max(1, ...rows.map((r) => Number(r[1]) || 0));
@@ -31,6 +38,19 @@ function resultPill(result: string) {
   const replace = result.includes("교환");
   const cls = ok ? "ok" : replace ? "bad" : "warn";
   return <span className={`pill ${cls}`}>{result || "양호"}</span>;
+}
+
+// 점검 결과 분포 도넛 — 양호 family 통합, 의미색. (SWC-safe하게 별도 컴포넌트로 분리)
+function InspectionDonut({ rows }: { rows: readonly (readonly unknown[])[] }) {
+  const m = new Map<string, number>();
+  for (const r of rows) {
+    let k = String(r[2] ?? "").trim();
+    if (k === "" || k === "-" || k === "–") k = "양호";
+    m.set(k, (m.get(k) || 0) + 1);
+  }
+  const dist = [...m.entries()].sort((a, b) => (a[0] === "양호" ? -1 : b[0] === "양호" ? 1 : b[1] - a[1])) as [string, number][];
+  const colors = dist.map(([k]) => INS_COLOR[k] || "#d97706");
+  return <Donut rows={dist} unit="건" colors={colors} />;
 }
 
 export default function ReportPanel({ initialCar, onNavigate }: { initialCar?: string; onNavigate?: (id: string, payload?: string) => void }) {
@@ -159,6 +179,7 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
           {(res.inspection?.length > 0) && (
             <>
               <div className="label">주요장치 점검표 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(상태부호: X교환·W판금/용접·C부식·A흠집·U요철·T손상·– 양호)</span></div>
+              <InspectionDonut rows={res.inspection} />
               <div style={{ overflowX: "auto" }}>
                 <table>
                   <thead><tr><th>장치</th><th>점검 항목</th><th>결과</th><th>부호</th></tr></thead>
@@ -177,8 +198,8 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
             </>
           )}
 
-          {(res.recallTopComponents?.length > 0) && (<><div className="label">리콜 주요 부품</div><Bars rows={res.recallTopComponents} /></>)}
-          {(res.complaintTopComponents?.length > 0) && (<><div className="label">불만 주요 부품</div><Bars rows={res.complaintTopComponents} /></>)}
+          {(res.recallTopComponents?.length > 0) && (<><div className="label">리콜 주요 부품</div><Donut rows={res.recallTopComponents} unit="건" /></>)}
+          {(res.complaintTopComponents?.length > 0) && (<><div className="label">불만 주요 부품</div><Donut rows={res.complaintTopComponents} unit="건" /></>)}
 
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
             <div className="label" style={{ margin: "18px 0 8px" }}>차종 개요 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(참고 · 결정적 집계)</span></div>

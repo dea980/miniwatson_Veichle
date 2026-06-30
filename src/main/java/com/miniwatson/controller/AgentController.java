@@ -65,6 +65,15 @@ public class AgentController {
         catch (Throwable t) { return Map.of("caseNumber", id, "error", t.toString()); }
     }
 
+    /** 불만 접수 내용 한국어 핵심 요약 — 처음 1회만 LLM, 이후 캐시. */
+    @GetMapping("/case-summary")
+    public Map<String, Object> caseSummary(@RequestParam String id,
+                                           @RequestParam(required = false) String model,
+                                           @RequestParam(defaultValue = "false") boolean force) {
+        try { return report.caseSummary(id, model, force); }
+        catch (Throwable t) { return Map.of("caseNumber", id, "error", t.toString()); }
+    }
+
     /** 정비사 메모 저장(문서화·적재). body: {id, note, model?} */
     @PostMapping("/case-report/note")
     public Map<String, Object> saveCaseNote(@RequestBody Map<String, String> body) {

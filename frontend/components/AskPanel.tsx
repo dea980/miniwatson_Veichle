@@ -7,6 +7,8 @@ export default function AskPanel() {
   const [namespace, setNamespace] = useState("vehicle");
   const [models, setModels] = useState<Models | null>(null);
   const [model, setModel] = useState("");
+  const [car, setCar] = useState("");     // 차종 좁히기(부분일치, 예: 팔리세이드/PALISADE)
+  const [year, setYear] = useState("");   // 연식 좁히기
   const [result, setResult] = useState<AskResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -34,7 +36,9 @@ export default function AskPanel() {
     if (!query) return;
     setLoading(true); setErr(""); setResult(null);
     try {
-      const r = await api.ask(query, namespace, model || undefined);
+      const yr = year.trim() ? Number(year.trim()) : undefined;
+      const r = await api.ask(query, namespace, model || undefined, undefined,
+        car.trim() || undefined, Number.isFinite(yr) ? yr : undefined);
       setResult(r);
     } catch (e) { setErr(String(e)); } finally { setLoading(false); }
   }
@@ -109,15 +113,25 @@ export default function AskPanel() {
             )}
           </button>
         )}
-        <input type="text" placeholder="namespace" value={namespace}
-          onChange={(e) => setNamespace(e.target.value)} style={{ width: 120 }} />
-        <select value={model} onChange={(e) => setModel(e.target.value)}>
-          {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
+        <label className="field-model" title="답변 생성에 사용할 LLM">
+          <span>모델</span>
+          <select value={model} onChange={(e) => setModel(e.target.value)}>
+            {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </label>
         <button className="btn" onClick={() => ask()} disabled={loading}>{loading ? "검색 중…" : "질문"}</button>
       </div>
+      <div className="row" style={{ gap: 8, marginTop: 8, alignItems: "center" }}>
+        <span className="muted" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em" }}>범위 좁히기</span>
+        <input type="text" placeholder="차종 (예: 팔리세이드 / PALISADE)" value={car}
+          onChange={(e) => setCar(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask()} style={{ width: 230 }} />
+        <input type="text" inputMode="numeric" placeholder="연식 (예: 2020)" value={year}
+          onChange={(e) => setYear(e.target.value.replace(/[^0-9]/g, ""))} onKeyDown={(e) => e.key === "Enter" && ask()} style={{ width: 120 }} />
+        {(car || year) && <button className="ghost" style={{ fontSize: 12 }} onClick={() => { setCar(""); setYear(""); }}>지우기</button>}
+      </div>
       <div className="hint">
-        자동차 데이터는 namespace에 <b>vehicle</b> 입력. {voiceOk ? "🎤로 말하면 자동 질문, 답변은 🔊로 듣기." : "(이 브라우저는 음성 미지원 — Chrome 권장)"}
+        {car || year ? <><b>{[car, year].filter(Boolean).join(" · ")}</b> 매뉴얼로 범위를 좁혀 검색합니다. </> : null}
+        {voiceOk ? "마이크 버튼으로 음성 질문하고, 답변은 스피커 버튼으로 들을 수 있습니다." : "이 브라우저는 음성 입력 미지원 — Chrome 권장."}
       </div>
       <div className="row" style={{ gap: 6, marginTop: 8 }}>
         {["안전벨트 경고등은 언제 울리나요?", "프리텐셔너 안전띠 취급 시 주의사항은?", "후방 카메라가 안 나올 때 점검 항목은?"].map((ex) => (
@@ -157,9 +171,14 @@ export default function AskPanel() {
             </div>
           ))}
           {result.logId != null && (
-            <div className="row" style={{ marginTop: 10 }}>
-              <button className="ghost" onClick={() => vote("up")}>👍</button>
-              <button className="ghost" onClick={() => vote("down")}>👎</button>
+            <div className="vote-row">
+              <span className="vote-q">이 답변이 도움이 되었나요?</span>
+              <button className="ghost iconbtn" onClick={() => vote("up")} title="도움됨" aria-label="도움됨">
+                <svg viewBox="0 0 24 24"><path d="M7 10v11H4a1 1 0 01-1-1v-9a1 1 0 011-1h3zm0 0l5-7a2 2 0 012 2v3h5a2 2 0 012 2.3l-1.3 7A2 2 0 0118.7 21H7" /></svg>
+              </button>
+              <button className="ghost iconbtn" onClick={() => vote("down")} title="도움 안 됨" aria-label="도움 안 됨">
+                <svg viewBox="0 0 24 24"><path d="M17 14V3h3a1 1 0 011 1v9a1 1 0 01-1 1h-3zm0 0l-5 7a2 2 0 01-2-2v-3H5a2 2 0 01-2-2.3l1.3-7A2 2 0 015.3 3H17" /></svg>
+              </button>
             </div>
           )}
         </>

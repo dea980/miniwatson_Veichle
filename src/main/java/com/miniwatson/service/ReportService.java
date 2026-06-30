@@ -27,7 +27,9 @@ public class ReportService {
     private final com.miniwatson.reports.GeneratedReportRepository reportRepo;
     private final EstimateService estimateService;
     private final AnalyticsService analytics;
-    private final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    // JavaTimeModule 등록 — LocalDate/LocalDateTime 직렬화(케이스 리포트 적재 시 "date" 필드 실패 방지).
+    private final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+        .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
 
     public ReportService(TabularSqlService tabular, RagService ragService,
                          OllamaService ollama, VehicleDataProperties data,
@@ -164,6 +166,49 @@ public class ReportService {
             var saved = reportRepo.save(gr);
             out.put("generatedAt", saved.getCreatedAt().toString());
         } catch (Exception e) { log.warn("[case-report] 적재 실패: {}", e.getMessage()); }
+        out.put("cached", false);
+        return out;
+    }
+
+    /**
+     * 불만 접수 내용(NHTSA 영문 원문) → 한국어 핵심 요약.
+     * 처음 1회만 로컬 LLM 호출, 이후 캐시(GeneratedReport type="SUMMARY")에서 즉시 반환.
+     * 반환: { caseNumber, fullText, gist, cached, generatedAt }
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> caseSummary(String caseNumber, String llmModel, boolean force) {
+        String id = caseNumber == null ? "" : caseNumber.trim();
+        Map<String, Object> out = new LinkedHashMap<>();
+        var existing = reportRepo.findFirstByReportTypeAndReportKeyOrderByCreatedAtDesc("SUMMARY", id);
+        if (!force && existing.isPresent()) {
+            try {
+                Map<String, Object> m = mapper.readValue(existing.get().getContentJson(), Map.class);
+                m.put("generatedAt", existing.get().getCreatedAt().toString());
+                m.put("cached", true);
+                return m;
+            } catch (Exception e) { log.warn("[case-summary] 캐시 파싱 실패 — 재생성: {}", e.getMessage()); }
+        }
+        var rows = analytics.caseById(id);
+        if (rows.isEmpty()) { out.put("error", "해당 접수번호를 찾지 못함: " + id); out.put("caseNumber", id); return out; }
+        String full = String.valueOf(rows.get(0).get(5));
+        out.put("caseNumber", id);
+        out.put("fullText", full);
+        String gist = "";
+        try {
+            String prompt = "다음은 차량 불만 접수 내용(영문 원문)이다. 정비사가 빠르게 파악하도록 "
+                + "한국어로 핵심만 2~3문장으로 요약하라. 증상·발생 상황·안전 위험 위주로, 지어내지 말 것.\n\n"
+                + "=== 접수 내용 ===\n" + full;
+            gist = ollama.ask(prompt, llmModel);
+        } catch (Throwable t) { log.warn("[case-summary] 요약 실패: {}", t.toString()); }
+        out.put("gist", gist);
+        try {   // out은 전부 문자열이라 jsr310 무관하게 직렬화 안전
+            com.miniwatson.reports.GeneratedReport gr = existing.orElseGet(com.miniwatson.reports.GeneratedReport::new);
+            gr.setReportType("SUMMARY"); gr.setReportKey(id); gr.setModel(llmModel);
+            gr.setContentJson(mapper.writeValueAsString(out));
+            gr.setCreatedAt(java.time.LocalDateTime.now());
+            var saved = reportRepo.save(gr);
+            out.put("generatedAt", saved.getCreatedAt().toString());
+        } catch (Exception e) { log.warn("[case-summary] 적재 실패: {}", e.getMessage()); }
         out.put("cached", false);
         return out;
     }

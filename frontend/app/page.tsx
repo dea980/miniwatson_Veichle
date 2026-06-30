@@ -67,8 +67,13 @@ export default function Home() {
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("mw-theme") : null;
     if (saved === "dark") setDark(true);
-    // 백엔드 연결 확인 (models 핑)
-    api.models().then(() => setOnline(true)).catch(() => setOnline(false));
+    // 백엔드 연결 상태 — 마운트 시 + 10초마다 재확인(중간에 꺼지면 빨갛게). 탭 복귀 시 즉시.
+    const ping = () => api.models().then(() => setOnline(true)).catch(() => setOnline(false));
+    ping();
+    const iv = setInterval(ping, 10000);
+    const onVis = () => { if (document.visibilityState === "visible") ping(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); };
   }, []);
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("mw-theme", dark ? "dark" : "light");
@@ -82,13 +87,7 @@ export default function Home() {
         <div className="brand">
           <span className="logo">
             <svg viewBox="0 0 40 40" aria-hidden="true">
-              <defs>
-                <linearGradient id="mw-logo" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stopColor="#2f86ff" />
-                  <stop offset="1" stopColor="#002c5f" />
-                </linearGradient>
-              </defs>
-              <rect width="40" height="40" rx="11" fill="url(#mw-logo)" />
+              <rect width="40" height="40" rx="3" fill="#002c5f" />
               <circle cx="20" cy="20" r="9" fill="none" stroke="#fff" strokeWidth="2.2" />
               <circle cx="20" cy="20" r="2.6" fill="#fff" />
               <path d="M20 17.4V11.2 M17.7 21.3l-5.4 3.1 M22.3 21.3l5.4 3.1"
@@ -112,13 +111,30 @@ export default function Home() {
       <div className="content">
         <header className="topbar">
           <span className="crumb">MiniWatson Vehicle <span className="muted">/</span> <b>{current.label}</b></span>
-          <div className="row" style={{ gap: 10 }}>
+          <div className="row" style={{ gap: 12 }}>
             {online !== null && (
-              <span className="conn" data-on={online ? "1" : "0"}>
-                <span className="dot" />{online ? "연결됨" : "백엔드 꺼짐"}
+              <span className="status" data-on={online ? "1" : "0"} title={online ? "백엔드 연결됨" : "백엔드 연결 끊김"}>
+                <span className="status-dot" />
+                {!online && <span className="status-txt">백엔드 연결 끊김</span>}
               </span>
             )}
-            <button className="theme-btn" onClick={() => setDark((v) => !v)}>{dark ? "라이트" : "다크"}</button>
+            <button
+              className="icon-toggle"
+              onClick={() => setDark((v) => !v)}
+              title={dark ? "라이트 모드로" : "다크 모드로"}
+              aria-label="테마 전환"
+            >
+              {dark ? (
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="4.2" />
+                  <path d="M12 2.5v2.4M12 19.1v2.4M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M21 12.8A8.5 8.5 0 1111.2 3a6.6 6.6 0 009.8 9.8z" />
+                </svg>
+              )}
+            </button>
           </div>
         </header>
 

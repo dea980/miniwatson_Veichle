@@ -68,7 +68,7 @@ export default function GovernancePanel() {
                   <td title={l.question}>{(l.question || "").slice(0, 60)}</td>
                   <td><span className="badge">{l.model}</span></td>
                   <td className="right">{l.latencyMs}</td>
-                  <td>{l.piiCount && l.piiCount > 0 ? `🔒 ${l.piiCount}` : "–"}</td>
+                  <td>{l.piiCount && l.piiCount > 0 ? <span className="pill warn">PII {l.piiCount}</span> : <span className="muted">–</span>}</td>
                   <td className="muted">{l.createdAt}</td>
                 </tr>
               ))}

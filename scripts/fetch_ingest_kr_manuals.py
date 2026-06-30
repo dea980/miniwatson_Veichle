@@ -30,7 +30,8 @@ import uuid
 
 MANUALS_DIR = "data/vehicle/manuals"
 MANIFEST = "ml/data/owners_manuals_hyundai_kr.csv"
-INGEST_URL = "http://localhost:8080/api/data/ingest-file"
+# 포트 충돌(Airflow가 8080 점유 등) 대비 — MW_INGEST_URL 환경변수로 덮어쓰기 가능.
+INGEST_URL = os.environ.get("MW_INGEST_URL", "http://localhost:8080/api/data/ingest-file")
 
 
 def make_ssl_context():

@@ -127,3 +127,7 @@ CLAUDE.md.fablize-bak.*
 
 # Python 캐시 (ml/ 외부 디렉터리도 모두)
 **/__pycache__/
+
+# omc
+.omc
+CLAUDE.mdㅂ

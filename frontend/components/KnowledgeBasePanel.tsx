@@ -137,8 +137,6 @@ export default function KnowledgeBasePanel() {
         <h2>파일 업로드</h2>
         <div className="row">
           <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-          <input type="text" placeholder="namespace" value={uploadNs}
-            onChange={(e) => setUploadNs(e.target.value)} style={{ width: 130 }} />
           <button className="btn" onClick={upload} disabled={busy}>업로드</button>
         </div>
         <div className="hint">PDF/DOCX/HWP/TXT → RAG, 이미지 → 멀티모달. CSV 표는 Tabular SQL 탭.</div>
@@ -148,8 +146,6 @@ export default function KnowledgeBasePanel() {
       <div className="card">
         <h2>지식베이스</h2>
         <div className="row" style={{ marginBottom: 12 }}>
-          <input type="text" placeholder="namespace 필터 (비우면 전체)" value={nsFilter}
-            onChange={(e) => setNsFilter(e.target.value)} style={{ width: 220 }} />
           <button className="ghost" onClick={refresh}>새로고침</button>
         </div>
         {err && <div className="err">{err}</div>}
