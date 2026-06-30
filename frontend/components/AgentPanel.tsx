@@ -3,6 +3,15 @@ import { useEffect, useState } from "react";
 import { api, type AgentResult, type Models } from "@/lib/api";
 import Markdown from "@/components/Markdown";
 
+// 도구명 → 색 클래스(트레이스 시각화). RAG=액션블루 / SQL=네이비 / 복합=주황.
+const toolClass = (t?: string) => {
+  const s = String(t || "").toLowerCase();
+  if (s.includes("both") || s.includes("복합") || s.includes("둘")) return "both";
+  if (s.includes("sql") || s.includes("리콜") || s.includes("tabular")) return "sql";
+  if (s.includes("rag") || s.includes("매뉴얼") || s.includes("검색")) return "rag";
+  return "";
+};
+
 export default function AgentPanel() {
   const [question, setQuestion] = useState("");
   const [namespace, setNamespace] = useState("vehicle");
@@ -64,15 +73,22 @@ export default function AgentPanel() {
 
       {res && (
         <>
-          <div className="label">선택된 도구 <span className="badge">{res.tool}</span></div>
-
-          <div className="label">처리 과정</div>
-          {res.trace.map((s, i) => (
-            <div key={i} className="step">
-              <div className="h">{i + 1}. {s.action} <span className="badge">{s.tool}</span> → {s.result}</div>
-              {s.detail && <div className="d">{s.detail}</div>}
-            </div>
-          ))}
+          <div className="label">에이전트 실행 트레이스 <span className={`tool-tag ${toolClass(res.tool)}`}>{res.tool}</span></div>
+          <div className="agent-trace">
+            {res.trace.map((s, i) => (
+              <div key={i} className="trace-step">
+                <span className="trace-node">{i + 1}</span>
+                <div className="trace-body">
+                  <div className="trace-head">
+                    {s.action}
+                    {s.tool && <span className={`tool-tag ${toolClass(s.tool)}`}>{s.tool}</span>}
+                  </div>
+                  {s.result && <div className="trace-result">→ {s.result}</div>}
+                  {s.detail && <div className="trace-detail">{s.detail}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
 
           <div className="label">답변</div>
           <div className="answer"><Markdown text={res.answer || "(No answer)"} /></div>
