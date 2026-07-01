@@ -76,8 +76,15 @@ public class AgentService {
             }
         }
 
-        // 3) 종합 — 한국어 최종 답변
-        String answer = synthesize(question, tool, ragAnswer, sql, rows, model);
+        // 3) 종합 — 순수 SQL은 결정적 렌더(LLM 스킵 → 지연↓), 그 외(RAG/BOTH)는 LLM 종합
+        String answer;
+        if (tool == Tool.SQL) {
+            answer = sqlAnswerDeterministic(rows);
+            trace.add(step("synth", "결정적 요약", "표 렌더(LLM 생략)",
+                    "순수 집계 질의 — 종합 LLM을 생략해 지연을 줄임(LLM 콜 2→1)"));
+        } else {
+            answer = synthesize(question, tool, ragAnswer, sql, rows, model);
+        }
         Long logId = ollama.lastQueryLogId();
 
         return new AgentResult(answer, tool.name(), trace, sources, sql, rows, logId);
@@ -112,6 +119,23 @@ public class AgentService {
             log.warn("[agent] 라우팅 LLM 실패 — RAG 폴백: {}", e.getMessage());
         }
         return Tool.RAG;
+    }
+
+    /** 순수 SQL 결과를 LLM 없이 결정적으로 렌더(불릿). Markdown이 표 미지원이라 "값 · 값" 불릿. */
+    private static String sqlAnswerDeterministic(Object rowsObj) {
+        List<?> rows = (rowsObj instanceof List) ? (List<?>) rowsObj : List.of();
+        if (rows.isEmpty()) return "조회 결과가 없습니다.";
+        StringBuilder sb = new StringBuilder("조회 결과 ").append(rows.size()).append("건.\n\n");
+        int shown = 0;
+        for (Object rowObj : rows) {
+            if (shown++ >= 50) { sb.append("- … 외 ").append(rows.size() - 50).append("건\n"); break; }
+            String line = (rowObj instanceof List<?> cells)
+                    ? cells.stream().map(c -> c == null ? "" : String.valueOf(c))
+                        .collect(java.util.stream.Collectors.joining(" · "))
+                    : String.valueOf(rowObj);
+            sb.append("- ").append(line).append("\n");
+        }
+        return sb.toString();
     }
 
     private String synthesize(String question, Tool tool, String ragAnswer,

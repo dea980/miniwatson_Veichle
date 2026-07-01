@@ -5,6 +5,18 @@ import { api } from "@/lib/api";
 type Schema = { name: string; type: string }[];
 type AskRes = { sql?: string; columns: string[]; rows: (string | number | null)[][] };
 
+// 도메인 데이터셋 프리셋 — raw 경로 타이핑 대신 원클릭. "설명가능 분석"(숫자 밑에 SQL) 페르소나.
+const PRESETS = [
+  { label: "리콜", table: "recalls", path: "data/vehicle/recalls/hyundai_recalls_nhtsa.csv",
+    examples: ["차종별 리콜 건수 많은 순", "부품(component)별 리콜 상위 5", "연도별 리콜 추세"] },
+  { label: "불만", table: "complaints", path: "data/vehicle/complaints/hyundai_complaints_nhtsa.csv",
+    examples: ["차종별 불만 건수 많은 순", "화재(fire) 신고가 있는 불만 수", "부상자 합계가 큰 차종 상위"] },
+  { label: "부품 단가", table: "parts", path: "data/vehicle/parts/parts_pricing.csv",
+    examples: ["부품별 단가 높은 순", "카테고리별 평균 단가"] },
+  { label: "점검", table: "inspection", path: "data/vehicle/inspection/inspection_sample.csv",
+    examples: ["장치별 점검 항목 수", "결과가 정비필요인 항목"] },
+];
+
 function parseSchema(s: string): Schema {
   return (s || "").split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
     const i = l.indexOf(" ");
@@ -27,6 +39,15 @@ export default function TabularPanel() {
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [examples, setExamples] = useState<string[]>(PRESETS[0].examples);
+
+  // 프리셋 선택 → 테이블·경로 세팅 + 자동 로드 + 예시 질문 교체
+  function selectPreset(p: typeof PRESETS[number]) {
+    setTable(p.table); setPath(p.path); setLoaded(false); setRes(null); setErr(""); setExamples(p.examples);
+    api.tabularLoad(p.table, p.path)
+      .then((r) => { setSchema(parseSchema(r.schema)); setLoaded(true); })
+      .catch((e) => setErr(String(e)));
+  }
 
   async function load() {
     setBusy(true); setErr(""); setSchema(null);
@@ -53,11 +74,13 @@ export default function TabularPanel() {
   }
 
   // 질문 시 테이블이 아직 안 올라갔으면 자동으로 먼저 로드 (재시작/순서 문제 우회)
-  async function ask() {
+  async function ask(q?: string) {
+    const query = (q ?? question).trim();
+    if (!query) return;
     setBusy(true); setErr(""); setRes(null);
     try {
       if (!loaded) { const r = await api.tabularLoad(table, path); setSchema(parseSchema(r.schema)); setLoaded(true); }
-      setRes(await api.tabularAsk(table, question));
+      setRes(await api.tabularAsk(table, query));
     } catch (e) { setErr(String(e)); } finally { setBusy(false); }
   }
 
@@ -66,18 +89,31 @@ export default function TabularPanel() {
 
   return (
     <div className="card">
-      <h2>데이터로 질문하기</h2>
-      <div className="row">
-        <input type="text" value={table} onChange={(e) => { setTable(e.target.value); setLoaded(false); }} style={{ width: 120 }} placeholder="table" />
-        <input className="grow" type="text" value={path} onChange={(e) => { setPath(e.target.value); setLoaded(false); }} placeholder="CSV/XLSX 경로" />
-        <button className="btn" onClick={load} disabled={busy}>경로로 로드</button>
+      <h2>데이터로 질문하기 <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>· 숫자 밑에 생성 SQL을 함께 보여주는 설명가능 분석</span></h2>
+
+      {/* 도메인 데이터셋 프리셋 — 원클릭 로드 */}
+      <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+        <span className="muted" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em" }}>데이터셋</span>
+        {PRESETS.map((p) => (
+          <button key={p.table} className={table === p.table && loaded ? "btn" : "ghost"}
+            style={{ fontSize: 12, padding: "5px 12px" }} onClick={() => selectPreset(p)} disabled={busy}>{p.label}</button>
+        ))}
+        {loaded && <span className="pill ok" style={{ marginLeft: 4 }}>로드됨</span>}
       </div>
-      <div className="row" style={{ marginTop: 8 }}>
-        <input type="file" accept=".csv,.xlsx,.tsv" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-        <button className="ghost" onClick={upload} disabled={busy}>파일 업로드로 등록</button>
-        <button className="ghost" onClick={downloadSample}>샘플 CSV 받기</button>
-      </div>
-      <div className="hint">서버 경로(위) 또는 <b>CSV/XLSX 직접 업로드</b>. 테이블명 칸 사용.</div>
+
+      <details style={{ marginTop: 8 }}>
+        <summary className="muted" style={{ fontSize: 12, cursor: "pointer" }}>고급 — 직접 경로 / 파일 업로드</summary>
+        <div className="row" style={{ marginTop: 8 }}>
+          <input type="text" value={table} onChange={(e) => { setTable(e.target.value); setLoaded(false); }} style={{ width: 120 }} placeholder="table" />
+          <input className="grow" type="text" value={path} onChange={(e) => { setPath(e.target.value); setLoaded(false); }} placeholder="CSV/XLSX 경로" />
+          <button className="btn" onClick={load} disabled={busy}>경로로 로드</button>
+        </div>
+        <div className="row" style={{ marginTop: 8 }}>
+          <input type="file" accept=".csv,.xlsx,.tsv" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+          <button className="ghost" onClick={upload} disabled={busy}>파일 업로드로 등록</button>
+          <button className="ghost" onClick={downloadSample}>샘플 CSV 받기</button>
+        </div>
+      </details>
 
       <div className="example">
         <div className="label" style={{ marginTop: 12 }}>업로드 형식 예시</div>
@@ -110,7 +146,12 @@ export default function TabularPanel() {
       <div className="row" style={{ marginTop: 14 }}>
         <input className="grow" type="text" value={question} onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && ask()} placeholder="자연어 질문" />
-        <button className="btn" onClick={ask} disabled={busy}>질문</button>
+        <button className="btn" onClick={() => ask()} disabled={busy}>{busy ? "생성 중…" : "질문"}</button>
+      </div>
+      <div className="row" style={{ gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+        {examples.map((ex, i) => (
+          <button key={i} className="ghost" style={{ fontSize: 12 }} onClick={() => { setQuestion(ex); ask(ex); }} disabled={busy}>{ex}</button>
+        ))}
       </div>
       {err && <div className="err">{err}</div>}
 
@@ -123,7 +164,7 @@ export default function TabularPanel() {
 
       {res && (
         <>
-          {res.sql && (<><div className="label">생성된 SQL</div><pre className="sqlbox">{res.sql}</pre></>)}
+          {res.sql && (<><div className="label">이 결과의 근거 SQL <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(숫자가 어떻게 나왔는지 검증)</span></div><pre className="sqlbox">{res.sql}</pre></>)}
 
           {chart && (
             <>

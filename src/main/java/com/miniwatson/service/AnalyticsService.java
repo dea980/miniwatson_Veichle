@@ -248,16 +248,21 @@ public class AnalyticsService {
         if (!TBL.contains(table)) return new ArrayList<>();
         ensure(table);
         String dc = "recalls".equals(table) ? "reportreceiveddate" : "datecomplaintfiled";
+        // 날짜 robust 파싱: 불만 MM/DD/YYYY + 리콜 ISO(YYYY-MM-DD) 모두 DATE로. 실패행은 NULL→제외.
+        String d = "COALESCE("
+            + "CAST(try_strptime(CAST(" + dc + " AS VARCHAR),'%m/%d/%Y') AS DATE), "
+            + "TRY_CAST(CAST(" + dc + " AS VARCHAR) AS DATE))";
         String bucket = switch (by == null ? "year" : by) {
-            case "day"   -> "cast(" + dc + " AS varchar)";
-            case "month" -> "year(" + dc + ") || '-' || lpad(cast(month(" + dc + ") AS varchar), 2, '0')";
-            default       -> "cast(year(" + dc + ") AS varchar)";
+            case "day"   -> "strftime(" + d + ", '%Y-%m-%d')";
+            case "month" -> "strftime(" + d + ", '%Y-%m')";
+            default       -> "strftime(" + d + ", '%Y')";
         };
-        StringBuilder w = new StringBuilder("WHERE " + dc + " IS NOT NULL");
+        StringBuilder w = new StringBuilder("WHERE " + d + " IS NOT NULL");
         if (model != null && !model.isBlank())
             w.append(" AND upper(model)='").append(model.replace("'", "''").toUpperCase()).append("'");
-        return rows("SELECT " + bucket + " AS bucket, COUNT(*) n FROM " + table + " " + w
-            + " GROUP BY bucket ORDER BY bucket LIMIT 120");
+        // 최근 120개 버킷만(DESC LIMIT) 가져온 뒤 표시용으로 오름차순 재정렬 — 일별도 최근 구간이 보이게.
+        return rows("SELECT bucket, n FROM (SELECT " + bucket + " AS bucket, COUNT(*) n FROM " + table + " " + w
+            + " GROUP BY bucket ORDER BY bucket DESC LIMIT 120) t ORDER BY bucket");
     }
 
     /** 단일 리콜 상세 (캠페인번호) — 결함내용·위험·시정조치 포함. */
