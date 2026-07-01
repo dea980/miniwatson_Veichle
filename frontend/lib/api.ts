@@ -4,8 +4,35 @@
 export function cleanText(s?: string): string {
   return (s || "")
     .replace(/\*(?:[A-Z]{1,6}\*)+[A-Z]{0,6}/g, " ")   // *DT*DT*JB*… 연쇄 코드
+    // 소형 모델이 새 넣는 한자·히라가나·가타카나 제거(표시 단계 최후 방어). 한글은 유지.
+    .replace(/[぀-ヿ㐀-䶿一-鿿豈-﫿]/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+/**
+ * 중요도(0~100 절대 심각도 지수). 원점수는 사망 가중치(×10000)가 커서 %로 정규화하면
+ * 사망 케이스만 100%로 뭉개진다. 그래서 밴드로 매핑한다 — 목록이 바뀌어도 값이 안정적이고
+ * '사망 절대 최우선' 철학과 일치한다. 사망 90–100, 부상 60–89, 화재 40–59, 사고 20–39, 그 외 낮음.
+ */
+export function severityPct(deaths?: number, injuries?: number, fire?: number, crash?: number): number {
+  const d = Number(deaths) || 0, inj = Number(injuries) || 0, f = Number(fire) || 0, c = Number(crash) || 0;
+  if (d > 0)   return Math.min(100, 90 + d * 4);    // 사망 90–100 (건수↑ 가산)
+  if (inj > 0) return Math.min(89, 60 + inj * 6);   // 부상 60–89
+  if (f > 0)   return c > 0 ? 55 : 45;              // 화재 40–59 (사고 동반 시↑)
+  if (c > 0)   return 30;                           // 사고 20–39
+  return 10;                                        // 그 외
+}
+
+/**
+ * 안전-치명 플래그(PRD §7 하드룰). 사망·화재, 또는 원문에 '에어백 미전개' 신호가 있으면 true.
+ * 밴드 순서(부상>화재)는 건드리지 않고, "절대 놓치면 안 될 건"을 배지로 surfacing만 한다.
+ */
+export function isSafetyCritical(deaths?: number, fire?: number, text?: string): boolean {
+  if ((Number(deaths) || 0) > 0 || (Number(fire) || 0) > 0) return true;
+  const t = (text || "").toLowerCase();
+  return /air\s?bag|에어백/.test(t)
+    && /(not deploy|did ?n.?t deploy|fail(ed)? to deploy|non-?deploy|미전개|전개되지|전개 안|전개하지)/.test(t);
 }
 
 // 해외명(NHTSA) → 국내명. 데이터 키는 해외명 유지(조회·필터 일관), 표시만 국내명.

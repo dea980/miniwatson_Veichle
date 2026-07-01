@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, cleanText, koModel, type Summary, type Source, type Models, type CaseRecord, type RecallDetail } from "@/lib/api";
+import { api, cleanText, koModel, severityPct, isSafetyCritical, type Summary, type Source, type Models, type CaseRecord, type RecallDetail } from "@/lib/api";
 import CarImage from "@/components/CarImage";
 
 const num = (v: unknown) => Number(v) || 0;
@@ -321,7 +321,8 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
                   <div className="row" style={{ gap: 6, marginTop: 10, flexWrap: "wrap" }}>
                     <span className="badge" style={{ marginLeft: 0 }} title={mdl}>{koModel(mdl)}{c[4] ? ` | ${c[4]}년` : ""}</span>
                     <span className="badge">{String(c[3])}</span>
-                    <span className="badge">중요도 {num(c[6])}</span>
+                    <span className="badge">중요도 {severityPct(num(c[10]), num(c[9]), num(c[7]), num(c[8]))}%</span>
+                    {isSafetyCritical(num(c[10]), num(c[7]), String(c[5])) && <span className="pill bad">⚠ 안전확인</span>}
                     {num(c[10]) > 0 && <span className="pill bad">사망 {num(c[10])}</span>}
                     {num(c[9]) > 0 && <span className="pill warn">부상 {num(c[9])}</span>}
                     {num(c[7]) > 0 && <span className="pill bad">화재</span>}

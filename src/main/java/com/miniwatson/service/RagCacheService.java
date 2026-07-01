@@ -104,16 +104,29 @@ public class RagCacheService {
     }
 
     // ───────── 응답 가드(미들웨어) ─────────
+
+    /** 저신뢰 폴백 배너 — 근거 0개로 나온 답 앞에 붙여 단정 톤을 낮춘다(안전 규격, PRD §7). */
+    static final String LOW_CONFIDENCE_NOTE =
+            "⚠ 확실치 않음 — 매뉴얼에서 근거를 찾지 못했습니다. 아래 내용은 참고용이며, 매뉴얼 원문이나 시니어 정비사 확인을 권장합니다.";
+
     /** pre-가드: 글자/숫자가 하나도 없으면(예: "", " ", "?") 무의미 질문으로 본다. */
     private static boolean isBlankQuestion(String q) {
         return q == null || q.replaceAll("[^\\p{L}\\p{N}]", "").isBlank();
     }
 
-    /** post-가드: 실질 답이 아니면(빈 답/해명·회피) 소스를 제거 — "헛근거" 표시 방지. */
+    /**
+     * post-가드(안전 미들웨어):
+     *  1) 실질 답이 아니면(빈 답/해명·회피) 소스를 제거 — "헛근거" 표시 방지.
+     *  2) 실답인데 **근거가 0개면 환각 위험** → 저신뢰 배너를 앞에 붙여 단정 톤을 낮춘다.
+     * 캐시 히트·미스 양쪽에 적용되고, 배너는 저장된 원문이 아니라 표출 단계에서만 붙는다(중복 방지 포함).
+     */
     private RagService.RagResult postProcess(RagService.RagResult r) {
         if (r == null) return null;
         if (isNonAnswer(r.answer())) {
             return new RagService.RagResult(r.answer(), List.of(), r.logId());
+        }
+        if ((r.sources() == null || r.sources().isEmpty()) && !r.answer().startsWith("⚠")) {
+            return new RagService.RagResult(LOW_CONFIDENCE_NOTE + "\n\n" + r.answer(), r.sources(), r.logId());
         }
         return r;
     }

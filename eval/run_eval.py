@@ -194,9 +194,44 @@ def sql_run():
     print(f"\nSQL recall: {hits}/{n} ({hits/n:.0%})\n")
 
 
+def mechanic_run():
+    """정비사 wedge 트랙(PRD): 매뉴얼 근거 진단 recall + 저신뢰 폴백(refusal) 검사.
+
+    - 진단 케이스: 검색 근거(sources)가 기대대로 잡히는지(hit).
+    - refusal 케이스: 근거 0개 질문에 ⚠ 저신뢰 배너/‘확실치 않음’이 떠야 함(confident 오답 금지).
+    """
+    path = os.path.join(HERE, "golden_mechanic.json")
+    if not os.path.exists(path):
+        print("\n(golden_mechanic.json 없음 — wedge 트랙 스킵)\n"); return
+    with open(path) as f:
+        cases = json.load(f)
+    diag = [c for c in cases if c.get("category") != "refusal"]
+    refusal = [c for c in cases if c.get("category") == "refusal"]
+    print(f"\n=== 정비사 wedge: 매뉴얼 진단 {len(diag)} · 저신뢰 폴백 {len(refusal)} ===")
+    ok_hit = 0
+    for c in diag:
+        resp = ask(c["question"], c.get("namespace", "vehicle"))
+        h = hit(c, resp)
+        ok_hit += h
+        print(f"  [{'HIT ' if h else 'MISS'}] {c['id']}")
+    ok_ref = 0
+    for c in refusal:
+        resp = ask(c["question"], c.get("namespace", "vehicle"))
+        ans = resp.get("answer") or ""
+        srcs = resp.get("sources") or []
+        low = ans.startswith("⚠") or "확실치 않" in ans or "찾지 못" in ans or "모르" in ans
+        passed = low and len(srcs) == 0
+        ok_ref += passed
+        print(f"  [{'PASS' if passed else 'FAIL'}] {c['id']} (sources={len(srcs)})")
+    print(f"\n진단 recall {ok_hit}/{len(diag)} · 저신뢰 폴백 {ok_ref}/{len(refusal)}")
+
+
 def main():
     if "--sql" in sys.argv:               # 정형 표 트랙 (text-to-SQL)
         sql_run()
+        return
+    if "--mechanic" in sys.argv:          # 정비사 wedge 트랙 (진단 recall + 저신뢰 폴백)
+        mechanic_run()
         return
     with open(os.path.join(HERE, "golden.json")) as f:   # 비정형 RAG 트랙
         cases = json.load(f)

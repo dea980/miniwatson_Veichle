@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api, type Analytics, type Models } from "@/lib/api";
 import Markdown from "@/components/Markdown";
 import Donut from "@/components/Donut";
+import TrendChart from "@/components/TrendChart";
 
 const won = (n: number) => Math.round(Number(n) || 0).toLocaleString("ko-KR") + "원";
 const num = (v: unknown) => Number(v) || 0;
@@ -123,9 +124,12 @@ export default function AnalyticsPanel() {
               ))}
             </div>
           </div>
-          {recallTrend.length > 0 && (<><div className="label">리콜 추세</div><Bars rows={recallTrend} unit="건" /></>)}
-          {complaintTrend.length > 0 && (<><div className="label">불만 추세</div><Bars rows={complaintTrend} unit="건" /></>)}
-          {recallTrend.length === 0 && complaintTrend.length === 0 && <div className="muted" style={{ fontSize: 13 }}>추세 데이터 없음</div>}
+          {(recallTrend.length > 0 || complaintTrend.length > 0)
+            ? <TrendChart unit="건" series={[
+                { name: "리콜", color: "#002c5f", data: recallTrend },
+                { name: "불만", color: "#d97706", data: complaintTrend },
+              ]} />
+            : <div className="muted" style={{ fontSize: 13 }}>추세 데이터 없음</div>}
 
           {/* 결함 부위 */}
           {res.recallTopComponents?.length > 0 && (<><div className="label">리콜 주요 부위</div><Donut rows={res.recallTopComponents} unit="건" /></>)}

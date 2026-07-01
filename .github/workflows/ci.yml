@@ -37,9 +37,23 @@ jobs:
       - name: Build (typecheck + next build)
         run: cd frontend && npm ci && npm run build
 
-  # CD: 백/프 테스트 통과 + main 에서만 이미지 빌드→GHCR 푸시 (실제 배포는 인프라 측)
+  # 품질 게이트 — 서버 없이 도는 회귀 검사(PRD §6). python3만 필요.
+  # CJK(한자·가나) 누수 0 + wedge 골든셋 파싱. 서버가 필요한 recall/refusal은 nightly/수동.
+  quality-guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: CJK 누수 회귀 (self-test)
+        run: python3 eval/check_cjk.py
+      - name: 골든셋 파싱 검증
+        run: |
+          python3 -c "import json; json.load(open('eval/golden.json'))"
+          python3 -c "import json; json.load(open('eval/golden_mechanic.json'))"
+          python3 -c "import ast; ast.parse(open('eval/run_eval.py').read())"
+
+  # CD: 백/프/품질 게이트 통과 + main 에서만 이미지 빌드→GHCR 푸시 (실제 배포는 인프라 측)
   build-image:
-    needs: [test, frontend]
+    needs: [test, frontend, quality-guards]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
