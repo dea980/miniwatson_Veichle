@@ -62,9 +62,10 @@ public class RagCacheService {
         }
 
         long kbVersion = catalogRepo.count();
+        // title(문서 전용 필터)·lang·powertrain 도 답을 바꾸므로 키에 포함 — 없으면 문서별 답이 뒤섞임.
         String key = sha256(String.join("|",
-                nz(question), nz(namespace), nz(model), nz(car),
-                year == null ? "" : year.toString(), Long.toString(kbVersion)));
+                nz(question), nz(namespace), nz(model), nz(title), nz(car),
+                year == null ? "" : year.toString(), nz(lang), nz(powertrain), Long.toString(kbVersion)));
 
         // 1) 조회 — 히트면 LLM 호출 0
         var hit = reportRepo.findFirstByReportTypeAndReportKeyOrderByCreatedAtDesc("ASK", key);

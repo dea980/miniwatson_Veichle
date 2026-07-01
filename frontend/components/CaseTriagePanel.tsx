@@ -147,7 +147,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
           <CarImage model={mdl} height={140} rounded={false} />
           <div className="car-hero-overlay">
             <div className="kicker" style={{ color: "#cfe0ff" }}>접수번호 진단 리포트</div>
-            <h2>{mdl} <span style={{ fontSize: 14, fontWeight: 400, opacity: .85 }}>접수 #{id}</span></h2>
+            <h2 title={mdl}>{koModel(mdl)} <span style={{ fontSize: 14, fontWeight: 400, opacity: .85 }}>접수 #{id}</span></h2>
             <p>{c[4]}년 · {c[1]} · 부위: {String(c[3])}</p>
           </div>
         </div>

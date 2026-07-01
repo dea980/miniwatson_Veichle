@@ -132,7 +132,8 @@ a:hover { text-decoration: underline; }
   background: rgba(255,255,255,.45); transition: background .2s, width .2s; }
 .hero-dot:hover { background: rgba(255,255,255,.7); }
 .hero-dot.on { width: 18px; background: #fff; }
-.car-hero-overlay h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
+/* 특정성 ↑ + 흰색/테두리제거 — .card h2(어두운 색·하단 보더)가 히어로 오버레이를 덮어써 글자가 묻히던 버그 방지 */
+.car-hero .car-hero-overlay h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.02em; color: #fff; border-bottom: none; padding: 0; }
 .car-hero-overlay p { margin: 0; font-size: 13px; color: #dce6f5; max-width: 60%; }
 
 /* 정비 스케줄 캘린더 */
