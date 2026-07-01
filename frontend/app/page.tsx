@@ -67,6 +67,9 @@ export default function Home() {
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("mw-theme") : null;
     if (saved === "dark") setDark(true);
+    // 새로고침해도 있던 탭 유지 — 저장된 탭 복원(홈으로 리셋 방지)
+    const savedTab = typeof window !== "undefined" ? localStorage.getItem("mw-tab") : null;
+    if (savedTab && TABS.some((t) => t.id === savedTab)) setTab(savedTab as TabId);
     // 백엔드 연결 상태 — 마운트 시 + 10초마다 재확인(중간에 꺼지면 빨갛게). 탭 복귀 시 즉시.
     const ping = () => api.models().then(() => setOnline(true)).catch(() => setOnline(false));
     ping();
@@ -78,6 +81,9 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("mw-theme", dark ? "dark" : "light");
   }, [dark]);
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("mw-tab", tab);
+  }, [tab]);
 
   const current = TABS.find((t) => t.id === tab)!;
 

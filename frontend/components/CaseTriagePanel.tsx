@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, type CaseRecord, type CaseReport } from "@/lib/api";
+import { api, cleanText, koModel, type CaseRecord, type CaseReport } from "@/lib/api";
 import CarImage from "@/components/CarImage";
 import PartImage from "@/components/PartImage";
 import Markdown from "@/components/Markdown";
@@ -40,7 +40,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
   const [carModels, setCarModels] = useState<string[]>([]);
   const [model, setModel] = useState(initialModel || "");
   const [component, setComponent] = useState("");
-  const [sort, setSort] = useState<"priority" | "model">("priority");
+  const [sort, setSort] = useState<"priority" | "date" | "model">("priority");
   const [cases, setCases] = useState<CaseRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -78,7 +78,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
     api.resolvedCases().then((r) => setResolvedCount((r.resolved || []).length)).catch(() => {});
   }
 
-  async function load(p: number, sortOverride?: "priority" | "model") {
+  async function load(p: number, sortOverride?: "priority" | "date" | "model") {
     setLoading(true); setErr("");
     try {
       const r = await api.cases(model || undefined, component || undefined, p * PAGE, PAGE, sortOverride ?? sort);
@@ -155,7 +155,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
           <Badges c={c} />
           {rep?.generatedAt && <span className="muted" style={{ fontSize: 12 }}>적재 {rep.generatedAt.slice(0, 16).replace("T", " ")}{rep.cached ? " · 캐시" : " · 방금"}</span>}
         </div>
-        <div className="snip" style={{ marginTop: 10, fontStyle: "italic" }}>접수 내용: {rep?.summary || String(c[5])}</div>
+        <div className="snip" style={{ marginTop: 10, fontStyle: "italic" }}>접수 내용: {cleanText(rep?.summary || String(c[5]))}</div>
 
         {report === "loading" && <div className="muted" style={{ fontSize: 13, marginTop: 14 }}>리포트 불러오는 중(최초 1회 생성 시 진단에 수십 초)…</div>}
         {report === null && <div className="err" style={{ marginTop: 14 }}>리포트를 불러오지 못했습니다.</div>}
@@ -230,11 +230,12 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
   return (
     <div className="card">
       <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-        <h2 style={{ margin: 0 }}>케이스 트리아지 <span className="muted" style={{ fontSize: 13 }}>· 우선순위 큐</span></h2>
+        <h2 style={{ margin: 0 }}>케이스 트리아지 <span className="muted" style={{ fontSize: 13 }}>· 중요도·입고순 큐</span></h2>
         <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-          <select value={sort} onChange={(e) => { const s = e.target.value as "priority" | "model"; setSort(s); load(0, s); }} title="정렬 기준">
-            <option value="priority">우선순위순</option>
-            <option value="model">차종별 · 우선순위순</option>
+          <select value={sort} onChange={(e) => { const s = e.target.value as "priority" | "date" | "model"; setSort(s); load(0, s); }} title="정렬 기준">
+            <option value="priority">중요도순</option>
+            <option value="date">입고순 (최신)</option>
+            <option value="model">차종별 · 중요도순</option>
           </select>
           <select value={model} onChange={(e) => setModel(e.target.value)}>
             <option value="">전체 차종</option>
@@ -245,7 +246,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
         </div>
       </div>
       <div className="hint">
-        <b>우선순위 = 사망×100 + 부상×10 + 화재×5 + 사고×3 + 최신성</b> (높을수록 시급 · 최신성=최근 접수일수록 가산, 반감 180일). {sort === "model" ? "차종별로 묶어 그 안에서 우선순위순" : "우선순위순으로"} 정렬 · 총 <b>{total.toLocaleString("ko-KR")}건</b> · 페이지 {page + 1}/{lastPage}. 카드를 누르면 접수번호 리포트로, "해결"하면 큐에서 사라집니다(서버 저장).
+        <b>중요도 = 사망×10000 + 부상×10 + 화재×5 + 사고×3</b> (사망 절대 최우선). {sort === "date" ? "입고(접수)일 최신순" : sort === "model" ? "차종별로 묶어 그 안에서 중요도순" : "중요도 높은 순"}으로 정렬 · 총 <b>{total.toLocaleString("ko-KR")}건</b> · 페이지 {page + 1}/{lastPage}. 카드를 누르면 접수번호 리포트로, "해결"하면 큐에서 사라집니다(서버 저장).
         {resolvedCount > 0 && <> · <a onClick={toggleResolved} style={{ cursor: "pointer" }}>해결 내역 {resolvedCount}건 {showResolved ? "닫기" : "보기"}</a></>}
       </div>
 
@@ -272,10 +273,10 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
               <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
                 <span style={{ width: 64, flexShrink: 0 }}><CarImage model={String(c[2])} height={40} /></span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="muted" style={{ fontSize: 12 }}><span className="badge" style={{ marginLeft: 0 }}>우선순위 {num(c[6])}</span> {c[2]} · 접수 #{id} · {c[4]}년</div>
+                  <div className="muted" style={{ fontSize: 12 }}><span className="badge" style={{ marginLeft: 0 }}>중요도 {num(c[6])}</span> <span title={String(c[2])}>{koModel(String(c[2]))}</span> · 접수 #{id} · {c[4]}년</div>
                   <div style={{ fontWeight: 600, fontSize: 13.5, marginTop: 2 }}>{String(c[3])}</div>
                   <div style={{ marginTop: 4 }}><Badges c={c} /></div>
-                  <div className="snip" style={{ marginTop: 4 }}>{String(c[5]).slice(0, 140)}…</div>
+                  <div className="snip" style={{ marginTop: 4 }}>{cleanText(String(c[5])).slice(0, 140)}…</div>
                 </div>
                 <div className="row" style={{ gap: 6, whiteSpace: "nowrap" }}>
                   <span className="muted" style={{ fontSize: 12 }}>진단 보기 →</span>
