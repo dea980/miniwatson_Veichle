@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type Summary, type Source, type Models, type CaseRecord, type RecallDetail } from "@/lib/api";
+import { api, cleanText, koModel, type Summary, type Source, type Models, type CaseRecord, type RecallDetail } from "@/lib/api";
 import CarImage from "@/components/CarImage";
 
 const num = (v: unknown) => Number(v) || 0;
@@ -109,7 +109,7 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
       <CarImage key={featured} model={featured} height={180} rounded={false} />
       <div className="car-hero-overlay">
         <div className="kicker" style={{ color: "#cfe0ff" }}>HYUNDAI FLEET INTELLIGENCE</div>
-        <h2>{featured}</h2>
+        <h2 title={featured}>{koModel(featured)}</h2>
         <p>{cur ? <>불만 <b>{num(cur[1])}</b> · 리콜 <b>{num(cur[2])}</b> — 활동 상위 차종을 순환 표시합니다.</> : "리콜·불만·정비 데이터를 한 화면에서."}</p>
       </div>
       {heroModels.length > 1 && (
@@ -146,7 +146,7 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
             <h2 style={{ margin: 0 }}>우선 대응 케이스</h2>
             <button className="ghost" style={{ fontSize: 12 }} onClick={() => onNavigate("triage")}>트리아지 전체 →</button>
           </div>
-          <div className="hint">심각도 우선순위 상위. 누르면 차량 케이스 진단으로.</div>
+          <div className="hint">중요도 상위. 누르면 차량 케이스 진단으로.</div>
           {topCases.filter((c) => !resolved.has(String(c[0]))).slice(0, 5).map((c, i) => {
             const fire = num(c[7]), inj = num(c[9]), dea = num(c[10]), prio = num(c[6]);
             const lvl = dea > 0 || fire > 0 ? "crit" : prio >= 20 ? "high" : "";
@@ -154,7 +154,7 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
               <div className="doc caserow" key={i} style={{ cursor: "pointer" }}
                 onClick={() => onNavigate("triage", `${c[2]}::${c[0]}`)}>
                 <span className={`prio ${lvl}`}>{prio}</span>
-                <span className="name" style={{ fontSize: 13 }}>{c[2]} · {String(c[3]).slice(0, 26)}</span>
+                <span className="name" style={{ fontSize: 13 }} title={String(c[2])}>{koModel(String(c[2]))} · {String(c[3]).slice(0, 26)}</span>
                 <span className="spacer" />
                 {dea > 0 && <span className="sevtag dea">사망 {dea}</span>}
                 {inj > 0 && <span className="sevtag inj">부상 {inj}</span>}
@@ -181,8 +181,8 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
               const id = String(r[0]), mdl = String(r[2]), comp = String(r[3]), open = () => feed === "recalls" ? openRecall(id) : openComplaint(id);
               return (
                 <div className="mail-row" key={i} onClick={open}>
-                  <span className="mail-from">{mdl}</span>
-                  <span className="mail-subject"><b>{comp}</b> <span className="mail-preview">— {String(r[4])}</span></span>
+                  <span className="mail-from" title={mdl}>{koModel(mdl)}</span>
+                  <span className="mail-subject"><b>{comp}</b> <span className="mail-preview">— {cleanText(String(r[4]))}</span></span>
                   <span>
                     <span className="mail-date">{r[1]}</span>
                     <span className="mail-actions">
@@ -204,14 +204,14 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
             <h2 style={{ margin: 0 }}>차종 현황</h2>
             <button className="ghost" style={{ fontSize: 12 }} onClick={() => onNavigate("triage")}>케이스 트리아지 →</button>
           </div>
-          <div className="hint">차종을 누르면 종합 진단 리포트로, 개별 케이스 우선순위는 트리아지에서 봅니다.</div>
+          <div className="hint">차종을 누르면 종합 진단 리포트로, 개별 케이스 중요도·입고순은 트리아지에서 봅니다.</div>
           {!sum && <div className="muted" style={{ marginTop: 10 }}>불러오는 중…</div>}
           {sum?.byModel?.map((m, i) => {
             const model = String(m[0]);
             return (
               <div className="doc" key={i} style={{ cursor: "pointer" }} onClick={() => onNavigate("report", model)}>
                 <span style={{ width: 56, flexShrink: 0 }}><CarImage model={model} height={36} /></span>
-                <span className="name">{model}</span>
+                <span className="name" title={model}>{koModel(model)}</span>
                 <span className="badge">불만 {num(m[1])}</span>
                 <span className="badge">리콜 {num(m[2])}</span>
                 <span className="spacer" />
@@ -319,9 +319,9 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
               return (
                 <>
                   <div className="row" style={{ gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-                    <span className="badge" style={{ marginLeft: 0 }}>{mdl}{c[4] ? ` · ${c[4]}년` : ""}</span>
+                    <span className="badge" style={{ marginLeft: 0 }} title={mdl}>{koModel(mdl)}{c[4] ? ` · ${c[4]}년` : ""}</span>
                     <span className="badge">{String(c[3])}</span>
-                    <span className="badge">우선순위 {num(c[6])}</span>
+                    <span className="badge">중요도 {num(c[6])}</span>
                     {num(c[10]) > 0 && <span className="pill bad">사망 {num(c[10])}</span>}
                     {num(c[9]) > 0 && <span className="pill warn">부상 {num(c[9])}</span>}
                     {num(c[7]) > 0 && <span className="pill bad">화재</span>}
@@ -333,7 +333,7 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
                     : csum && csum.gist ? <div className="answer" style={{ marginTop: 0 }}>{csum.gist}</div>
                     : <div className="muted" style={{ fontSize: 13 }}>요약 없음 — 아래 원문 참고.</div>}
                   <div className="label" style={{ marginTop: 14 }}>접수 내용 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(원문)</span></div>
-                  <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{String(c[5]) || "(내용 없음)"}</div>
+                  <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{cleanText(String(c[5])) || "(내용 없음)"}</div>
                   <div className="row" style={{ justifyContent: "flex-end", marginTop: 16, gap: 8 }}>
                     <button className="ghost" style={{ fontSize: 13 }} onClick={() => { setComplaint(null); onNavigate("report", mdl); }}>차종 리포트</button>
                     <button className="btn" style={{ fontSize: 13 }} onClick={() => { setComplaint(null); onNavigate("triage", `${mdl}::${id}`); }}>케이스 리포트 →</button>

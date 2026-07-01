@@ -21,6 +21,12 @@ const MAP: [RegExp, string][] = [
   [/와이퍼/, "Windscreen_wiper"],
   [/점화\s*플러그|스파크/, "Spark_plug"],
   [/연료\s*펌프/, "Fuel_pump"],
+  [/등속\s*조인트|조인트/, "Constant-velocity_joint"],
+  [/쇼크\s*업소버|쇼바|쇽업소버/, "Shock_absorber"],
+  [/라디에이터/, "Radiator_(engine_cooling)"],
+  [/타이밍\s*벨트/, "Timing_belt_(camshaft)"],
+  [/디머|헤드램프|전조등/, "Headlamp"],
+  [/변속기|미션/, "Automatic_transmission"],
 ];
 
 function wikiTitle(part: string): string {

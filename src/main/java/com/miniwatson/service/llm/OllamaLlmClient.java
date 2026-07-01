@@ -105,7 +105,7 @@ public class OllamaLlmClient implements RawLlmProvider {
         request.setStream(false);
         request.setThink(false);
         // 출력 품질 제약 — FT/소형 모델의 한자 누수·반복 완화(생성 단계가 올바른 레이어).
-        request.setSystem("반드시 한국어로만 답하라. 한자·중국어 사용 금지. 같은 문장이나 구절을 반복하지 말 것. 간결하게.");
+        request.setSystem("반드시 한국어로만 답하라. 한자·중국어·일본어(かなカナ) 등 외국 문자·외국어 사용 절대 금지 — 한글과 숫자·영문 약어만. 같은 문장이나 구절을 반복하지 말 것. 간결하게.");
         request.setOptions(Map.<String, Object>of(
                 "num_predict", numPredict,
                 "num_ctx", numCtx,

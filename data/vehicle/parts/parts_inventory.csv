@@ -1,0 +1,21 @@
+part,component,unit_price,stock_qty,reorder_point,supplier,location
+브레이크 패드(앞),BRAKE,80000,8,10,만도,A-01
+브레이크 디스크,BRAKE,150000,15,6,만도,A-02
+산소센서,ENGINE,120000,4,5,보쉬,B-01
+촉매변환기,EXHAUST,600000,2,2,현대모비스,C-03
+안전벨트 프리텐셔너,SEAT BELTS,200000,3,4,현대모비스,B-05
+앞유리(윈드실드),VISIBILITY,350000,5,3,코리아오토글라스,D-01
+후방카메라,CAMERA,180000,9,6,현대모비스,B-02
+엔진오일+필터,ENGINE,60000,40,20,SK엔무브,A-05
+배터리(12V),ELECTRICAL,150000,12,8,아트라스BX,C-01
+TPMS 센서,TIRE,70000,20,12,콘티넨탈,B-03
+변속기오일,TRANSMISSION,90000,6,10,ZF,A-06
+와이퍼 모터,VISIBILITY,110000,7,5,보쉬,B-04
+에어백 모듈,AIR BAGS,400000,3,2,현대모비스,C-02
+점화플러그(4개),ENGINE,50000,25,15,NGK,A-03
+연료펌프,FUEL,250000,4,6,보쉬,B-06
+디머스위치,ELECTRICAL,45000,18,10,현대모비스,C-04
+등속조인트,DRIVETRAIN,220000,5,4,GKN,A-07
+쇼크업소버,SUSPENSION,130000,10,6,만도,A-04
+라디에이터,COOLING,280000,4,3,한온시스템,D-02
+타이밍벨트,ENGINE,95000,8,6,게이츠,B-07

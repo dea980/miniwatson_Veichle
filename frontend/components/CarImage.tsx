@@ -10,6 +10,7 @@ function wikiTitle(model: string): string {
   const map: Record<string, string> = {
     "SANTA FE": "Hyundai_Santa_Fe", "SANTAFE": "Hyundai_Santa_Fe",
     "SANTA CRUZ": "Hyundai_Santa_Cruz", "SANTACRUZ": "Hyundai_Santa_Cruz", "SANTA-CRUZ": "Hyundai_Santa_Cruz",
+    "VELOSTER": "Hyundai_Veloster", "VELOSTER N": "Hyundai_Veloster_N", "VELOSTERN": "Hyundai_Veloster_N",
     "GENESIS COUPE": "Hyundai_Genesis_Coupe", "GENESISCOUPE": "Hyundai_Genesis_Coupe",
     "ELANTRA GT": "Hyundai_Elantra_GT", "ELANTRAGT": "Hyundai_Elantra_GT",
     "SONATA HYBRID": "Hyundai_Sonata", "SONATAHYBRID": "Hyundai_Sonata",
@@ -17,7 +18,11 @@ function wikiTitle(model: string): string {
     "EQUUS": "Hyundai_Equus", "ENTOURAGE": "Hyundai_Entourage", "VENUE": "Hyundai_Venue",
   };
   if (map[m]) return map[m];
-  return "Hyundai_" + m.charAt(0) + m.slice(1).toLowerCase();
+  // 폴백: 각 단어 Title-case 후 '_' 결합 → 다단어 차종 자동 처리
+  //   "SANTA CRUZ"→Hyundai_Santa_Cruz, "IONIQ 5"→Hyundai_Ioniq_5, "VELOSTER N"→Hyundai_Veloster_N
+  return "Hyundai_" + m.toLowerCase().split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join("_");
 }
 
 export default function CarImage({ model, height = 120, rounded = true }: { model: string; height?: number; rounded?: boolean }) {

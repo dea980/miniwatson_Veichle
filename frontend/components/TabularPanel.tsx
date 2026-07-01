@@ -11,8 +11,8 @@ const PRESETS = [
     examples: ["차종별 리콜 건수 많은 순", "부품(component)별 리콜 상위 5", "연도별 리콜 추세"] },
   { label: "불만", table: "complaints", path: "data/vehicle/complaints/hyundai_complaints_nhtsa.csv",
     examples: ["차종별 불만 건수 많은 순", "화재(fire) 신고가 있는 불만 수", "부상자 합계가 큰 차종 상위"] },
-  { label: "부품 단가", table: "parts", path: "data/vehicle/parts/parts_pricing.csv",
-    examples: ["부품별 단가 높은 순", "카테고리별 평균 단가"] },
+  { label: "부품 재고", table: "parts", path: "data/vehicle/parts/parts_inventory.csv",
+    examples: ["재고가 적정재고(reorder_point) 미만인 부품", "재고 금액(단가×수량) 큰 순", "공급사별 부품 수", "부위(component)별 총 재고 수량"] },
   { label: "점검", table: "inspection", path: "data/vehicle/inspection/inspection_sample.csv",
     examples: ["장치별 점검 항목 수", "결과가 정비필요인 항목"] },
 ];

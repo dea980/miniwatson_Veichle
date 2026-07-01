@@ -1,5 +1,29 @@
 // 백엔드 API 헬퍼. next.config.js rewrites가 /api/* 를 Spring(8080)으로 프록시한다.
 
+/** NHTSA 원문의 편집/비식별 코드(*DT* *JB* 등)와 잉여 공백 제거 — 표시용 정리. */
+export function cleanText(s?: string): string {
+  return (s || "")
+    .replace(/\*(?:[A-Z]{1,6}\*)+[A-Z]{0,6}/g, " ")   // *DT*DT*JB*… 연쇄 코드
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+// 해외명(NHTSA) → 국내명. 데이터 키는 해외명 유지(조회·필터 일관), 표시만 국내명.
+const MODEL_KO: Record<string, string> = {
+  ELANTRA: "아반떼", AVANTE: "아반떼", SONATA: "쏘나타", TUCSON: "투싼",
+  "SANTA FE": "싼타페", SANTAFE: "싼타페", "SANTA CRUZ": "싼타크루즈", SANTACRUZ: "싼타크루즈",
+  PALISADE: "팰리세이드", KONA: "코나", VELOSTER: "벨로스터", GRANDEUR: "그랜저", AZERA: "그랜저",
+  GENESIS: "제네시스", EQUUS: "에쿠스", ACCENT: "엑센트", VENUE: "베뉴", NEXO: "넥쏘",
+  VERACRUZ: "베라크루즈", ENTOURAGE: "앙트라지", IONIQ: "아이오닉",
+};
+/** 차종 표시명(국내). 매핑 없으면 원본. 필요 시 "아반떼(ELANTRA)"로 병기 가능. */
+export function koModel(name?: string, withOriginal = false): string {
+  const raw = (name || "").trim();
+  const ko = MODEL_KO[raw.toUpperCase()];
+  if (!ko) return raw;
+  return withOriginal ? `${ko} (${raw})` : ko;
+}
+
 export type Source = { id?: number; title: string; summary: string; url: string; namespace?: string };
 export type AskResult = { answer: string; sources: Source[]; logId?: number };
 export type DocItem = { title: string; chunks: number; namespace: string; url: string; ids: number[] };
@@ -189,7 +213,7 @@ export const api = {
     jget<{ model: string; common: [string, string][]; additional: [string, number, string][]; error?: string }>(
       `/api/analytics/checklist?model=${encodeURIComponent(model)}${component ? `&component=${encodeURIComponent(component)}` : ""}`),
   // 케이스 우선순위 트리아지(전 차종, 필터 + 페이지네이션 + 해결제외)
-  cases: (model?: string, component?: string, offset = 0, limit = 50, sort: "priority" | "model" = "priority") => {
+  cases: (model?: string, component?: string, offset = 0, limit = 50, sort: "priority" | "date" | "model" = "priority") => {
     const p = new URLSearchParams();
     if (model) p.set("model", model);
     if (component) p.set("component", component);

@@ -153,7 +153,7 @@ public class AnalyticsService {
         String rec     = "COALESCE(ROUND(12 * exp(-date_diff('day', " + recDate + ", current_date) / 180.0)), 0)";
         return tabular.runSelect(
             "SELECT odinumber, datecomplaintfiled, components, modelyear, substr(summary,1,2000), "
-            + "(" + dea + "*100 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3 + " + rec + ") AS priority, "
+            + "(" + dea + "*10000 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3 + " + rec + ") AS priority, "
             + fireT + " AS fire, " + crashT + " AS crash, " + inj + " AS injuries, " + dea + " AS deaths "
             + "FROM complaints WHERE upper(model)='" + esc + "' "
             + "ORDER BY priority DESC, datecomplaintfiled DESC NULLS LAST LIMIT 20").rows();
@@ -197,13 +197,16 @@ public class AnalyticsService {
         long total = scalar("SELECT COUNT(*) FROM complaints " + where);
         int lim = limit <= 0 ? 50 : Math.min(limit, 200);
         int off = Math.max(0, offset);
-        // 정렬: 기본은 전체 심각도순. "model"이면 차종 알파벳 그룹 후 그 안에서 심각도순.
-        String orderBy = "model".equalsIgnoreCase(sort)
-            ? "ORDER BY model, priority DESC, datecomplaintfiled DESC NULLS LAST, odinumber"
-            : "ORDER BY priority DESC, datecomplaintfiled DESC NULLS LAST, odinumber";
+        // 정렬: priority=중요도순(심각도), date=입고순(접수일 최신), model=차종그룹 후 중요도.
+        //   날짜 정렬은 파싱된 DATE(recDate)로 — 원문 MM/DD/YYYY 문자열은 연도경계서 오정렬돼서.
+        String orderBy = switch (sort == null ? "priority" : sort.toLowerCase()) {
+            case "model" -> "ORDER BY model, priority DESC, " + recDate + " DESC NULLS LAST, odinumber";
+            case "date"  -> "ORDER BY " + recDate + " DESC NULLS LAST, priority DESC, odinumber";
+            default       -> "ORDER BY priority DESC, " + recDate + " DESC NULLS LAST, odinumber";
+        };
         List<List<Object>> rows = rows(
             "SELECT odinumber, datecomplaintfiled, model, components, modelyear, substr(summary,1,2000), "
-            + "(" + dea + "*100 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3 + " + rec + ") AS priority, "
+            + "(" + dea + "*10000 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3 + " + rec + ") AS priority, "
             + fireT + " AS fire, " + crashT + " AS crash, " + inj + " AS injuries, " + dea + " AS deaths "
             + "FROM complaints " + where + " "
             + orderBy + " LIMIT " + lim + " OFFSET " + off);
@@ -295,7 +298,7 @@ public class AnalyticsService {
             + "TRY_CAST(CAST(datecomplaintfiled AS VARCHAR) AS DATE))";
         String rec = "COALESCE(ROUND(12 * exp(-date_diff('day', " + recDate + ", current_date) / 180.0)), 0)";
         return rows("SELECT odinumber, datecomplaintfiled, model, components, modelyear, substr(summary,1,2000), "
-            + "(" + dea + "*100 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3 + " + rec + ") AS priority, "
+            + "(" + dea + "*10000 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3 + " + rec + ") AS priority, "
             + fireT + ", " + crashT + ", " + inj + ", " + dea + " "
             + "FROM complaints WHERE odinumber='" + esc + "' LIMIT 1");
     }

@@ -190,7 +190,9 @@ public class ReportService {
         }
         var rows = analytics.caseById(id);
         if (rows.isEmpty()) { out.put("error", "해당 접수번호를 찾지 못함: " + id); out.put("caseNumber", id); return out; }
-        String full = String.valueOf(rows.get(0).get(5));
+        String full = String.valueOf(rows.get(0).get(5))
+            .replaceAll("\\*(?:[A-Z]{1,6}\\*)+[A-Z]{0,6}", " ")   // NHTSA 편집코드 *DT* *JB* 제거
+            .replaceAll("\\s{2,}", " ").trim();
         out.put("caseNumber", id);
         out.put("fullText", full);
         String gist = "";
