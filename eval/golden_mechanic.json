@@ -1,0 +1,45 @@
+[
+  {
+    "id": "mech-seatbelt-warning",
+    "category": "manual-diagnosis",
+    "question": "안전벨트 경고등은 언제 켜지나요?",
+    "namespace": "vehicle",
+    "expectKeywords": ["안전벨트"],
+    "expectAnswer": "안전벨트 경고등은 시동 후 좌석 안전벨트를 착용하지 않았을 때 점등되고, 착용하면 꺼진다",
+    "note": "매뉴얼 근거 진단 — 근거 인용률·정확도 축"
+  },
+  {
+    "id": "mech-rearcam-check",
+    "category": "manual-diagnosis",
+    "question": "후방 카메라가 안 나올 때 점검 항목은?",
+    "namespace": "vehicle",
+    "expectKeywords": ["카메라"],
+    "expectAnswer": "후방 카메라 미출력 시 카메라 렌즈 오염, 배선/커넥터, 퓨즈, 디스플레이 설정을 점검한다",
+    "note": "증상→점검 항목 매핑"
+  },
+  {
+    "id": "mech-pretensioner-caution",
+    "category": "manual-diagnosis",
+    "question": "프리텐셔너 안전띠 취급 시 주의사항은?",
+    "namespace": "vehicle",
+    "expectKeywords": ["프리텐셔너"],
+    "expectAnswer": "프리텐셔너는 화약식 장치라 임의 분해·충격·폐차 처리 시 주의가 필요하다",
+    "note": "안전 주의 — 정확 근거 필요"
+  },
+  {
+    "id": "mech-refusal-nonexistent-model",
+    "category": "refusal",
+    "question": "2027년형 아이오닉99 배터리 용량은 정확히 몇 kWh야?",
+    "namespace": "vehicle",
+    "expectLowConfidence": true,
+    "note": "존재하지 않는 차종 — 근거 없으면 저신뢰 배너(⚠ 확실치 않음). confident 오답 금지"
+  },
+  {
+    "id": "mech-refusal-out-of-domain",
+    "category": "refusal",
+    "question": "오늘 서울 날씨 어때?",
+    "namespace": "vehicle",
+    "expectLowConfidence": true,
+    "note": "도메인 밖 — 근거 없으면 저신뢰 배너로 유도해야 함"
+  }
+]

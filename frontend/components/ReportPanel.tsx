@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, koModel, cleanText, type ReportResult, type Models, type CaseRecord, type EstimateResult } from "@/lib/api";
+import { api, koModel, cleanText, severityPct, type ReportResult, type Models, type CaseRecord, type EstimateResult } from "@/lib/api";
 import Markdown from "@/components/Markdown";
 import CarImage from "@/components/CarImage";
 import Donut from "@/components/Donut";
@@ -162,7 +162,7 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
             <CarImage model={res.car} height={150} rounded={false} />
             <div className="car-hero-overlay">
               <div className="kicker" style={{ color: "#cfe0ff" }}>차종 진단 리포트</div>
-              <h2>{res.car}</h2>
+              <h2 title={res.car}>{koModel(res.car)}</h2>
               <p>리콜·불만·매뉴얼을 종합한 한국어 진단서</p>
             </div>
           </div>
@@ -209,7 +209,7 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
           <div className="answer"><Markdown text={res.report} /></div>
 
           {/* 이 차종의 케이스 — 건별 점검 체크리스트 + 필요 부품 */}
-          <div className="label" style={{ marginTop: 22 }}>이 차종의 케이스 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>({res.car} | 중요도순)</span></div>
+          <div className="label" style={{ marginTop: 22 }}>이 차종의 케이스 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>({koModel(res.car)} | 중요도순)</span></div>
           {chk && chk.common.length > 0 && (
             <div className="hint" style={{ marginTop: 0 }}>공통 점검(모든 차량 표준): {chk.common.map((r) => String(r[0])).join(", ")}. 각 건을 누르면 <b>차량 케이스 진단 페이지</b>(부품 이미지·점검·견적)로 이동합니다.</div>
           )}
@@ -231,7 +231,7 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
                   <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
                     <div style={{ minWidth: 0 }}>
                       <div className="muted" style={{ fontSize: 12, marginBottom: 3 }}>
-                        <span className="badge" style={{ marginLeft: 0 }}>중요도 {pr}</span> 접수 #{id} | {c[4]}년 | {c[1]}
+                        <span className="badge" style={{ marginLeft: 0 }}>중요도 {severityPct(dea, inj, fire, crash)}%</span> 접수 #{id} | {c[4]}년 | {c[1]}
                       </div>
                       <div style={{ fontWeight: 600, fontSize: 13 }}>{String(c[3])}</div>
                       {pr > 0 && (

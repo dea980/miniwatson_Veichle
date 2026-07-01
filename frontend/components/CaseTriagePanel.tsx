@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, cleanText, koModel, type CaseRecord, type CaseReport } from "@/lib/api";
+import { api, cleanText, koModel, severityPct, isSafetyCritical, type CaseRecord, type CaseReport } from "@/lib/api";
 import CarImage from "@/components/CarImage";
 import PartImage from "@/components/PartImage";
 import Markdown from "@/components/Markdown";
@@ -246,7 +246,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
         </div>
       </div>
       <div className="hint">
-        <b>중요도 = 사망×10000 + 부상×10 + 화재×5 + 사고×3</b> (사망 절대 최우선). {sort === "date" ? "입고(접수)일 최신순" : sort === "model" ? "차종별로 묶어 그 안에서 중요도순" : "중요도 높은 순"}으로 정렬 | 총 <b>{total.toLocaleString("ko-KR")}건</b> | 페이지 {page + 1}/{lastPage}. 카드를 누르면 접수번호 리포트로, "해결"하면 큐에서 사라집니다(서버 저장).
+        <b>중요도 지수(0~100%)</b> — 사망 90~100 · 부상 60~89 · 화재 40~59 · 사고 20~39 밴드(사망 절대 최우선). 정렬은 원점수(사망×10000+부상×10+화재×5+사고×3+최신성)로, {sort === "date" ? "입고(접수)일 최신순" : sort === "model" ? "차종별로 묶어 그 안에서 중요도순" : "중요도 높은 순"} | 총 <b>{total.toLocaleString("ko-KR")}건</b> | 페이지 {page + 1}/{lastPage}. 카드를 누르면 접수번호 리포트로, "해결"하면 큐에서 사라집니다(서버 저장).
         {resolvedCount > 0 && <> | <a onClick={toggleResolved} style={{ cursor: "pointer" }}>해결 내역 {resolvedCount}건 {showResolved ? "닫기" : "보기"}</a></>}
       </div>
 
@@ -273,7 +273,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
               <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
                 <span style={{ width: 64, flexShrink: 0 }}><CarImage model={String(c[2])} height={40} /></span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="muted" style={{ fontSize: 12 }}><span className="badge" style={{ marginLeft: 0 }}>중요도 {num(c[6])}</span> <span title={String(c[2])}>{koModel(String(c[2]))}</span> | 접수 #{id} | {c[4]}년</div>
+                  <div className="muted" style={{ fontSize: 12 }}>{isSafetyCritical(num(c[10]), num(c[7]), String(c[5])) && <span className="pill bad" style={{ marginRight: 6 }}>⚠ 안전확인</span>}<span className="badge" style={{ marginLeft: 0 }}>중요도 {severityPct(num(c[10]), num(c[9]), num(c[7]), num(c[8]))}%</span> <span title={String(c[2])}>{koModel(String(c[2]))}</span> | 접수 #{id} | {c[4]}년</div>
                   <div style={{ fontWeight: 600, fontSize: 13.5, marginTop: 2 }}>{String(c[3])}</div>
                   <div style={{ marginTop: 4 }}><Badges c={c} /></div>
                   <div className="snip" style={{ marginTop: 4 }}>{cleanText(String(c[5])).slice(0, 140)}…</div>

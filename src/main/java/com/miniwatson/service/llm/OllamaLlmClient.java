@@ -104,8 +104,10 @@ public class OllamaLlmClient implements RawLlmProvider {
         request.setPrompt(prompt);
         request.setStream(false);
         request.setThink(false);
-        // 출력 품질 제약 — FT/소형 모델의 한자 누수·반복 완화(생성 단계가 올바른 레이어).
-        request.setSystem("반드시 한국어로만 답하라. 한자·중국어·일본어(かなカナ) 등 외국 문자·외국어 사용 절대 금지 — 한글과 숫자·영문 약어만. 같은 문장이나 구절을 반복하지 말 것. 간결하게.");
+        // 출력 품질 제약 — FT/소형 모델의 외국문자 누수·반복 완화(생성 단계가 올바른 레이어).
+        // 중요: 시스템 프롬프트에는 한자·가나 같은 외국 문자를 절대 넣지 않는다.
+        // 넣으면 소형 모델이 그 문자를 그대로 출력에 베껴 오히려 누수를 유발한다(관측된 버그).
+        request.setSystem("답변은 오직 한국어로만 작성한다. 한글과 숫자, 영문 약어만 사용하고 그 외 다른 나라 문자는 하나도 쓰지 않는다. 같은 문장이나 구절을 반복하지 않는다. 지시문을 그대로 옮겨 적지 말고 간결하게 답한다.");
         request.setOptions(Map.<String, Object>of(
                 "num_predict", numPredict,
                 "num_ctx", numCtx,

@@ -183,9 +183,14 @@ public class ReportService {
         if (!force && existing.isPresent()) {
             try {
                 Map<String, Object> m = mapper.readValue(existing.get().getContentJson(), Map.class);
-                m.put("generatedAt", existing.get().getCreatedAt().toString());
-                m.put("cached", true);
-                return m;
+                // 예전에 외국문자(한자·가나)가 새어 들어간 캐시는 무효화하고 재생성한다.
+                if (hasForeign(String.valueOf(m.get("gist")))) {
+                    log.info("[case-summary] 캐시에 외국문자 누수 — 재생성: {}", id);
+                } else {
+                    m.put("generatedAt", existing.get().getCreatedAt().toString());
+                    m.put("cached", true);
+                    return m;
+                }
             } catch (Exception e) { log.warn("[case-summary] 캐시 파싱 실패 — 재생성: {}", e.getMessage()); }
         }
         var rows = analytics.caseById(id);
@@ -195,17 +200,25 @@ public class ReportService {
             .replaceAll("\\s{2,}", " ").trim();
         out.put("caseNumber", id);
         out.put("fullText", full);
+        // 요약은 영문→한국어 번역·압축이라 도메인 FT 소형 모델(1.5B)엔 부담이 커 고유명사를 한자로 오역한다.
+        // 요약은 1회 생성 후 캐시되므로(반복 비용 없음) 항상 강한 기본 채팅 모델을 쓴다(llmModel 무시).
         String gist = "";
         try {
             String prompt = "다음은 차량 불만 접수 내용(영문 원문)이다. 정비사가 빠르게 파악하도록 "
-                + "한국어로 핵심만 2~3문장으로 요약하라. 증상·발생 상황·안전 위험 위주로, 지어내지 말 것.\n\n"
+                + "한국어로 핵심만 2~3문장으로 요약하라. 증상·발생 상황·안전 위험 위주로, 지어내지 말 것. "
+                + "차종·지명 등 고유명사는 한글 또는 원문 영어로 적고 한자로 바꾸지 말 것.\n\n"
                 + "=== 접수 내용 ===\n" + full;
-            gist = ollama.ask(prompt, llmModel);
+            gist = ollama.ask(prompt, null);                 // null → 기본(강한) 채팅 모델
+            if (hasForeign(gist)) {                          // 그래도 외국문자가 새면 1회 재시도
+                log.info("[case-summary] 외국문자 누수 — 재시도: {}", id);
+                gist = ollama.ask(prompt, null);
+            }
+            if (hasForeign(gist)) gist = stripForeign(gist);  // 최후 방어: 외국문자 제거
         } catch (Throwable t) { log.warn("[case-summary] 요약 실패: {}", t.toString()); }
         out.put("gist", gist);
         try {   // out은 전부 문자열이라 jsr310 무관하게 직렬화 안전
             com.miniwatson.reports.GeneratedReport gr = existing.orElseGet(com.miniwatson.reports.GeneratedReport::new);
-            gr.setReportType("SUMMARY"); gr.setReportKey(id); gr.setModel(llmModel);
+            gr.setReportType("SUMMARY"); gr.setReportKey(id); gr.setModel("(summary-default)");
             gr.setContentJson(mapper.writeValueAsString(out));
             gr.setCreatedAt(java.time.LocalDateTime.now());
             var saved = reportRepo.save(gr);
@@ -213,6 +226,28 @@ public class ReportService {
         } catch (Exception e) { log.warn("[case-summary] 적재 실패: {}", e.getMessage()); }
         out.put("cached", false);
         return out;
+    }
+
+    /** 한자·히라가나·가타카나 등 외국(CJK) 문자가 섞였는지. 한글(가~힣)은 제외. */
+    private static boolean hasForeign(String s) {
+        if (s == null || s.isEmpty()) return false;
+        return s.codePoints().anyMatch(ReportService::isForeignCjk);
+    }
+
+    /** 외국(CJK) 문자만 제거하고 공백을 정리. 한글·숫자·영문·기호는 유지. */
+    private static String stripForeign(String s) {
+        if (s == null) return "";
+        StringBuilder b = new StringBuilder(s.length());
+        s.codePoints().forEach(cp -> { if (!isForeignCjk(cp)) b.appendCodePoint(cp); });
+        return b.toString().replaceAll("\\s{2,}", " ").trim();
+    }
+
+    private static boolean isForeignCjk(int cp) {
+        return (cp >= 0x4E00 && cp <= 0x9FFF)   // CJK 한자(통합)
+            || (cp >= 0x3400 && cp <= 0x4DBF)   // CJK 확장 A
+            || (cp >= 0x3040 && cp <= 0x309F)   // 히라가나
+            || (cp >= 0x30A0 && cp <= 0x30FF)   // 가타카나
+            || (cp >= 0xF900 && cp <= 0xFAFF);  // CJK 호환 한자
     }
 
     /** 정비사 메모 저장 — 적재된 케이스 리포트에 병합(없으면 먼저 생성). */
