@@ -95,7 +95,7 @@ export default function AnalyticsPanel() {
           </div>
 
           {/* 부품 수요 / 워런티 비용 프록시 */}
-          <div className="label">부품 수요 · 예상 워런티 비용 (결함 신호 × 단가)</div>
+          <div className="label">부품 수요 | 예상 워런티 비용 (결함 신호 × 단가)</div>
           <div style={{ overflowX: "auto" }}>
             <table>
               <thead><tr><th>부품</th><th>부위</th><th className="right">수요(신호)</th><th className="right">단가</th><th className="right">예상 비용</th></tr></thead>

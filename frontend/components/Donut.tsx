@@ -53,7 +53,7 @@ export default function Donut({ rows, unit = "", colors = DONUT_COLORS }:
           <div className={`donut-leg ${hi === i ? "on" : ""}`} key={i} onMouseEnter={() => setHi(i)}>
             <span className="donut-sw" style={{ background: colors[i % colors.length] }} />
             <span className="donut-lbl" title={d[0]}>{d[0]}</span>
-            <span className="donut-pct">{d[1]}{unit} · {Math.round((d[1] / total) * 100)}%</span>
+            <span className="donut-pct">{d[1]}{unit} | {Math.round((d[1] / total) * 100)}%</span>
           </div>
         ))}
       </div>

@@ -87,7 +87,7 @@ export default function SchedulePanel() {
                 onClick={() => setForm((f) => ({ ...f, scheduledDate: key }))} title="클릭하면 이 날짜로 추가 폼 설정">
                 <div className="cal-date">{d.getDate()}</div>
                 {list.slice(0, 3).map((it) => (
-                  <div key={it.id} className="cal-chip" style={{ borderLeft: `3px solid ${statusColor(it.status)}` }} title={`${it.model} · ${it.title} (${it.status})`}>
+                  <div key={it.id} className="cal-chip" style={{ borderLeft: `3px solid ${statusColor(it.status)}` }} title={`${it.model} | ${it.title} (${it.status})`}>
                     {it.title}
                   </div>
                 ))}
@@ -96,7 +96,7 @@ export default function SchedulePanel() {
             );
           })}
         </div>
-        <div className="hint">날짜를 클릭하면 우측 추가 폼의 날짜가 설정됩니다. 칩 색: <span style={{ color: "var(--accent-2)" }}>예정</span> · <span style={{ color: "var(--warn)" }}>진행</span> · <span style={{ color: "var(--ok)" }}>완료</span></div>
+        <div className="hint">날짜를 클릭하면 우측 추가 폼의 날짜가 설정됩니다. 칩 색: <span style={{ color: "var(--accent-2)" }}>예정</span> | <span style={{ color: "var(--warn)" }}>진행</span> | <span style={{ color: "var(--ok)" }}>완료</span></div>
       </div>
 
       {/* 우측: 추가 + 다가오는 일정 */}
@@ -124,7 +124,7 @@ export default function SchedulePanel() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 13 }}>{it.title}</div>
                 <div className="muted" style={{ fontSize: 12 }}>
-                  {it.scheduledDate}{it.model ? ` · ${it.model}` : ""}{it.technician ? ` · ${it.technician}` : ""}{it.caseNumber ? ` · 접수#${it.caseNumber}` : ""}
+                  {it.scheduledDate}{it.model ? ` | ${it.model}` : ""}{it.technician ? ` | ${it.technician}` : ""}{it.caseNumber ? ` | 접수#${it.caseNumber}` : ""}
                 </div>
               </div>
               <select value={it.status} onChange={(e) => setStatus(it, e.target.value)} style={{ fontSize: 12, padding: "4px 6px" }}>

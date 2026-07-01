@@ -167,7 +167,7 @@ export default function KnowledgeBasePanel() {
             <section key={cat} style={{ marginTop: 14 }}>
               <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", borderBottom: "2px solid var(--border)", paddingBottom: 6 }}>
                 <h3 style={{ margin: 0, fontSize: 15 }}>{cat}</h3>
-                <span className="muted" style={{ fontSize: 12 }}>{catDocs.length}개 문서 · {chunks} chunks</span>
+                <span className="muted" style={{ fontSize: 12 }}>{catDocs.length}개 문서 | {chunks} chunks</span>
               </div>
               {vehKeys.map((veh) => (
                 <div key={veh} style={{ marginTop: 8 }}>

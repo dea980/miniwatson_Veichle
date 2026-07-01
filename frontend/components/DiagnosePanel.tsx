@@ -70,7 +70,7 @@ export default function DiagnosePanel() {
           <div className="muted">{diag.caption || "(설명 없음)"}{diag.ocr ? ` | OCR: ${diag.ocr.slice(0, 80)}` : ""}</div>
           <div className="label">진단</div>
           <div className="answer"><Markdown text={diag.diagnosis} /></div>
-          {diag.sources?.length > 0 && <div className="hint">매뉴얼 근거: {diag.sources.join(" · ")}</div>}
+          {diag.sources?.length > 0 && <div className="hint">매뉴얼 근거: {diag.sources.join(" | ")}</div>}
 
           <div className="label">필요 부품 산정</div>
           <div className="row">
