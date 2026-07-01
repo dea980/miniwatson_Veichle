@@ -39,9 +39,10 @@ export default function AnalyticsPanel() {
 
   async function loadTrends(g = by) {
     try {
+      // 추세는 전 차종(플릿) 집계 — 여기 model 은 LLM 모델이라 차종 필터로 넘기면 안 됨(버그였음).
       const [rc, cp] = await Promise.all([
-        api.trend("recalls", g, model || undefined),
-        api.trend("complaints", g, model || undefined),
+        api.trend("recalls", g),
+        api.trend("complaints", g),
       ]);
       setRecallTrend(rc.trend || []); setComplaintTrend(cp.trend || []);
     } catch { /* 무시 */ }
@@ -113,7 +114,7 @@ export default function AnalyticsPanel() {
 
           {/* 추세 분석 — 연/월/일 그래뉼래리티 (분석가용) */}
           <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
-            <div className="label" style={{ margin: 0 }}>추세 분석 {model && <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>· {model}</span>}</div>
+            <div className="label" style={{ margin: 0 }}>추세 분석 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>· 전 차종</span></div>
             <div className="row" style={{ gap: 4 }}>
               {(["year", "month", "day"] as const).map((g) => (
                 <button key={g} className={by === g ? "btn" : "ghost"} style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setBy(g)}>
