@@ -110,7 +110,7 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
       <div className="car-hero-overlay">
         <div className="kicker" style={{ color: "#cfe0ff" }}>HYUNDAI FLEET INTELLIGENCE</div>
         <h2 title={featured}>{koModel(featured)}</h2>
-        <p>{cur ? <>불만 <b>{num(cur[1])}</b> · 리콜 <b>{num(cur[2])}</b> — 활동 상위 차종을 순환 표시합니다.</> : "리콜·불만·정비 데이터를 한 화면에서."}</p>
+        <p>{cur ? <>불만 <b>{num(cur[1])}</b> | 리콜 <b>{num(cur[2])}</b> — 활동 상위 차종을 순환 표시합니다.</> : "리콜·불만·정비 데이터를 한 화면에서."}</p>
       </div>
       {heroModels.length > 1 && (
         <div className="hero-dots">
@@ -137,7 +137,7 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
             <div className={`stat ${num(t?.injuries) > 0 ? "warn" : ""}`}><div className="v">{num(t?.injuries)}</div><div className="l">부상 합계</div></div>
           </div>
           <div className="hint">전체 플릿 집계. 자세한 분석은 <a onClick={() => onNavigate("analytics")} style={{ cursor: "pointer" }}>분석 대시보드</a>에서.
-            {updatedAt && <span className="muted"> · 자동 갱신 {updatedAt.toLocaleTimeString("ko-KR")}</span>}</div>
+            {updatedAt && <span className="muted"> | 자동 갱신 {updatedAt.toLocaleTimeString("ko-KR")}</span>}</div>
         </div>
 
         {/* 우선 대응 케이스 — 클릭 → 차량 케이스 진단 (스파인으로 연결) */}
@@ -154,7 +154,7 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
               <div className="doc caserow" key={i} style={{ cursor: "pointer" }}
                 onClick={() => onNavigate("triage", `${c[2]}::${c[0]}`)}>
                 <span className={`prio ${lvl}`}>{prio}</span>
-                <span className="name" style={{ fontSize: 13 }} title={String(c[2])}>{koModel(String(c[2]))} · {String(c[3]).slice(0, 26)}</span>
+                <span className="name" style={{ fontSize: 13 }} title={String(c[2])}>{koModel(String(c[2]))} | {String(c[3]).slice(0, 26)}</span>
                 <span className="spacer" />
                 {dea > 0 && <span className="sevtag dea">사망 {dea}</span>}
                 {inj > 0 && <span className="sevtag inj">부상 {inj}</span>}
@@ -284,11 +284,11 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
             : (
             <>
               <div className="row" style={{ gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-                <span className="badge" style={{ marginLeft: 0 }}>{recall.model}{recall.year ? ` · ${recall.year}년` : ""}</span>
+                <span className="badge" style={{ marginLeft: 0 }}>{recall.model}{recall.year ? ` | ${recall.year}년` : ""}</span>
                 <span className="badge">{recall.component}</span>
                 {String(recall.parkIt) === "true" && <span className="pill bad">주차 권고(화재위험)</span>}
               </div>
-              <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>캠페인 #{recall.campaign} · 접수일 {recall.date}</div>
+              <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>캠페인 #{recall.campaign} | 접수일 {recall.date}</div>
               {recall.summary && (<><div className="label" style={{ marginTop: 14 }}>결함 내용</div><div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{recall.summary}</div></>)}
               {recall.consequence && (<><div className="label" style={{ marginTop: 14 }}>위험 (Consequence)</div><div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{recall.consequence}</div></>)}
               {recall.remedy && (<><div className="label" style={{ marginTop: 14 }}>시정 조치 (Remedy)</div><div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{recall.remedy}</div></>)}
@@ -319,7 +319,7 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
               return (
                 <>
                   <div className="row" style={{ gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-                    <span className="badge" style={{ marginLeft: 0 }} title={mdl}>{koModel(mdl)}{c[4] ? ` · ${c[4]}년` : ""}</span>
+                    <span className="badge" style={{ marginLeft: 0 }} title={mdl}>{koModel(mdl)}{c[4] ? ` | ${c[4]}년` : ""}</span>
                     <span className="badge">{String(c[3])}</span>
                     <span className="badge">중요도 {num(c[6])}</span>
                     {num(c[10]) > 0 && <span className="pill bad">사망 {num(c[10])}</span>}
@@ -327,8 +327,8 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
                     {num(c[7]) > 0 && <span className="pill bad">화재</span>}
                     {num(c[8]) > 0 && <span className="pill warn">사고</span>}
                   </div>
-                  <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>접수 #{id} · 접수일 {String(c[1])}</div>
-                  <div className="label" style={{ marginTop: 14 }}>AI 요약 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(한국어 · 처음 1회 생성 후 캐시)</span></div>
+                  <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>접수 #{id} | 접수일 {String(c[1])}</div>
+                  <div className="label" style={{ marginTop: 14 }}>AI 요약 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(한국어 | 처음 1회 생성 후 캐시)</span></div>
                   {csum === "loading" ? <div className="muted" style={{ fontSize: 13 }}>요약 생성 중…</div>
                     : csum && csum.gist ? <div className="answer" style={{ marginTop: 0 }}>{csum.gist}</div>
                     : <div className="muted" style={{ fontSize: 13 }}>요약 없음 — 아래 원문 참고.</div>}

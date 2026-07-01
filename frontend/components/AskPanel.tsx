@@ -130,7 +130,7 @@ export default function AskPanel() {
         {(car || year) && <button className="ghost" style={{ fontSize: 12 }} onClick={() => { setCar(""); setYear(""); }}>지우기</button>}
       </div>
       <div className="hint">
-        {car || year ? <><b>{[car, year].filter(Boolean).join(" · ")}</b> 매뉴얼로 범위를 좁혀 검색합니다. </> : null}
+        {car || year ? <><b>{[car, year].filter(Boolean).join(" | ")}</b> 매뉴얼로 범위를 좁혀 검색합니다. </> : null}
         {voiceOk ? "마이크 버튼으로 음성 질문하고, 답변은 스피커 버튼으로 들을 수 있습니다." : "이 브라우저는 음성 입력 미지원 — Chrome 권장."}
       </div>
       <div className="row" style={{ gap: 6, marginTop: 8 }}>

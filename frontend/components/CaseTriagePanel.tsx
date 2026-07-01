@@ -148,12 +148,12 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
           <div className="car-hero-overlay">
             <div className="kicker" style={{ color: "#cfe0ff" }}>접수번호 진단 리포트</div>
             <h2 title={mdl}>{koModel(mdl)} <span style={{ fontSize: 14, fontWeight: 400, opacity: .85 }}>접수 #{id}</span></h2>
-            <p>{c[4]}년 · {c[1]} · 부위: {String(c[3])}</p>
+            <p>{c[4]}년 | {c[1]} | 부위: {String(c[3])}</p>
           </div>
         </div>
         <div className="row" style={{ marginTop: 10, justifyContent: "space-between", alignItems: "center" }}>
           <Badges c={c} />
-          {rep?.generatedAt && <span className="muted" style={{ fontSize: 12 }}>적재 {rep.generatedAt.slice(0, 16).replace("T", " ")}{rep.cached ? " · 캐시" : " · 방금"}</span>}
+          {rep?.generatedAt && <span className="muted" style={{ fontSize: 12 }}>적재 {rep.generatedAt.slice(0, 16).replace("T", " ")}{rep.cached ? " | 캐시" : " | 방금"}</span>}
         </div>
         <div className="snip" style={{ marginTop: 10, fontStyle: "italic" }}>접수 내용: {cleanText(rep?.summary || String(c[5]))}</div>
 
@@ -166,7 +166,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
           {/* AI 진단 — 매뉴얼 근거(RAG) */}
           <div className="label" style={{ marginTop: 16 }}>AI 진단 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(매뉴얼 근거)</span></div>
           {rep.diagnosis ? <div className="answer"><Markdown text={rep.diagnosis} /></div> : <div className="muted" style={{ fontSize: 13 }}>—</div>}
-          {rep.sources && rep.sources.length > 0 && <div className="hint" style={{ marginTop: 4 }}>근거: {rep.sources.join(" · ")}</div>}
+          {rep.sources && rep.sources.length > 0 && <div className="hint" style={{ marginTop: 4 }}>근거: {rep.sources.join(" | ")}</div>}
 
           {/* 정비사 메모 — 사용자 작성, 문서화·적재 */}
           <div className="label" style={{ marginTop: 18 }}>정비사 메모 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(작성 시 리포트에 함께 적재)</span></div>
@@ -186,7 +186,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
               <PartImage part={it.part} height={72} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600 }}>{it.part}</div>
-                <div className="muted" style={{ fontSize: 12 }}>{it.component} · 공임 {it.laborHours}h</div>
+                <div className="muted" style={{ fontSize: 12 }}>{it.component} | 공임 {it.laborHours}h</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontWeight: 600 }}>{won(it.lineTotal)}</div>
@@ -212,7 +212,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
             : thisChk.map((it, i) => <div key={i} className="chk" style={{ fontSize: 13.5, padding: "3px 0" }}>{it}</div>)}
 
           {/* 차종 추가 점검 (참고) */}
-          <div className="label" style={{ marginTop: 18 }}>차종 추가 점검 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(참고 · {mdl} 전반 빈도순)</span></div>
+          <div className="label" style={{ marginTop: 18 }}>차종 추가 점검 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(참고 | {mdl} 전반 빈도순)</span></div>
           {carChk.length === 0 ? <div className="muted" style={{ fontSize: 13 }}>—</div>
             : carChk.slice(0, 6).map((r, i) => (
               <div key={i} className="row" style={{ justifyContent: "space-between", fontSize: 13, padding: "2px 0" }}>
@@ -235,7 +235,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
           <select value={sort} onChange={(e) => { const s = e.target.value as "priority" | "date" | "model"; setSort(s); load(0, s); }} title="정렬 기준">
             <option value="priority">중요도순</option>
             <option value="date">입고순 (최신)</option>
-            <option value="model">차종별 · 중요도순</option>
+            <option value="model">차종별 | 중요도순</option>
           </select>
           <select value={model} onChange={(e) => setModel(e.target.value)}>
             <option value="">전체 차종</option>
@@ -246,8 +246,8 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
         </div>
       </div>
       <div className="hint">
-        <b>중요도 = 사망×10000 + 부상×10 + 화재×5 + 사고×3</b> (사망 절대 최우선). {sort === "date" ? "입고(접수)일 최신순" : sort === "model" ? "차종별로 묶어 그 안에서 중요도순" : "중요도 높은 순"}으로 정렬 · 총 <b>{total.toLocaleString("ko-KR")}건</b> · 페이지 {page + 1}/{lastPage}. 카드를 누르면 접수번호 리포트로, "해결"하면 큐에서 사라집니다(서버 저장).
-        {resolvedCount > 0 && <> · <a onClick={toggleResolved} style={{ cursor: "pointer" }}>해결 내역 {resolvedCount}건 {showResolved ? "닫기" : "보기"}</a></>}
+        <b>중요도 = 사망×10000 + 부상×10 + 화재×5 + 사고×3</b> (사망 절대 최우선). {sort === "date" ? "입고(접수)일 최신순" : sort === "model" ? "차종별로 묶어 그 안에서 중요도순" : "중요도 높은 순"}으로 정렬 | 총 <b>{total.toLocaleString("ko-KR")}건</b> | 페이지 {page + 1}/{lastPage}. 카드를 누르면 접수번호 리포트로, "해결"하면 큐에서 사라집니다(서버 저장).
+        {resolvedCount > 0 && <> | <a onClick={toggleResolved} style={{ cursor: "pointer" }}>해결 내역 {resolvedCount}건 {showResolved ? "닫기" : "보기"}</a></>}
       </div>
 
       {showResolved && (
@@ -273,7 +273,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
               <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
                 <span style={{ width: 64, flexShrink: 0 }}><CarImage model={String(c[2])} height={40} /></span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="muted" style={{ fontSize: 12 }}><span className="badge" style={{ marginLeft: 0 }}>중요도 {num(c[6])}</span> <span title={String(c[2])}>{koModel(String(c[2]))}</span> · 접수 #{id} · {c[4]}년</div>
+                  <div className="muted" style={{ fontSize: 12 }}><span className="badge" style={{ marginLeft: 0 }}>중요도 {num(c[6])}</span> <span title={String(c[2])}>{koModel(String(c[2]))}</span> | 접수 #{id} | {c[4]}년</div>
                   <div style={{ fontWeight: 600, fontSize: 13.5, marginTop: 2 }}>{String(c[3])}</div>
                   <div style={{ marginTop: 4 }}><Badges c={c} /></div>
                   <div className="snip" style={{ marginTop: 4 }}>{cleanText(String(c[5])).slice(0, 140)}…</div>
@@ -288,7 +288,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
         })}
       </div>
 
-      {/* 페이지네이션 1 · 2 · 3 … */}
+      {/* 페이지네이션 1 | 2 | 3 … */}
       {total > PAGE && (
         <div className="row" style={{ gap: 4, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
           <button className="ghost" style={{ fontSize: 13 }} disabled={page === 0 || loading} onClick={() => load(page - 1)}>‹ 이전</button>
