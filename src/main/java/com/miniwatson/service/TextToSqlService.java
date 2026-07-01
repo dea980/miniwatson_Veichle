@@ -16,6 +16,8 @@ public class TextToSqlService {
 
     private final TabularSqlService sql;
     private final OllamaService ollama;
+    // SQL 생성 캐시(표+질문 → SQL). 생성만 캐시하고 실행은 매번 → 데이터 최신 반영. LLM 9초 콜을 반복 제거.
+    private final java.util.Map<String, String> sqlCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     public TextToSqlService(TabularSqlService sql, OllamaService ollama) {
         this.sql = sql;
@@ -23,6 +25,14 @@ public class TextToSqlService {
     }
 
     public Map<String, Object> ask(String table, String question) throws SQLException {
+        String key = table + "||" + (question == null ? "" : question.trim());
+        String cachedSql = sqlCache.get(key);
+        if (cachedSql != null) {
+            try {
+                var res = sql.runSelect(cachedSql);
+                return Map.of("sql", cachedSql, "columns", res.columns(), "rows", res.rows(), "cached", true);
+            } catch (Exception ignore) { sqlCache.remove(key); }   // 스키마 변경 등 → 재생성
+        }
         String prompt = """
             You are a SQL assistant for DuckDB. Write ONE SQL SELECT query that answers the question.
             Use only the table `%s`.
@@ -39,6 +49,7 @@ public class TextToSqlService {
         String query = cleanSql(ollama.ask(prompt, null));   // 기본 모델(granite4)
         try {
             var res = sql.runSelect(query);
+            sqlCache.put(key, query);   // 성공한 SQL만 캐시
             return Map.of("sql", query, "columns", res.columns(), "rows", res.rows());
         } catch (Exception e1) {
             // 자기수정(self-correction): 실행 에러를 모델에 돌려주고 1회 재시도 — agentic 패턴.
@@ -56,6 +67,7 @@ public class TextToSqlService {
             String fixed = cleanSql(ollama.ask(fixPrompt, null));
             try {
                 var res = sql.runSelect(fixed);
+                sqlCache.put(key, fixed);   // 자기수정으로 성공한 SQL도 캐시
                 return Map.of("sql", fixed, "columns", res.columns(), "rows", res.rows(), "retried", true);
             } catch (Exception e2) {
                 // 재시도도 실패 → 진단 정보 반환(500 아님)
