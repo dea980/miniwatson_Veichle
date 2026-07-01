@@ -9,6 +9,7 @@ function wikiTitle(model: string): string {
   const m = (model || "").trim().toUpperCase();
   const map: Record<string, string> = {
     "SANTA FE": "Hyundai_Santa_Fe", "SANTAFE": "Hyundai_Santa_Fe",
+    "SANTA CRUZ": "Hyundai_Santa_Cruz", "SANTACRUZ": "Hyundai_Santa_Cruz", "SANTA-CRUZ": "Hyundai_Santa_Cruz",
     "GENESIS COUPE": "Hyundai_Genesis_Coupe", "GENESISCOUPE": "Hyundai_Genesis_Coupe",
     "ELANTRA GT": "Hyundai_Elantra_GT", "ELANTRAGT": "Hyundai_Elantra_GT",
     "SONATA HYBRID": "Hyundai_Sonata", "SONATAHYBRID": "Hyundai_Sonata",
