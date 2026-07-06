@@ -136,7 +136,7 @@ public class AnalyticsService {
 
     /** 드릴다운 + 케이스 우선순위 트리아지: 특정 차종의 개별 차량 기록(불만).
      *  [접수번호, 날짜, 부위, 연식, 요약, 우선순위, 화재, 사고, 부상, 사망]
-     *  우선순위 = 사망×100 + 부상×10 + 화재×5 + 사고×3 → 심각한 케이스가 위로(A/S 접수 트리아지).
+     *  중요도 = 사망×10000 + 부상×10 + 화재×5 + 사고×3 (+최신성) → 심각한 케이스가 위로(A/S 접수 트리아지).
      *  에러를 삼키지 않고 던진다 → 컨트롤러가 응답에 원인을 담아 화면에서 바로 보이게. */
     public List<List<Object>> vehiclesByModel(String model) throws Exception {
         ensure("complaints");
@@ -185,8 +185,9 @@ public class AnalyticsService {
             where.append(" AND upper(model)='").append(model.replace("'", "''").toUpperCase()).append("'");
         if (component != null && !component.isBlank())
             where.append(" AND upper(components) LIKE '%").append(component.replace("'", "''").toUpperCase()).append("%'");
-        // 해결된 케이스 제외 (DB 영속)
+        // 완료(DONE) 케이스만 제외 (DB 영속) — 진단중/수리중은 큐에 상태칩으로 남는다
         List<String> resolved = resolvedRepo.findAll().stream()
+            .filter(rc -> rc.getStatus() == null || "DONE".equals(rc.getStatus()))
             .map(com.miniwatson.cases.ResolvedCase::getCaseNumber)
             .filter(s -> s != null && !s.isBlank()).toList();
         if (!resolved.isEmpty()) {
@@ -233,13 +234,43 @@ public class AnalyticsService {
         resolvedRepo.findByCaseNumber(caseNumber).ifPresent(resolvedRepo::delete);
     }
 
-    /** 해결된 케이스 목록 (접수번호·시각·메모). */
+    /** 해결(완료)된 케이스 목록 (접수번호·시각·메모). 진단중/수리중은 제외. */
     public List<Map<String, Object>> resolvedCases() {
-        return resolvedRepo.findAll().stream().map(rc -> {
+        return resolvedRepo.findAll().stream()
+            .filter(rc -> rc.getStatus() == null || "DONE".equals(rc.getStatus()))
+            .map(rc -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("caseNumber", rc.getCaseNumber());
             m.put("note", rc.getNote() == null ? "" : rc.getNote());
             m.put("resolvedAt", rc.getResolvedAt() == null ? "" : rc.getResolvedAt().toString());
+            return m;
+        }).toList();
+    }
+
+    private static final java.util.Set<String> CASE_STATUSES = java.util.Set.of("DIAGNOSING", "REPAIRING", "DONE");
+
+    /** 케이스 워크플로 상태 설정(업서트). RECEIVED(기본)로 되돌리면 행 삭제. */
+    public void setCaseStatus(String caseNumber, String status, String note) {
+        if (caseNumber == null || caseNumber.isBlank()) return;
+        String s = status == null ? "" : status.trim().toUpperCase();
+        if (s.isEmpty() || "RECEIVED".equals(s)) { unresolveCase(caseNumber); return; }
+        if (!CASE_STATUSES.contains(s)) throw new IllegalArgumentException("unknown status: " + status);
+        com.miniwatson.cases.ResolvedCase rc = resolvedRepo.findByCaseNumber(caseNumber)
+            .orElseGet(com.miniwatson.cases.ResolvedCase::new);
+        rc.setCaseNumber(caseNumber);
+        rc.setStatus(s);
+        if (note != null && !note.isBlank()) rc.setNote(note);
+        rc.setResolvedAt(java.time.LocalDateTime.now());
+        resolvedRepo.save(rc);
+    }
+
+    /** 전체 케이스 상태 맵 — [{caseNumber, status, updatedAt}] (행 없음 = RECEIVED). */
+    public List<Map<String, Object>> caseStatuses() {
+        return resolvedRepo.findAll().stream().map(rc -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("caseNumber", rc.getCaseNumber());
+            m.put("status", rc.getStatus() == null ? "DONE" : rc.getStatus());
+            m.put("updatedAt", rc.getResolvedAt() == null ? "" : rc.getResolvedAt().toString());
             return m;
         }).toList();
     }
@@ -452,6 +483,61 @@ public class AnalyticsService {
     public void refresh() {
         tabular.invalidateRegistrations();
         ensure("recalls"); ensure("complaints"); ensure("parts");
+    }
+
+    /** 유사 케이스 검색 — "과거에 같은 증상 접수 있었나?" top-k.
+     *  ponytail: 토큰 코사인 근사(같은 부위 후보 → 요약 토큰 중복도). 전 불만 임베딩 적재가 없어 1차는
+     *  어휘 기반 — 정밀도 올릴 땐 complaints를 EmbeddingService로 적재 후 벡터 코사인으로 교체. */
+    public List<Map<String, Object>> similarCases(String caseNumber, int k) {
+        List<List<Object>> target = caseById(caseNumber);
+        if (target.isEmpty()) return List.of();
+        List<Object> t = target.get(0);
+        String comp = String.valueOf(t.get(3));
+        java.util.Set<String> tTok = simTokens(String.valueOf(t.get(5)));
+        if (tTok.isEmpty()) return List.of();
+        String esc = caseNumber.replace("'", "''");
+        String sel = "SELECT odinumber, datecomplaintfiled, model, components, modelyear, substr(summary,1,800) FROM complaints "
+            + "WHERE odinumber<>'" + esc + "'";
+        // 후보: 같은 부위 우선(정밀) → 부족하면 전체로 확장(회수). 비용 상한 2000건.
+        List<List<Object>> cands = rows(sel + " AND upper(components)=upper('" + comp.replace("'", "''") + "') LIMIT 2000");
+        if (cands.size() < 50) cands = rows(sel + " LIMIT 2000");
+        int kk = k <= 0 ? 5 : Math.min(k, 20);
+        return cands.stream()
+            .map(r -> {
+                java.util.Set<String> ct = simTokens(String.valueOf(r.get(5)));
+                if (ct.isEmpty()) return Map.entry(r, 0.0);
+                long inter = ct.stream().filter(tTok::contains).count();
+                return Map.entry(r, inter / Math.sqrt((double) tTok.size() * ct.size()));  // 코사인 근사
+            })
+            .filter(e -> e.getValue() > 0.05)
+            .sorted((a, b) -> Double.compare(b.getValue(), a.getValue()))
+            .limit(kk)
+            .map(e -> {
+                List<Object> r = e.getKey();
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("caseNumber", String.valueOf(r.get(0)));
+                m.put("date", String.valueOf(r.get(1)));
+                m.put("model", String.valueOf(r.get(2)));
+                m.put("component", String.valueOf(r.get(3)));
+                m.put("year", String.valueOf(r.get(4)));
+                m.put("snippet", String.valueOf(r.get(5)).substring(0, Math.min(180, String.valueOf(r.get(5)).length())));
+                m.put("score", Math.round(e.getValue() * 100));
+                return m;
+            }).toList();
+    }
+
+    private static final java.util.Set<String> SIM_STOP = java.util.Set.of(
+        "THE", "AND", "WAS", "WERE", "THAT", "THIS", "WITH", "HAVE", "HAS", "HAD", "FROM", "WHEN", "WHILE",
+        "THERE", "BEEN", "WOULD", "COULD", "ABOUT", "AFTER", "BEFORE", "VEHICLE", "CONTACT", "STATED",
+        "HYUNDAI", "MILES", "DEALER", "MANUFACTURER", "FAILURE", "ISSUE", "PROBLEM", "TIME", "ALSO", "ONLY", "INTO");
+
+    /** 요약 → 의미 토큰(4자+ 영숫자, 불용어 제외). */
+    private java.util.Set<String> simTokens(String s) {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        if (s == null) return out;
+        for (String w : s.toUpperCase().split("[^A-Z0-9]+"))
+            if (w.length() >= 4 && !SIM_STOP.contains(w)) out.add(w);
+        return out;
     }
 
     private long scalar(String sql) {

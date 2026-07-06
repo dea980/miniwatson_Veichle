@@ -124,4 +124,27 @@ public class AnalyticsController {
         try { return Map.of("resolved", analytics.resolvedCases()); }
         catch (Throwable t) { return Map.of("resolved", java.util.List.of(), "error", t.toString()); }
     }
+
+    /** 케이스 워크플로 상태 설정. body: {id, status: RECEIVED|DIAGNOSING|REPAIRING|DONE, note?}. */
+    @PostMapping("/case-status")
+    public Map<String, Object> setCaseStatus(@RequestBody Map<String, String> body) {
+        try {
+            analytics.setCaseStatus(body.get("id"), body.get("status"), body.get("note"));
+            return Map.of("ok", true, "id", body.getOrDefault("id", ""), "status", body.getOrDefault("status", ""));
+        } catch (Throwable t) { return Map.of("ok", false, "error", t.toString()); }
+    }
+
+    /** 전체 케이스 상태 맵 (행 없음 = RECEIVED). */
+    @GetMapping("/case-status")
+    public Map<String, Object> caseStatuses() {
+        try { return Map.of("statuses", analytics.caseStatuses()); }
+        catch (Throwable t) { return Map.of("statuses", java.util.List.of(), "error", t.toString()); }
+    }
+
+    /** 유사 케이스 — 같은 증상 과거 접수 top-k (요약 토큰 유사도). */
+    @GetMapping("/similar-cases")
+    public Map<String, Object> similarCases(@RequestParam String id, @RequestParam(defaultValue = "5") int k) {
+        try { return Map.of("similar", analytics.similarCases(id, k)); }
+        catch (Throwable t) { return Map.of("similar", java.util.List.of(), "error", t.toString()); }
+    }
 }

@@ -52,6 +52,8 @@ export function koModel(name?: string, withOriginal = false): string {
 }
 
 export type Source = { id?: number; title: string; summary: string; url: string; namespace?: string };
+export type CaseWorkStatus = "RECEIVED" | "DIAGNOSING" | "REPAIRING" | "DONE";
+export type SimilarCase = { caseNumber: string; date: string; model: string; component: string; year: string; snippet: string; score: number };
 export type AskResult = { answer: string; sources: Source[]; logId?: number };
 export type DocItem = { title: string; chunks: number; namespace: string; url: string; ids: number[] };
 export type Models = { default: string; available: string[] };
@@ -257,6 +259,14 @@ export const api = {
     fetch(`/api/analytics/resolve/${encodeURIComponent(id)}`, { method: "DELETE" }).then((r) => r.json()),
   resolvedCases: () =>
     jget<{ resolved: { caseNumber: string; note: string; resolvedAt: string }[] }>("/api/analytics/resolved"),
+  // 케이스 워크플로 상태 (RECEIVED=행없음 | DIAGNOSING | REPAIRING | DONE)
+  setCaseStatus: (id: string, status: CaseWorkStatus, note?: string) =>
+    jpost<{ ok: boolean; id: string; status: string; error?: string }>("/api/analytics/case-status", { id, status, note }),
+  caseStatuses: () =>
+    jget<{ statuses: { caseNumber: string; status: CaseWorkStatus; updatedAt: string }[] }>("/api/analytics/case-status"),
+  // 유사 케이스 — 같은 증상 과거 접수 top-k
+  similarCases: (id: string, k = 5) =>
+    jget<{ similar: SimilarCase[]; error?: string }>(`/api/analytics/similar-cases?id=${encodeURIComponent(id)}&k=${k}`),
   // 단일 리콜 상세 (캠페인번호)
   recall: (id: string) =>
     jget<RecallDetail>(`/api/analytics/recall?id=${encodeURIComponent(id)}`),
