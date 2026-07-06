@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api, koModel, cleanText, severityPct, type ReportResult, type Models, type CaseRecord, type EstimateResult } from "@/lib/api";
+import Select from "@/components/Select";
 import Markdown from "@/components/Markdown";
 import CarImage from "@/components/CarImage";
 import Donut from "@/components/Donut";
@@ -142,14 +143,10 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
 
   return (
     <div className="card">
-      <h2>차종 카테고리 <span className="muted" style={{ fontSize: 13, fontWeight: 400 }}>· 케이스 빠른 조회</span></h2>
+      <h2>차종 카테고리 <span className="muted" style={{ fontSize: 13, fontWeight: 400 }}>| 케이스 빠른 조회</span></h2>
       <div className="row">
-        <select className="grow" value={car} onChange={(e) => setCar(e.target.value)} title="차종 선택">
-          {carOptions.map((c) => <option key={c} value={c}>{koModel(c)}</option>)}
-        </select>
-        <select value={model} onChange={(e) => setModel(e.target.value)} title="응답 생성 LLM">
-          {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
+        <Select className="grow" value={car} onChange={setCar} options={carOptions} renderLabel={(c) => koModel(c)} title="차종 선택" />
+        <Select value={model} onChange={setModel} options={models?.available || []} title="응답 생성 LLM" />
         <button className="btn" onClick={() => gen()} disabled={loading}>{loading ? "조회 중…" : "조회"}</button>
       </div>
       <div className="hint">차종은 <b>접수번호(케이스)를 빠르게 찾는 카테고리</b>입니다. 차종별 집계(리콜·불만·점검표)는 참고용이고, 실제 진단·견적·점검·정비사 메모는 아래 케이스를 눌러 <b>접수번호별 리포트</b>에서 작성·적재합니다.</div>

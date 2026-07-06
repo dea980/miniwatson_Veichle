@@ -48,7 +48,7 @@ function Icon({ id }: { id: string }) {
 
 export default function Home() {
   const [tab, setTab] = useState<TabId>("home");
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);  // 콕핏 기본 = 다크(계기판). 저장된 선택이 있으면 그걸 따름.
   const [online, setOnline] = useState<boolean | null>(null);
   const [reportCar, setReportCar] = useState("");   // → 진단 리포트 차종 전달
   const [triageModel, setTriageModel] = useState("");   // → 트리아지 차종 필터
@@ -66,7 +66,7 @@ export default function Home() {
 
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("mw-theme") : null;
-    if (saved === "dark") setDark(true);
+    if (saved) setDark(saved === "dark");
     // 새로고침해도 있던 탭 유지 — 저장된 탭 복원(홈으로 리셋 방지)
     const savedTab = typeof window !== "undefined" ? localStorage.getItem("mw-tab") : null;
     if (savedTab && TABS.some((t) => t.id === savedTab)) setTab(savedTab as TabId);

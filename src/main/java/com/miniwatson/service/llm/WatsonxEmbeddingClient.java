@@ -19,7 +19,8 @@ import java.util.Map;
  * /ml/v1/text/embeddings 로 호출. 인증은 WatsonxAuth 공용.
  */
 @Component
-@ConditionalOnProperty(name = "llm.provider", havingValue = "watsonx")
+// 임베딩은 chat 제공자와 독립(embedding.provider로 선택). watsonx 임베딩을 쓰려면 EMBEDDING_PROVIDER=watsonx.
+@ConditionalOnProperty(name = "embedding.provider", havingValue = "watsonx")
 public class WatsonxEmbeddingClient implements EmbeddingClient {
 
     private static final String API_VERSION = "2024-05-01";

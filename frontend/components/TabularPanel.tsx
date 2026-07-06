@@ -89,7 +89,7 @@ export default function TabularPanel() {
 
   return (
     <div className="card">
-      <h2>데이터로 질문하기 <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>· 숫자 밑에 생성 SQL을 함께 보여주는 설명가능 분석</span></h2>
+      <h2>데이터로 질문하기 <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>| 숫자 밑에 생성 SQL을 함께 보여주는 설명가능 분석</span></h2>
 
       {/* 도메인 데이터셋 프리셋 — 원클릭 로드 */}
       <div className="row" style={{ gap: 6, alignItems: "center", flexWrap: "wrap" }}>

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api, type DiagnoseResult, type EstimateResult, type Models } from "@/lib/api";
 import Markdown from "@/components/Markdown";
+import Select from "@/components/Select";
 
 const won = (n: number) => n.toLocaleString("ko-KR") + "원";
 
@@ -45,9 +46,7 @@ export default function DiagnosePanel() {
         <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
         <label className="field-model" title="진단에 사용할 멀티모달 LLM">
           <span>모델</span>
-          <select value={model} onChange={(e) => setModel(e.target.value)}>
-            {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <Select value={model} onChange={setModel} options={models?.available || []} title="진단에 사용할 멀티모달 LLM" />
         </label>
         <button className="btn" onClick={diagnose} disabled={busy}>{busy ? "처리 중…" : "이미지 진단"}</button>
       </div>
@@ -102,7 +101,7 @@ export default function DiagnosePanel() {
           </div>
           {est.items.length > 0 && (
             <div className="hint">참고 합계: 부품 {won(est.partsTotal)} + 공임 {won(est.laborTotal)} = <b>{won(est.grandTotal)}</b>
-              {" "}· 공임 {won(est.laborRate)}/h <b>(샘플 단가 — 실제 가격 아님)</b></div>
+              {" "}| 공임 {won(est.laborRate)}/h <b>(샘플 단가 — 실제 가격 아님)</b></div>
           )}
           {est.note && <div className="answer" style={{ marginTop: 8 }}>{est.note}</div>}
         </>

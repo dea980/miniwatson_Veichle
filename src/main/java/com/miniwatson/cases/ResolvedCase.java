@@ -21,4 +21,8 @@ public class ResolvedCase {
 
     private String note;
     private LocalDateTime resolvedAt = LocalDateTime.now();
+
+    /** 워크플로 상태: DIAGNOSING(진단중) | REPAIRING(수리중) | DONE(완료). null = DONE(구버전 행 호환).
+     *  RECEIVED(접수)는 "행 없음"이 기본이라 저장하지 않는다. */
+    private String status;
 }

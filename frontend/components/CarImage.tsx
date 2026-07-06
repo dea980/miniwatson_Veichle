@@ -6,21 +6,25 @@ import { useEffect, useState } from "react";
 const cache: Record<string, string | null> = {};
 
 function wikiTitle(model: string): string {
-  const m = (model || "").trim().toUpperCase();
+  const raw = (model || "").trim().toUpperCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
   const map: Record<string, string> = {
     "SANTA FE": "Hyundai_Santa_Fe", "SANTAFE": "Hyundai_Santa_Fe",
-    "SANTA CRUZ": "Hyundai_Santa_Cruz", "SANTACRUZ": "Hyundai_Santa_Cruz", "SANTA-CRUZ": "Hyundai_Santa_Cruz",
-    "VELOSTER": "Hyundai_Veloster", "VELOSTER N": "Hyundai_Veloster_N", "VELOSTERN": "Hyundai_Veloster_N",
+    "SANTA CRUZ": "Hyundai_Santa_Cruz", "SANTACRUZ": "Hyundai_Santa_Cruz",
+    // 변형(N)은 전용 위키 문서에 썸네일이 없어 베이스 문서로 보낸다.
+    "VELOSTER": "Hyundai_Veloster", "VELOSTER N": "Hyundai_Veloster", "VELOSTERN": "Hyundai_Veloster",
     "GENESIS COUPE": "Hyundai_Genesis_Coupe", "GENESISCOUPE": "Hyundai_Genesis_Coupe",
     "ELANTRA GT": "Hyundai_Elantra_GT", "ELANTRAGT": "Hyundai_Elantra_GT",
-    "SONATA HYBRID": "Hyundai_Sonata", "SONATAHYBRID": "Hyundai_Sonata",
     "GENESIS": "Hyundai_Genesis", "AZERA": "Hyundai_Azera",
     "EQUUS": "Hyundai_Equus", "ENTOURAGE": "Hyundai_Entourage", "VENUE": "Hyundai_Venue",
   };
-  if (map[m]) return map[m];
-  // 폴백: 각 단어 Title-case 후 '_' 결합 → 다단어 차종 자동 처리
-  //   "SANTA CRUZ"→Hyundai_Santa_Cruz, "IONIQ 5"→Hyundai_Ioniq_5, "VELOSTER N"→Hyundai_Veloster_N
-  return "Hyundai_" + m.toLowerCase().split(/\s+/)
+  if (map[raw]) return map[raw];
+  // 변형 접미사(하이브리드·전기·수소·N 등) 제거 → 베이스 모델의 안정적 위키 문서로.
+  //   "SANTA FE HYBRID"→SANTA FE, "IONIQ 5 N"→IONIQ 5, "KONA ELECTRIC"→KONA. (숫자 모델명 IONIQ 5 는 보존)
+  const base = raw.replace(/\s+(N LINE|HYBRID|PLUG IN HYBRID|PHEV|HEV|ELECTRIC|EV|FCEV|FUEL CELL|LONG|N)$/g, "").trim();
+  const key = map[base] ? base : (base || raw);
+  if (map[key]) return map[key];
+  // 폴백: 각 단어 Title-case 후 '_' 결합 (SANTA CRUZ→Hyundai_Santa_Cruz, IONIQ 5→Hyundai_Ioniq_5)
+  return "Hyundai_" + key.toLowerCase().split(/\s+/)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join("_");
 }

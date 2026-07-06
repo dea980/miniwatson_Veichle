@@ -58,8 +58,31 @@
 ## 6. 로드맵
 
 - **P1 — vLLM-Metal 로컬 서빙(실증)**: vllm-metal 설치(또는 Docker Model Runner) → 7B(또는 DPO-merged) OpenAI API(`:8000`). 작동 확인.
-- **P2 — 앱 provider 연결**: `llm.provider=vllm`(OpenAI 호환) 추가 → 앱이 vLLM으로 서빙. [LLM-ABSTRACTION.md](LLM-ABSTRACTION.md) 패턴.
-- **P3 — 최적화 실측**: prefix caching on/off, 연속배칭 동시성별 처리량/지연 벤치(`ml/optimize/benchmark.py` 확장). §4 매핑을 수치로.
+- **P2 — 앱 provider 연결 ✅**: `llm.provider=vllm`(OpenAI 호환) 배선 완료. `VllmLlmClient`(`/v1/chat/completions`, 한국어 가드 system·타임아웃·비전 image_url)가 `@ConditionalOnProperty(llm.provider=vllm)`로 활성, 기존 `RawLlmProvider` 추상화에 그대로 끼워짐(거버넌스 래퍼 `OllamaService`가 감쌈 — 호출처 변경 0). 설정 `vllm.url/api-key/chat-model/chat-models/num-predict`(application.yaml). [LLM-ABSTRACTION.md](LLM-ABSTRACTION.md) 패턴.
+
+  실행:
+  ```bash
+  vllm serve Qwen/Qwen2.5-7B-Instruct        # (별도 터미널, :8000) 또는 Docker Model Runner
+  LLM_PROVIDER=vllm VLLM_URL=http://localhost:8000 ./mvnw spring-boot:run
+  ```
+- **P3 — 최적화 실측**: prefix caching on/off, 연속배칭 동시성별 처리량/지연 벤치. §4 매핑을 수치로. 스크립트 `ml/optimize/bench_serving.py`(OpenAI 호환, stdlib) — vLLM·Ollama 대조.
+  ```bash
+  python3 ml/optimize/bench_serving.py --base http://localhost:8000  --model Qwen/Qwen2.5-7B-Instruct   # vLLM
+  python3 ml/optimize/bench_serving.py --base http://localhost:11434 --model qwen2.5:7b-instruct        # Ollama(대조)
+  ```
+  측정: ① prefix TTFT warm(재사용) vs cold(매번 새 프리픽스) 절감%, ② 동시성 1·2·4·8별 처리량(req/s)·p50/p95.
+
+  **실측 (2026-07-01, MacBook Air M·24GB · Qwen2.5-7B · max_tokens 128)**
+
+  | 지표 | vLLM-Metal (bf16) | Ollama (Q4) |
+  |---|---|---|
+  | Prefix TTFT warm→cold 절감 | 842→1032ms, **18.4%** | 388→507ms, **23.5%** |
+  | 처리량 c=1 (req/s) | 0.08 | **0.18** |
+  | 처리량 c=8 (req/s) | **0.20** | 0.09 |
+  | 처리량 c=1→8 추세 | **↑ 2.5×**(배칭) | ↓ 0.5×(포화) |
+  | p95 c=8 (s) | **55.4** | 97.4 |
+
+  해석: **저부하는 Ollama(Q4)가 빠르고, 고부하는 vLLM이 역전**. 동시성을 올릴 때 처리량이 vLLM은 **오르고**(연속 배칭) Ollama는 **내린다**(포화) — 이게 vLLM을 쓰는 이유(다중 사용자·트래픽). prefix cache는 양쪽 다 TTFT ~20% 절감. **정직한 한계**: bf16 vs Q4라 절대속도는 비공정, 그러나 스케일링 추세는 정밀도 무관한 신호. 공정 비교는 동일 양자화 서빙이 과제.
 - **P4 — 대규모/엔터프라이즈(설계)**: vLLM CUDA 클라우드(대규모 트래픽), sglang(프리픽스), Triton/TRT-LLM(멀티모델·노드 효율) — 스케일 칸으로 설계·문서화.
 
 ## 출처

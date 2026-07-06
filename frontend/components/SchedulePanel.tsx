@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { api, type Maintenance } from "@/lib/api";
+import Select from "@/components/Select";
 
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
@@ -104,10 +105,8 @@ export default function SchedulePanel() {
         <div className="card" style={{ margin: 0 }}>
           <h2>정비 일정 추가</h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-            <select value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })}>
-              <option value="">차종 선택(선택)</option>
-              {carModels.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            <Select value={form.model} onChange={(v) => setForm({ ...form, model: v })}
+              options={["", ...carModels]} renderLabel={(v) => (v === "" ? "차종 선택(선택)" : v)} title="차종(선택)" />
             <input type="text" placeholder="정비 항목 (예: 안전벨트 프리텐셔너 점검)" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             <input type="date" value={form.scheduledDate} onChange={(e) => setForm({ ...form, scheduledDate: e.target.value })} />
             <input type="text" placeholder="담당자(선택)" value={form.technician} onChange={(e) => setForm({ ...form, technician: e.target.value })} />
@@ -127,9 +126,7 @@ export default function SchedulePanel() {
                   {it.scheduledDate}{it.model ? ` | ${it.model}` : ""}{it.technician ? ` | ${it.technician}` : ""}{it.caseNumber ? ` | 접수#${it.caseNumber}` : ""}
                 </div>
               </div>
-              <select value={it.status} onChange={(e) => setStatus(it, e.target.value)} style={{ fontSize: 12, padding: "4px 6px" }}>
-                {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              <Select value={it.status} onChange={(v) => setStatus(it, v)} options={STATUSES} title="상태" style={{ fontSize: 12 }} />
               <button className="ghost" style={{ fontSize: 12 }} onClick={() => del(it)}>삭제</button>
             </div>
           ))}

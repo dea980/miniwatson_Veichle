@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api, type AgentResult, type Models } from "@/lib/api";
 import Markdown from "@/components/Markdown";
+import Select from "@/components/Select";
 
 // 도구명 → 색 클래스(트레이스 시각화). RAG=액션블루 / SQL=네이비 / 복합=주황.
 const toolClass = (t?: string) => {
@@ -47,9 +48,7 @@ export default function AgentPanel() {
           onKeyDown={(e) => e.key === "Enter" && ask()} />
         <label className="field-model" title="답변 생성에 사용할 LLM">
           <span>모델</span>
-          <select value={model} onChange={(e) => setModel(e.target.value)}>
-            {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <Select value={model} onChange={setModel} options={models?.available || []} />
         </label>
         <button className="btn" onClick={ask} disabled={loading}>{loading ? "처리 중…" : "질문"}</button>
       </div>

@@ -15,9 +15,11 @@ import java.util.Map;
 public class MaintenanceController {
 
     private final MaintenanceRepository repo;
+    private final com.miniwatson.service.AnalyticsService analytics;
 
-    public MaintenanceController(MaintenanceRepository repo) {
+    public MaintenanceController(MaintenanceRepository repo, com.miniwatson.service.AnalyticsService analytics) {
         this.repo = repo;
+        this.analytics = analytics;
     }
 
     /** 전체 일정(날짜순). from/to(YYYY-MM-DD) 주면 기간 필터. */
@@ -42,15 +44,26 @@ public class MaintenanceController {
         m.setTechnician(body.get("technician"));
         m.setNote(body.get("note"));
         if (body.get("status") != null && !body.get("status").isBlank()) m.setStatus(body.get("status"));
-        return repo.save(m);
+        MaintenanceSchedule saved = repo.save(m);
+        // 케이스 연결 예약 → 그 케이스는 수리중 (진단→예약→완료 루프의 가운데 고리)
+        syncCase(saved.getCaseNumber(), "REPAIRING");
+        return saved;
     }
 
-    /** 상태 변경 (예정/진행/완료). */
+    /** 상태 변경 (예정/진행/완료). 완료 시 연결된 케이스도 완료 처리(루프 닫힘). */
     @PutMapping("/{id}/status")
     public MaintenanceSchedule updateStatus(@PathVariable Long id, @RequestParam String value) {
         MaintenanceSchedule m = repo.findById(id).orElseThrow();
         m.setStatus(value);
-        return repo.save(m);
+        MaintenanceSchedule saved = repo.save(m);
+        if ("완료".equals(value)) syncCase(m.getCaseNumber(), "DONE");
+        return saved;
+    }
+
+    /** 케이스 상태 동기화 — 실패해도 일정 저장은 성공으로(부수 효과 격리). */
+    private void syncCase(String caseNumber, String status) {
+        if (caseNumber == null || caseNumber.isBlank()) return;
+        try { analytics.setCaseStatus(caseNumber, status, null); } catch (Exception ignored) {}
     }
 
     @DeleteMapping("/{id}")

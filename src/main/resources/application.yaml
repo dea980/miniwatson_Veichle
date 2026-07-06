@@ -48,7 +48,21 @@ ollama:
 
 # 추론 제공자 선택 — 활성 제공자 1개만 빈으로 뜬다(@ConditionalOnProperty). LLM-ABSTRACTION.md
 llm:
-  provider: ${LLM_PROVIDER:ollama}   # ollama | watsonx | vertex | bedrock | azure
+  provider: ${LLM_PROVIDER:ollama}   # ollama | vllm | watsonx | vertex | bedrock | azure
+
+# 임베딩 제공자 — chat 제공자(llm.provider)와 독립. 기본 ollama(granite-embedding:278m, 768차원).
+# 예: LLM_PROVIDER=vllm 로 챗은 vLLM을 써도 임베딩은 이 설정을 따른다(기본 Ollama). watsonx 임베딩은 EMBEDDING_PROVIDER=watsonx.
+embedding:
+  provider: ${EMBEDDING_PROVIDER:ollama}   # ollama | watsonx
+
+# vLLM (llm.provider=vllm 일 때만 사용). OpenAI 호환 /v1/chat/completions.
+# 맥: vLLM-Metal(:8000)로 로컬 서빙. 클라우드 vLLM(CUDA)도 URL만 바꿔 스왑. 근거 docs/SERVING.md
+vllm:
+  url: ${VLLM_URL:http://localhost:8000}
+  api-key: ${VLLM_API_KEY:}                # vLLM을 --api-key 로 띄웠을 때만(비면 인증 헤더 생략)
+  chat-model: ${VLLM_CHAT_MODEL:Qwen/Qwen2.5-7B-Instruct}
+  chat-models: ${VLLM_CHAT_MODELS:Qwen/Qwen2.5-7B-Instruct}
+  num-predict: ${VLLM_NUM_PREDICT:512}
 
 # watsonx.ai (llm.provider=watsonx 일 때만 사용). 키/프로젝트는 .env로 주입(커밋 금지).
 watsonx:

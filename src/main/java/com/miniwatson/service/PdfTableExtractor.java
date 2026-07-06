@@ -31,22 +31,14 @@ public final class PdfTableExtractor {
     }
 
     /**
-     * TODO-1 (네가 구현): XHTML → "본문 텍스트 + 마크다운 표".
+     * XHTML → "본문 평문 + 마크다운 표". (구현 완료 · 방식 (b) 의존성 0)
      *
-     * 목표: 본문은 평문으로, <table>...</table> 블록은 마크다운 표로 변환해 그 자리에 끼워 넣는다.
+     * <table>...</table> 블록만 정규식으로 떼어 마크다운 표로 치환하고(그 자리에 삽입),
+     * 나머지 태그는 제거해 평문으로 남긴다. 표가 없으면 평문만 반환 → 기존과 동일 동작(회귀 없음).
+     * 첫 행을 헤더로 보고 구분자(| --- |)를 넣는다. Jsoup 없이 stdlib 정규식만 사용.
      *
-     * 힌트:
-     *  - <table> 안에 <tr>(행), 그 안에 <th>/<td>(셀).
-     *  - 마크다운 한 행 = "| a | b | c |". 첫(헤더) 행 다음 줄에 구분자 "| --- | --- | --- |".
-     *  - 표 외 태그(<p>,<h1>,<div>...)는 제거하고 텍스트만 남긴다.
-     *  - 구현 방법 두 가지:
-     *      (a) Jsoup이 클래스패스에 있으면: Jsoup.parse(xhtml) 후 doc.select("table") 로 표를 잡고,
-     *          각 table.select("tr") → row.select("th,td") 로 셀을 읽어 마크다운 조립. 나머지는 doc.text().
-     *      (b) 의존성 추가가 싫으면: 정규식/SAX로 <table>..</table>만 떼어 직접 변환, 나머지는 태그 제거.
-     *  - 표가 없으면 평문만 반환되면 된다(기존과 동일 동작 보장 — 회귀 없음).
-     *
-     * 검증: 표 많은 매뉴얼 페이지 인제스트 후, 문서 전용 채팅에서 "토크값 표" 질문 →
-     *       답에 셀 값(숫자·단위)이 보이면 성공. (전/후 같은 질문으로 비교)
+     * 호출부: IngestionService의 TIKA 경로 — toTextWithTables(toXhtml(in)).
+     * (더 정밀한 pdfplumber/Docling은 Python 사이드카 필요 = 스케일 칸. INGESTION-FORMATS.md §5)
      */
     private static final Pattern TABLE = Pattern.compile("(?s)<table\\b.*?</table>");
     private static final Pattern ROW   = Pattern.compile("(?s)<tr\\b.*?</tr>");
