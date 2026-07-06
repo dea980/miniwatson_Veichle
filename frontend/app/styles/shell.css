@@ -1,0 +1,64 @@
+/* ---- Shell: sidebar + content ---- */
+/* 테마(data-theme)가 .shell에 붙으므로 여기서 color를 다시 적용해야
+   색을 명시 안 한 상속 텍스트(표 셀·문서명·브랜드명 등)가 다크모드에서 올바른 밝은 색을 받는다.
+   (body는 .shell 상위라 항상 :root의 어두운 --text를 써서 상속 텍스트가 안 보였던 버그) */
+.shell { display: flex; min-height: 100vh; color: var(--text); background: var(--bg); }
+/* 다크모드 배경 — 미세한 청사진 그리드(계기판 분위기). 라이트는 평면 유지 */
+[data-theme="dark"] .shell {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--accent-2) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent-2) 4%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+/* 사이드바 — 라이트에서도 어두운 콕핏 레일(제품 인상을 결정하는 한 방) */
+.sidebar {
+  width: 232px; flex-shrink: 0; background: var(--rail);
+  border-right: 1px solid color-mix(in srgb, var(--rail-text) 18%, transparent); padding: 20px 14px;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+.brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 18px; }
+.brand .logo {
+  width: 36px; height: 36px; flex-shrink: 0; display: inline-flex;
+}
+.brand .logo svg { width: 36px; height: 36px; }
+.brand .name { font-weight: 700; font-size: 15px; letter-spacing: -.01em; color: #fff; }
+.brand .sub { color: var(--rail-text); font-size: 10px; font-family: var(--display); font-weight: 600; text-transform: uppercase; letter-spacing: .14em; }
+
+.nav { display: flex; flex-direction: column; gap: 2px; }
+.navitem {
+  position: relative; display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 9px 12px; border: none; background: none; cursor: pointer;
+  color: var(--rail-text); font-size: 13.5px; border-radius: 3px; text-align: left;
+  transition: background .15s ease, color .15s ease;
+}
+.navitem:hover { background: rgba(255,255,255,.06); color: var(--rail-active); }
+.navitem.active { background: color-mix(in srgb, var(--accent-2) 22%, transparent); color: var(--rail-active); font-weight: 600; }
+.navitem.active::before { content: ""; position: absolute; left: -14px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: #4f9cff; box-shadow: 0 0 8px rgba(79,156,255,.8); }
+.navitem .ic { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.navitem .ic svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+
+.content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 28px; border-bottom: 1px solid var(--border);
+  background: var(--surface); position: sticky; top: 0; z-index: 5;
+}
+.topbar { padding: 12px 40px; }
+/* crumb는 남는 폭을 차지하되 넘치면 말줄임 → 우측 컨트롤(연결상태·테마토글)을 밀어내지 않음(좁은 창에서 짤림 방지). */
+.topbar .crumb { font-size: 13px; color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar > .row { flex-shrink: 0; }
+.topbar .crumb b { color: var(--text); font-weight: 600; }
+.brand .logo { font-weight: 800; }
+.theme-btn { background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--text); border-radius: 3px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+/* 연결 상태 — 정상이면 작은 점만(조용), 끊겼을 때만 텍스트로 알림. 알약·배경·테두리 없음. */
+.status { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.status[data-on="1"] .status-dot { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 16%, transparent); }
+.status[data-on="0"] .status-dot { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 16%, transparent); }
+.status-txt { color: var(--danger); font-weight: 600; }
+
+/* 테마 토글 — 글자 라벨 대신 아이콘(해/달). 정사각 아이콘 버튼. */
+.icon-toggle { display: inline-grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); border-radius: 3px; cursor: pointer; }
+.icon-toggle:hover { color: var(--text); background: var(--surface-2); border-color: var(--border-strong); }
+.icon-toggle svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+

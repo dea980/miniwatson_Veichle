@@ -1,0 +1,57 @@
+/* OEM 콕핏 — 산업·정밀. 각진 모서리, 납작한 평면(섀도 최소), 네이비+스틸그레이, 조밀한 데이터 우선.
+   디스플레이 폰트(Rajdhani)는 숫자·라벨 전용, 본문은 Pretendard. */
+:root {
+  --bg: #eceff3;            /* 약한 스틸 그레이 배경 (white-on-white 회피) */
+  --surface: #ffffff;
+  --surface-2: #eef1f5;
+  --border: #d2d9e2;        /* 또렷한 1px 경계 (소프트 섀도 대신 선으로 구조) */
+  --border-strong: #b8c1cd;
+  --text: #11212f;
+  --muted: #5c6878;
+  --accent: #002c5f;        /* deep automotive navy */
+  --accent-2: #0a4f9c;      /* steel blue — 제네릭 SaaS 블루(#1f6feb)보다 깊고 산업적 */
+  --accent-2-hover: #073d7a;
+  --ok: #1a7f37;
+  --danger: #c01825;
+  --warn: #8a5a00;
+  --shadow: none;           /* 콕핏은 평면 — 깊이는 경계선으로 표현 */
+  --radius: 4px;            /* 12px → 4px: 각진 산업용 */
+  --display: "Rajdhani", "Pretendard", sans-serif;  /* 계기판 숫자·라벨 */
+  --rail: #0b1524;          /* 사이드바 — 라이트에서도 어두운 콕핏 레일 */
+  --rail-text: #93a3ba;
+  --rail-active: #eaf2ff;
+}
+[data-theme="dark"] {
+  --bg: #070b12;            /* 더 깊은 검정 — 계기판 소등 배경 */
+  --surface: #0d1420;
+  --surface-2: #131c2b;
+  --border: #223047;
+  --border-strong: #35486a;
+  --text: #e6edf6;
+  --muted: #8b98aa;
+  --accent: #4f9cff;
+  --accent-2: #4b94ee;
+  --accent-2-hover: #6aa8f5;
+  /* 다크모드용 밝은 의미색 (라이트용 어두운 값이 다크 배경에서 안 보여서) */
+  --ok: #3fb950;
+  --danger: #f85149;
+  --warn: #d6a020;
+  --shadow: none;
+  --rail: #070d17;
+  --rail-text: #7f8ea3;
+  --rail-active: #eaf2ff;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  font-size: 14px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  letter-spacing: -0.01em;
+}
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+

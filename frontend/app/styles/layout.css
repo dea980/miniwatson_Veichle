@@ -1,0 +1,33 @@
+/* main을 세로 flex로 채워서 footer를 항상 아래로(짧은 페이지에서도 화면 바닥에 고정) */
+.main { padding: 0; width: 100%; flex: 1; display: flex; flex-direction: column; }
+/* 콕핏 페이지 헤더 — 마케팅 히어로가 아니라 좌측 네이비 룰로 구분되는 타이트한 제목줄 */
+.hero { padding: 20px 40px 14px; max-width: 1560px; border-bottom: 1px solid var(--border); }
+.hero h2 { font-size: 19px; font-weight: 700; letter-spacing: -.01em; margin: 0 0 4px; line-height: 1.25; padding-left: 11px; border-left: 3px solid var(--accent); }
+.hero p { color: var(--muted); font-size: 13px; margin: 0; max-width: 760px; padding-left: 14px; }
+.hero .kicker { color: var(--muted); font-family: var(--display); font-size: 11px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; margin-bottom: 8px; padding-left: 14px; }
+.panels { padding: 0 40px 56px; max-width: 1440px; }
+.footer { border-top: 1px solid var(--border); padding: 22px 40px; color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; max-width: 1440px; }
+.footer b { color: var(--text); font-weight: 600; }
+
+/* ---- Card ---- */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 14px; box-shadow: var(--shadow); transition: border-color .2s ease; }
+.card:hover { border-color: var(--border-strong); }
+.card h2 { font-size: 14px; font-weight: 700; margin: 0 0 14px; letter-spacing: -.01em; color: var(--text); text-transform: none; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+
+/* 페이지 진입 모션 — 카드가 순서대로 떠오름(한 번의 오케스트레이션, 산만한 마이크로모션 대신) */
+.panels > *, .panels .home-grid > div > .card, .panels .home-grid > .card { animation: card-rise .4s ease both; }
+.panels .home-grid > div > .card:nth-child(2) { animation-delay: .06s; }
+.panels .home-grid > div > .card:nth-child(3) { animation-delay: .12s; }
+.panels .home-grid > div > .card:nth-child(4) { animation-delay: .18s; }
+@keyframes card-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .panels > *, .panels .card, .car-hero-overlay .kicker, .car-hero .car-hero-overlay h2, .car-hero-overlay p { animation: none !important; } }
+
+button.btn, button.ghost, .navitem, .theme-btn, input, select { transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease; }
+button.btn:active { transform: translateY(1px); }
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+input[type="text"], select, textarea {
+  padding: 9px 11px; border: 1px solid var(--border-strong); background: var(--surface);
+  font-size: 14px; font-family: inherit; color: var(--text); border-radius: 3px;
+}
+input[type="text"]:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent-2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-2) 18%, transparent); }

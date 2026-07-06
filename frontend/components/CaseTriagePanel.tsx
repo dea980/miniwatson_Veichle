@@ -178,9 +178,10 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
     const carChk = rep?.checklistCar?.additional || [];
     return (
       <div className="card">
-        <div className="row" style={{ justifyContent: "space-between" }}>
+        <div className="row no-print" style={{ justifyContent: "space-between" }}>
           <button className="ghost" style={{ fontSize: 12 }} onClick={() => setSelected(null)}>← 케이스 큐</button>
           <div className="row" style={{ gap: 6 }}>
+            <button className="ghost" style={{ fontSize: 12 }} onClick={() => window.print()} title="이 진단 리포트를 인쇄하거나 PDF로 저장">🖨 인쇄/PDF</button>
             <button className="ghost" style={{ fontSize: 12 }} onClick={() => regenReport(id)} disabled={report === "loading"} title="진단·견적·점검을 새로 생성해 적재본 갱신">↻ 재생성</button>
             {onNavigate && <button className="ghost" style={{ fontSize: 12 }} onClick={() => onNavigate("report", mdl)}>차종 카테고리 →</button>}
             <Select value={statuses[id] || "RECEIVED"} title="워크플로 상태"
@@ -207,7 +208,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
         </div>
 
         {/* 정비 예약 — 예약하면 케이스가 수리중, 일정 완료 시 케이스도 완료(루프) */}
-        <div className="row" style={{ marginTop: 10, gap: 8, alignItems: "center" }}>
+        <div className="row no-print" style={{ marginTop: 10, gap: 8, alignItems: "center" }}>
           <span className="label" style={{ margin: 0 }}>정비 예약</span>
           <input type="date" value={bookDate} onChange={(e) => setBookDate(e.target.value)}
             style={{ padding: "7px 9px", border: "1px solid var(--border-strong)", background: "var(--surface)", color: "var(--text)", borderRadius: 3, fontSize: 13 }} />
@@ -247,7 +248,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
           <textarea value={noteText} onChange={(e) => { setNoteText(e.target.value); setNoteSaved(false); }}
             placeholder="점검 소견·작업 내용·고객 안내 등을 적으면 이 접수번호 리포트에 저장됩니다."
             style={{ width: "100%", minHeight: 90, resize: "vertical", padding: "10px 12px", fontSize: 13.5, lineHeight: 1.5, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" }} />
-          <div className="row" style={{ justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
+          <div className="row no-print" style={{ justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
             {noteSaved && <span className="muted" style={{ fontSize: 12, color: "var(--ok, var(--accent))" }}>저장됨 ✓</span>}
             <button className="btn" style={{ fontSize: 12 }} onClick={() => saveNote(id)} disabled={noteSaving}>{noteSaving ? "저장 중…" : "메모 저장"}</button>
           </div>
