@@ -228,6 +228,43 @@ public class ReportService {
         return out;
     }
 
+    /** 주간 품질 브리핑 — 집계는 결정적 SQL(weeklyStats), 서술만 LLM. 주간 키로 1회 생성 후 캐시. */
+    public Map<String, Object> briefing(boolean force) {
+        Map<String, Object> stats = analytics.weeklyStats();
+        if (stats.isEmpty()) return Map.of("error", "데이터 없음");
+        String key = String.valueOf(stats.get("to"));   // 데이터 최신일 = 주간 키(데이터가 갱신되면 자동 새 키)
+        var existing = reportRepo.findFirstByReportTypeAndReportKeyOrderByCreatedAtDesc("BRIEFING", key);
+        if (!force && existing.isPresent()) {
+            try {
+                Map<String, Object> m = mapper.readValue(existing.get().getContentJson(), Map.class);
+                m.put("generatedAt", existing.get().getCreatedAt().toString());
+                m.put("cached", true);
+                return m;
+            } catch (Exception e) { log.warn("[briefing] 캐시 파싱 실패 — 재생성: {}", e.getMessage()); }
+        }
+        Map<String, Object> out = new LinkedHashMap<>(stats);
+        String narrative = "";
+        try {
+            String prompt = "너는 자동차 A/S 품질 매니저 보조다. 아래 주간 집계(JSON)를 근거로 한국어 운영 브리핑을 "
+                + "3~5문장으로 써라. 신규 불만 규모, 눈에 띄는 차종·부위, 사망/화재 등 안전 신호, 권고 조치 순서로. "
+                + "숫자는 JSON에 있는 것만 쓰고 지어내지 말 것. 차종명은 영문 그대로 두고 한자를 쓰지 말 것.\n\n"
+                + mapper.writeValueAsString(stats);
+            narrative = ollama.ask(prompt, null);
+            if (hasForeign(narrative)) narrative = stripForeign(narrative);
+        } catch (Throwable t) { log.warn("[briefing] 서술 생성 실패: {}", t.toString()); }
+        out.put("narrative", narrative);
+        try {
+            com.miniwatson.reports.GeneratedReport gr = existing.orElseGet(com.miniwatson.reports.GeneratedReport::new);
+            gr.setReportType("BRIEFING"); gr.setReportKey(key); gr.setModel("(briefing-default)");
+            gr.setContentJson(mapper.writeValueAsString(out));
+            gr.setCreatedAt(java.time.LocalDateTime.now());
+            var saved = reportRepo.save(gr);
+            out.put("generatedAt", saved.getCreatedAt().toString());
+        } catch (Exception e) { log.warn("[briefing] 적재 실패: {}", e.getMessage()); }
+        out.put("cached", false);
+        return out;
+    }
+
     /** 한자·히라가나·가타카나 등 외국(CJK) 문자가 섞였는지. 한글(가~힣)은 제외. */
     private static boolean hasForeign(String s) {
         if (s == null || s.isEmpty()) return false;

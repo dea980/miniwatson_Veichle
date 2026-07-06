@@ -485,6 +485,39 @@ public class AnalyticsService {
         ensure("recalls"); ensure("complaints"); ensure("parts");
     }
 
+    /** 주간 품질 집계(결정적 SQL) — 데이터 최신일 기준 최근 7일. LLM 브리핑의 사실 원천.
+     *  NHTSA 데이터는 과거분이라 "오늘" 기준이 아니라 max(접수일) 기준 주간으로 잡는다. */
+    public Map<String, Object> weeklyStats() {
+        ensure("recalls"); ensure("complaints");
+        String cDate = "COALESCE("
+            + "CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%m/%d/%Y') AS DATE), "
+            + "CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%Y%m%d') AS DATE), "
+            + "TRY_CAST(CAST(datecomplaintfiled AS VARCHAR) AS DATE))";
+        String fireT = "CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
+        String inj = "COALESCE(TRY_CAST(numberofinjuries AS INTEGER),0)";
+        String dea = "COALESCE(TRY_CAST(numberofdeaths AS INTEGER),0)";
+        List<List<Object>> mx = rows("SELECT CAST(max(" + cDate + ") AS VARCHAR) FROM complaints");
+        String to = mx.isEmpty() || mx.get(0).get(0) == null ? null : String.valueOf(mx.get(0).get(0));
+        if (to == null) return Map.of();
+        String win = cDate + " BETWEEN CAST('" + to + "' AS DATE) - INTERVAL 6 DAY AND CAST('" + to + "' AS DATE)";
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("to", to);
+        out.put("from", String.valueOf(rows("SELECT CAST(CAST('" + to + "' AS DATE) - INTERVAL 6 DAY AS VARCHAR)").get(0).get(0)));
+        out.put("complaints", scalar("SELECT COUNT(*) FROM complaints WHERE " + win));
+        out.put("deaths", scalar("SELECT COALESCE(SUM(" + dea + "),0) FROM complaints WHERE " + win));
+        out.put("injuries", scalar("SELECT COALESCE(SUM(" + inj + "),0) FROM complaints WHERE " + win));
+        out.put("fires", scalar("SELECT COALESCE(SUM(" + fireT + "),0) FROM complaints WHERE " + win));
+        out.put("topModels", rows("SELECT model, COUNT(*) n FROM complaints WHERE " + win
+            + " GROUP BY model ORDER BY n DESC LIMIT 3"));
+        out.put("topComponents", rows("SELECT components, COUNT(*) n FROM complaints WHERE " + win
+            + " GROUP BY components ORDER BY n DESC LIMIT 3"));
+        out.put("worstCases", rows("SELECT odinumber, model, components, (" + dea + "*10000 + " + inj + "*10 + " + fireT + "*5) AS prio "
+            + "FROM complaints WHERE " + win + " ORDER BY prio DESC LIMIT 3"));
+        // 리콜은 접수일 컬럼이 달라 별도 윈도
+        out.put("recalls", scalar("SELECT COUNT(*) FROM recalls WHERE reportreceiveddate >= CAST('" + to + "' AS DATE) - INTERVAL 6 DAY"));
+        return out;
+    }
+
     /** 리콜 대상 조회 — "제 차(차종·연식) 리콜 대상인가요?" 고객 응대 첫 질문.
      *  연식 없으면 차종 전체. parkIt(주차 권고=화재위험) 우선 정렬. */
     public List<Map<String, Object>> recallCheck(String model, Integer year) {

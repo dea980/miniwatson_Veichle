@@ -55,6 +55,11 @@ export type Source = { id?: number; title: string; summary: string; url: string;
 export type CaseWorkStatus = "RECEIVED" | "DIAGNOSING" | "REPAIRING" | "DONE";
 export type SimilarCase = { caseNumber: string; date: string; model: string; component: string; year: string; snippet: string; score: number };
 export type RecallCheckItem = { campaign: string; date: string; year: string; component: string; summary: string; parkIt: boolean };
+export type Briefing = {
+  from: string; to: string; complaints: number; recalls: number; deaths: number; injuries: number; fires: number;
+  topModels: [string, number][]; topComponents: [string, number][]; worstCases: [string, string, string, number][];
+  narrative: string; cached?: boolean; generatedAt?: string; error?: string;
+};
 export type AskResult = { answer: string; sources: Source[]; logId?: number };
 export type DocItem = { title: string; chunks: number; namespace: string; url: string; ids: number[] };
 export type Models = { default: string; available: string[] };
@@ -253,6 +258,9 @@ export const api = {
     return jget<{ cases: CaseRecord[]; total: number; offset: number; limit: number; error?: string }>(
       `/api/analytics/cases?${p.toString()}`);
   },
+  // 주간 품질 브리핑 — 결정적 집계 + LLM 서술, 주간 키 캐시
+  briefing: (force = false) =>
+    jget<Briefing>(`/api/agent/briefing${force ? "?force=true" : ""}`),
   // 케이스 해결 처리(영속) / 취소 / 목록
   resolveCase: (id: string, note?: string) =>
     jpost<{ resolved: boolean; id: string }>("/api/analytics/resolve", { id, note }),

@@ -74,6 +74,13 @@ public class AgentController {
         catch (Throwable t) { return Map.of("caseNumber", id, "error", t.toString()); }
     }
 
+    /** 주간 품질 브리핑 — 결정적 집계 + LLM 서술, 주간 키 캐시(compute-once). */
+    @GetMapping("/briefing")
+    public Map<String, Object> briefing(@RequestParam(defaultValue = "false") boolean force) {
+        try { return report.briefing(force); }
+        catch (Throwable t) { return Map.of("error", t.toString()); }
+    }
+
     /** 정비사 메모 저장(문서화·적재). body: {id, note, model?} */
     @PostMapping("/case-report/note")
     public Map<String, Object> saveCaseNote(@RequestBody Map<String, String> body) {
