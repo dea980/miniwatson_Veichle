@@ -108,6 +108,9 @@
   주차 권고(parkIt=화재위험) 리콜 최우선 정렬.
 - **인쇄/PDF** — 케이스 상세 🖨 버튼(`window.print`) + `app/styles/print.css`
   (사이드바·컨트롤 `no-print` 숨김, 다크여도 항상 라이트 강제) → 고객 인계용 진단 리포트 산출물.
+- **주간 품질 브리핑** (`GET /api/agent/briefing`) — 매니저 뷰. 데이터 최신일 기준 최근 7일을
+  결정적 SQL로 집계(`weeklyStats`)하고 서술만 LLM(집계 JSON 밖 숫자 금지). `GeneratedReport`
+  BRIEFING 타입으로 compute-once 캐시(실측 최초 17s → 캐시 0.16s), 분석 대시보드 최상단 카드.
 
 검증 방식: 매 기능 curl E2E(상태 전이 왕복) + Playwright 실렌더 스크린샷(`frontend/design-shots/`).
 

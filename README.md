@@ -229,7 +229,7 @@ curl -X POST http://localhost:8080/api/tabular/ask \
 - [ ] **V21 분산 학습 (Kaggle 2× T4)** — DDP(복제·처리량)/FSDP(샤딩·메모리)를 `accelerate`로 구성·실행. 스캐폴드: `ml/finetune/train_distributed.py` + `accel_ddp.yaml`/`accel_fsdp.yaml`. JD 우대(분산 학습) — "분산은 모델 코드가 아니라 런처/설정"이 요지 ([ml/finetune/DISTRIBUTED.md](ml/finetune/DISTRIBUTED.md))
 - [ ] **V22 (옵션)** — 임베딩 파인튜닝, 로컬 TTS·웨이크워드, 라이브 배포, GraphRAG 통합
 - [x] **V23 콕핏 디자인 시스템** — 다크 콕핏 기본 테마, 계기판 타이포(Rajdhani 디스플레이 폰트·44px KPI), 카운트업·스태거 모션, 히어로 계기 눈금 — 실렌더링 전/후 스크린샷 검증
-- [x] **V24 실사용 A/S 제품 트랙 (P1~P5 완료)** — 케이스 상태 워크플로 영속(접수→진단중→수리중→완료, localStorage→JPA), 진단→예약→완료 루프, 유사 케이스 검색(토큰 코사인 top-5), 차종·연식 리콜 대상 조회, 진단 리포트 인쇄/PDF, PII 마스킹 before/after. 남은 것: 주간 품질 브리핑(P6). 프로세스 상세 [docs/AS-OPERATIONS.md](docs/AS-OPERATIONS.md) §9, 백로그 [docs/FEATURE-BACKLOG.md](docs/FEATURE-BACKLOG.md)
+- [x] **V24 실사용 A/S 제품 트랙 (P1~P6 완료)** — 케이스 상태 워크플로 영속(접수→진단중→수리중→완료, localStorage→JPA), 진단→예약→완료 루프, 유사 케이스 검색(토큰 코사인 top-5), 차종·연식 리콜 대상 조회, 진단 리포트 인쇄/PDF, PII 마스킹 before/after, **주간 품질 브리핑**(결정적 집계+LLM 서술, 캐시 17s→0.16s). 프로세스 상세 [docs/AS-OPERATIONS.md](docs/AS-OPERATIONS.md) §9, 백로그 [docs/FEATURE-BACKLOG.md](docs/FEATURE-BACKLOG.md)
 
 > GraphRAG는 지금 설계서만 있고 구현은 안 됐다. 실제 RAG는 벡터+BM25 하이브리드로 동작한다. 고도화 방향은 [docs/GRAPHRAG_VEHICLE.md](docs/GRAPHRAG_VEHICLE.md)에 정리했다.
 
