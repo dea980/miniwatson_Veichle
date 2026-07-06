@@ -228,6 +228,72 @@ public class ReportService {
         return out;
     }
 
+    /** 통합 질의 — 정형(핫스팟)으로 "무엇을 볼지" 좁히고 비정형(매뉴얼 RAG)으로 "어떻게 볼지" 답한다.
+     *  결과는 GeneratedReport ADVICE(key=model:year)로 compute-once 캐시. */
+    public Map<String, Object> integratedAdvice(String model, Integer year, String llmModel, boolean force) {
+        String m = model == null ? "" : model.trim().toUpperCase();
+        if (m.isBlank()) return Map.of("error", "model 필요");
+        String key = m + ":" + (year == null ? "all" : year);
+        var existing = reportRepo.findFirstByReportTypeAndReportKeyOrderByCreatedAtDesc("ADVICE", key);
+        if (!force && existing.isPresent()) {
+            try {
+                Map<String, Object> cached = mapper.readValue(existing.get().getContentJson(), Map.class);
+                cached.put("generatedAt", existing.get().getCreatedAt().toString());
+                cached.put("cached", true);
+                return cached;
+            } catch (Exception e) { log.warn("[integrated] 캐시 파싱 실패 — 재생성: {}", e.getMessage()); }
+        }
+        // ① 정형 신호 — 그 차·연식의 핫스팟(결정적 SQL)
+        Map<String, Object> hot = analytics.modelYearHotspots(m, year);
+        Map<String, Object> out = new LinkedHashMap<>(hot);
+        @SuppressWarnings("unchecked")
+        List<List<Object>> top = (List<List<Object>>) hot.getOrDefault("complaintTop", List.of());
+        // ② 비정형 근거 — 상위 부위별로 그 차·연식 매뉴얼을 메타필터 RAG 검색(상위 3개 부위만: 비용 상한)
+        List<Map<String, Object>> evidences = new ArrayList<>();
+        StringBuilder ragCtx = new StringBuilder();
+        for (List<Object> row : top.stream().limit(3).toList()) {
+            String comp = String.valueOf(row.get(0));
+            try {
+                var rag = ragService.ask(comp + " 점검 방법과 주의사항", "vehicle", llmModel, null, m, year, null, null);
+                String snippet = rag.sources().stream().limit(2)
+                    .map(s -> s.getTitle() + ": " + String.valueOf(s.getSummary()).substring(0, Math.min(200, String.valueOf(s.getSummary()).length())))
+                    .reduce((a, b) -> a + "\n" + b).orElse("");
+                Map<String, Object> ev = new LinkedHashMap<>();
+                ev.put("component", comp);
+                ev.put("count", row.get(1));
+                ev.put("sources", rag.sources().stream().limit(2).map(s -> s.getTitle()).toList());
+                evidences.add(ev);
+                if (!snippet.isBlank()) ragCtx.append("[").append(comp).append("]\n").append(snippet).append("\n\n");
+            } catch (Exception e) { log.warn("[integrated] RAG 실패({}): {}", comp, e.getMessage()); }
+        }
+        out.put("evidence", evidences);
+        // ③ 종합 — 핫스팟 수치 + 매뉴얼 근거로 우선순위 있는 점검 가이드 서술
+        String advice = "";
+        try {
+            String prompt = "너는 자동차 정비 어드바이저다. 대상: " + m + (year == null ? "" : " " + year + "년식")
+                + ". 아래 [집계]는 이 차의 부위별 불만/리콜 통계(결정적 SQL), [매뉴얼]은 그 차 오너스 매뉴얼 발췌다. "
+                + "이를 근거로 '추가 점검 추천'을 한국어로 써라: 도입 1~2문장(빈발 부위와 안전 신호 요약) 후 "
+                + "상위 부위별로 '- 부위: 점검 포인트 1줄'. 집계·매뉴얼에 없는 내용은 지어내지 말고, 한자를 쓰지 말 것.\n\n"
+                + "[집계]\n" + mapper.writeValueAsString(Map.of(
+                    "complaintTop", top, "fires", hot.get("fires"), "injuries", hot.get("injuries"),
+                    "deaths", hot.get("deaths"), "recalls", hot.get("recalls"), "recallTop", hot.get("recallTop")))
+                + "\n\n[매뉴얼]\n" + (ragCtx.isEmpty() ? "(해당 차·연식 매뉴얼 근거 없음 — 집계만으로 답하라)" : ragCtx);
+            advice = ollama.ask(prompt, llmModel);
+            if (hasForeign(advice)) advice = stripForeign(advice);
+        } catch (Throwable t) { log.warn("[integrated] 종합 실패: {}", t.toString()); }
+        out.put("advice", advice);
+        try {
+            com.miniwatson.reports.GeneratedReport gr = existing.orElseGet(com.miniwatson.reports.GeneratedReport::new);
+            gr.setReportType("ADVICE"); gr.setReportKey(key); gr.setModel(llmModel == null ? "(default)" : llmModel);
+            gr.setContentJson(mapper.writeValueAsString(out));
+            gr.setCreatedAt(java.time.LocalDateTime.now());
+            var saved = reportRepo.save(gr);
+            out.put("generatedAt", saved.getCreatedAt().toString());
+        } catch (Exception e) { log.warn("[integrated] 적재 실패: {}", e.getMessage()); }
+        out.put("cached", false);
+        return out;
+    }
+
     /** 주간 품질 브리핑 — 집계는 결정적 SQL(weeklyStats), 서술만 LLM. 주간 키로 1회 생성 후 캐시. */
     public Map<String, Object> briefing(boolean force) {
         Map<String, Object> stats = analytics.weeklyStats();

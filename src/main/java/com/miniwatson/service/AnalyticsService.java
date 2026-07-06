@@ -485,6 +485,35 @@ public class AnalyticsService {
         ensure("recalls"); ensure("complaints"); ensure("parts");
     }
 
+    /** 차종·연식 핫스팟 — "이 차·연식은 어디가 자주 고장나나"(결정적 SQL). 통합 질의의 정형 신호.
+     *  연식(year) 없으면 차종 전체. modelyear는 문자열일 수 있어 VARCHAR 비교. */
+    public Map<String, Object> modelYearHotspots(String model, Integer year) {
+        ensure("recalls"); ensure("complaints");
+        if (model == null || model.isBlank()) return Map.of();
+        String m = model.replace("'", "''").toUpperCase();
+        String yearW = year == null ? "" : " AND CAST(modelyear AS VARCHAR)='" + year + "'";
+        String cw = "WHERE upper(model)='" + m + "'" + yearW;
+        String fireT = "CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
+        String crashT = "CASE WHEN lower(cast(crash AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
+        String inj = "COALESCE(TRY_CAST(numberofinjuries AS INTEGER),0)";
+        String dea = "COALESCE(TRY_CAST(numberofdeaths AS INTEGER),0)";
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("model", m);
+        out.put("year", year);
+        out.put("complaints", scalar("SELECT COUNT(*) FROM complaints " + cw));
+        out.put("complaintTop", rows("SELECT components, COUNT(*) n FROM complaints " + cw
+            + " GROUP BY components ORDER BY n DESC LIMIT 6"));
+        out.put("fires", scalar("SELECT COALESCE(SUM(" + fireT + "),0) FROM complaints " + cw));
+        out.put("crashes", scalar("SELECT COALESCE(SUM(" + crashT + "),0) FROM complaints " + cw));
+        out.put("injuries", scalar("SELECT COALESCE(SUM(" + inj + "),0) FROM complaints " + cw));
+        out.put("deaths", scalar("SELECT COALESCE(SUM(" + dea + "),0) FROM complaints " + cw));
+        String rw = "WHERE upper(model)='" + m + "'" + (year == null ? "" : " AND CAST(modelyear AS VARCHAR)='" + year + "'");
+        out.put("recalls", scalar("SELECT COUNT(*) FROM recalls " + rw));
+        out.put("recallTop", rows("SELECT component, COUNT(*) n FROM recalls " + rw
+            + " GROUP BY component ORDER BY n DESC LIMIT 6"));
+        return out;
+    }
+
     /** 주간 품질 집계(결정적 SQL) — 데이터 최신일 기준 최근 7일. LLM 브리핑의 사실 원천.
      *  NHTSA 데이터는 과거분이라 "오늘" 기준이 아니라 max(접수일) 기준 주간으로 잡는다. */
     public Map<String, Object> weeklyStats() {

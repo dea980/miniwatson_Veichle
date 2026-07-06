@@ -55,6 +55,13 @@ export type Source = { id?: number; title: string; summary: string; url: string;
 export type CaseWorkStatus = "RECEIVED" | "DIAGNOSING" | "REPAIRING" | "DONE";
 export type SimilarCase = { caseNumber: string; date: string; model: string; component: string; year: string; snippet: string; score: number };
 export type RecallCheckItem = { campaign: string; date: string; year: string; component: string; summary: string; parkIt: boolean };
+export type IntegratedAdvice = {
+  model: string; year?: number | null; complaints: number; recalls: number;
+  fires: number; crashes: number; injuries: number; deaths: number;
+  complaintTop: [string, number][]; recallTop: [string, number][];
+  evidence: { component: string; count: number; sources: string[] }[];
+  advice: string; cached?: boolean; generatedAt?: string; error?: string;
+};
 export type Briefing = {
   from: string; to: string; complaints: number; recalls: number; deaths: number; injuries: number; fires: number;
   topModels: [string, number][]; topComponents: [string, number][]; worstCases: [string, string, string, number][];
@@ -257,6 +264,13 @@ export const api = {
     p.set("sort", sort);
     return jget<{ cases: CaseRecord[]; total: number; offset: number; limit: number; error?: string }>(
       `/api/analytics/cases?${p.toString()}`);
+  },
+  // 통합 질의 — 차종·연식 핫스팟(정형) + 매뉴얼 RAG(비정형) 종합 점검 추천
+  integrated: (model: string, year?: string, force = false) => {
+    const p = new URLSearchParams({ model });
+    if (year) p.set("year", year);
+    if (force) p.set("force", "true");
+    return jget<IntegratedAdvice>(`/api/agent/integrated?${p.toString()}`);
   },
   // 주간 품질 브리핑 — 결정적 집계 + LLM 서술, 주간 키 캐시
   briefing: (force = false) =>

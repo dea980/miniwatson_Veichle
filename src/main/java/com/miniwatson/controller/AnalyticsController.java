@@ -141,6 +141,13 @@ public class AnalyticsController {
         catch (Throwable t) { return Map.of("statuses", java.util.List.of(), "error", t.toString()); }
     }
 
+    /** 차종·연식 핫스팟 — 부위별 불만/리콜 top + 화재/부상/사망 합 (통합 질의 정형 신호). */
+    @GetMapping("/hotspots")
+    public Map<String, Object> hotspots(@RequestParam String model, @RequestParam(required = false) Integer year) {
+        try { return analytics.modelYearHotspots(model, year); }
+        catch (Throwable t) { return Map.of("error", t.toString()); }
+    }
+
     /** 리콜 대상 조회 — 차종(+연식)으로 해당 리콜 목록. 고객 응대 "제 차 리콜 대상인가요?" */
     @GetMapping("/recall-check")
     public Map<String, Object> recallCheck(@RequestParam String model, @RequestParam(required = false) Integer year) {
