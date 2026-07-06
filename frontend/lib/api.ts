@@ -54,6 +54,7 @@ export function koModel(name?: string, withOriginal = false): string {
 export type Source = { id?: number; title: string; summary: string; url: string; namespace?: string };
 export type CaseWorkStatus = "RECEIVED" | "DIAGNOSING" | "REPAIRING" | "DONE";
 export type SimilarCase = { caseNumber: string; date: string; model: string; component: string; year: string; snippet: string; score: number };
+export type RecallCheckItem = { campaign: string; date: string; year: string; component: string; summary: string; parkIt: boolean };
 export type AskResult = { answer: string; sources: Source[]; logId?: number };
 export type DocItem = { title: string; chunks: number; namespace: string; url: string; ids: number[] };
 export type Models = { default: string; available: string[] };
@@ -267,6 +268,10 @@ export const api = {
   // 유사 케이스 — 같은 증상 과거 접수 top-k
   similarCases: (id: string, k = 5) =>
     jget<{ similar: SimilarCase[]; error?: string }>(`/api/analytics/similar-cases?id=${encodeURIComponent(id)}&k=${k}`),
+  // 리콜 대상 조회 — "제 차(차종·연식) 리콜 대상인가요?"
+  recallCheck: (model: string, year?: string) =>
+    jget<{ recalls: RecallCheckItem[]; count: number; error?: string }>(
+      `/api/analytics/recall-check?model=${encodeURIComponent(model)}${year ? `&year=${encodeURIComponent(year)}` : ""}`),
   // 단일 리콜 상세 (캠페인번호)
   recall: (id: string) =>
     jget<RecallDetail>(`/api/analytics/recall?id=${encodeURIComponent(id)}`),
@@ -287,6 +292,8 @@ export const api = {
     fetch(`/api/maintenance/${id}`, { method: "DELETE" }).then((r) => r.json()),
 
   // Governance
+  maskPreview: (text: string) =>
+    jpost<{ original: string; masked: string; count: number }>("/api/governance/mask-preview", { text }),
   logs: () => jget<QueryLog[]>("/api/governance/logs"),
   stats: () => jget<Stats>("/api/governance/stats"),
   feedback: (id: number, value: string) =>

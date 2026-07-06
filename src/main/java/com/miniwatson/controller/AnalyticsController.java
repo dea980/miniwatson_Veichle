@@ -141,6 +141,15 @@ public class AnalyticsController {
         catch (Throwable t) { return Map.of("statuses", java.util.List.of(), "error", t.toString()); }
     }
 
+    /** 리콜 대상 조회 — 차종(+연식)으로 해당 리콜 목록. 고객 응대 "제 차 리콜 대상인가요?" */
+    @GetMapping("/recall-check")
+    public Map<String, Object> recallCheck(@RequestParam String model, @RequestParam(required = false) Integer year) {
+        try {
+            var list = analytics.recallCheck(model, year);
+            return Map.of("recalls", list, "count", list.size());
+        } catch (Throwable t) { return Map.of("recalls", java.util.List.of(), "count", 0, "error", t.toString()); }
+    }
+
     /** 유사 케이스 — 같은 증상 과거 접수 top-k (요약 토큰 유사도). */
     @GetMapping("/similar-cases")
     public Map<String, Object> similarCases(@RequestParam String id, @RequestParam(defaultValue = "5") int k) {

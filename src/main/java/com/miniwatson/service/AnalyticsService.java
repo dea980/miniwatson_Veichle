@@ -485,6 +485,28 @@ public class AnalyticsService {
         ensure("recalls"); ensure("complaints"); ensure("parts");
     }
 
+    /** 리콜 대상 조회 — "제 차(차종·연식) 리콜 대상인가요?" 고객 응대 첫 질문.
+     *  연식 없으면 차종 전체. parkIt(주차 권고=화재위험) 우선 정렬. */
+    public List<Map<String, Object>> recallCheck(String model, Integer year) {
+        ensure("recalls");
+        if (model == null || model.isBlank()) return List.of();
+        String where = "WHERE upper(model)='" + model.replace("'", "''").toUpperCase() + "'";
+        if (year != null) where += " AND TRY_CAST(modelyear AS INTEGER)=" + year;
+        List<List<Object>> r = rows("SELECT nhtsacampaignnumber, reportreceiveddate, modelyear, component, "
+            + "substr(summary,1,300), cast(parkit AS varchar) FROM recalls " + where
+            + " ORDER BY (CASE WHEN lower(cast(parkit AS varchar))='true' THEN 0 ELSE 1 END), reportreceiveddate DESC LIMIT 50");
+        return r.stream().map(row -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("campaign", String.valueOf(row.get(0)));
+            m.put("date", String.valueOf(row.get(1)));
+            m.put("year", String.valueOf(row.get(2)));
+            m.put("component", String.valueOf(row.get(3)));
+            m.put("summary", String.valueOf(row.get(4)));
+            m.put("parkIt", "true".equalsIgnoreCase(String.valueOf(row.get(5))));
+            return m;
+        }).toList();
+    }
+
     /** 유사 케이스 검색 — "과거에 같은 증상 접수 있었나?" top-k.
      *  ponytail: 토큰 코사인 근사(같은 부위 후보 → 요약 토큰 중복도). 전 불만 임베딩 적재가 없어 1차는
      *  어휘 기반 — 정밀도 올릴 땐 complaints를 EmbeddingService로 적재 후 벡터 코사인으로 교체. */

@@ -1,9 +1,29 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, cleanText, koModel, severityPct, isSafetyCritical, type Summary, type Source, type Models, type CaseRecord, type RecallDetail } from "@/lib/api";
+import { api, cleanText, koModel, severityPct, isSafetyCritical, type Summary, type Source, type Models, type CaseRecord, type RecallDetail, type RecallCheckItem } from "@/lib/api";
 import CarImage from "@/components/CarImage";
+import Select from "@/components/Select";
 
 const num = (v: unknown) => Number(v) || 0;
+
+/* KPI 카운트업 — 이전 값에서 새 값으로 700ms ease-out (계기판 바늘 감기) */
+function CountUp({ value }: { value: number }) {
+  const [n, setN] = useState(0);
+  const prev = useRef(0);
+  useEffect(() => {
+    const from = prev.current, dur = 700, t0 = performance.now();
+    prev.current = value;
+    let raf = 0;
+    const step = (t: number) => {
+      const p = Math.min(1, (t - t0) / dur);
+      setN(Math.round(from + (value - from) * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return <>{n.toLocaleString()}</>;
+}
 
 export default function HomePanel({ onNavigate }: { onNavigate: (id: string, payload?: string) => void }) {
   const [sum, setSum] = useState<Summary | null>(null);
@@ -12,9 +32,21 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
   const [paused, setPaused] = useState(false); // hover 시 자동 전환 멈춤
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null); // 마지막 자동 갱신 시각
   const [sumErr, setSumErr] = useState("");
-  const [topCases, setTopCases] = useState<CaseRecord[]>([]);     // 우선 대응 케이스
-  const [resolved, setResolved] = useState<Set<string>>(new Set());
+  const [topCases, setTopCases] = useState<CaseRecord[]>([]);     // 우선 대응 케이스 (완료 제외는 서버 필터)
+  const [statuses, setStatuses] = useState<Record<string, string>>({});   // 접수번호→워크플로 상태 (DB 영속)
   const [recall, setRecall] = useState<RecallDetail | "loading" | null>(null);   // 리콜 상세 모달
+  // 리콜 대상 조회 — 차종+연식으로 즉시 확인
+  const [rcModel, setRcModel] = useState("");
+  const [rcYear, setRcYear] = useState("");
+  const [rcLoading, setRcLoading] = useState(false);
+  const [rcResult, setRcResult] = useState<RecallCheckItem[] | null>(null);
+
+  async function checkRecalls() {
+    if (!rcModel || rcLoading) return;
+    setRcLoading(true);
+    try { const r = await api.recallCheck(rcModel, rcYear || undefined); setRcResult(r.recalls || []); }
+    catch { setRcResult([]); } finally { setRcLoading(false); }
+  }
   const [complaint, setComplaint] = useState<CaseRecord | "loading" | "error" | null>(null);   // 불만 상세 모달
   const [csum, setCsum] = useState<{ gist?: string; cached?: boolean } | "loading" | null>(null);   // 접수 내용 AI 요약
 
@@ -50,12 +82,16 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
     Promise.all([
       api.summary().then(setSum).catch((e) => setSumErr(String(e))),
       api.cases().then((r) => setTopCases(r.cases || [])).catch(() => {}),
+      api.caseStatuses().then((r) => {
+        const m: Record<string, string> = {};
+        (r.statuses || []).forEach((s) => { m[s.caseNumber] = s.status; });
+        setStatuses(m);
+      }).catch(() => {}),
     ]).finally(() => setUpdatedAt(new Date()));
   }, []);
 
   useEffect(() => {
     loadData();
-    try { setResolved(new Set(JSON.parse(localStorage.getItem("mw-resolved-cases") || "[]"))); } catch {}
     // 기본 모델: 지시 잘 따르는 instruct/7B 우선(약한 모델은 프롬프트를 메아리치는 경우가 있음)
     api.models().then((m) => {
       setModels(m);
@@ -131,10 +167,10 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
         <div className="card" style={{ margin: 0 }}>
           <h2>차량 품질 현황</h2>
           <div className="cards">
-            <div className="stat"><div className="v">{num(t?.recalls)}</div><div className="l">리콜</div></div>
-            <div className="stat"><div className="v">{num(t?.complaints)}</div><div className="l">불만</div></div>
-            <div className={`stat ${num(t?.fires) > 0 ? "danger" : ""}`}><div className="v">{num(t?.fires)}</div><div className="l">화재 신고</div></div>
-            <div className={`stat ${num(t?.injuries) > 0 ? "warn" : ""}`}><div className="v">{num(t?.injuries)}</div><div className="l">부상 합계</div></div>
+            <div className="stat"><div className="v"><CountUp value={num(t?.recalls)} /></div><div className="l">리콜</div></div>
+            <div className="stat"><div className="v"><CountUp value={num(t?.complaints)} /></div><div className="l">불만</div></div>
+            <div className={`stat ${num(t?.fires) > 0 ? "danger" : ""}`}><div className="v"><CountUp value={num(t?.fires)} /></div><div className="l">화재 신고</div></div>
+            <div className={`stat ${num(t?.injuries) > 0 ? "warn" : ""}`}><div className="v"><CountUp value={num(t?.injuries)} /></div><div className="l">부상 합계</div></div>
           </div>
           <div className="hint">전체 플릿 집계. 자세한 분석은 <a onClick={() => onNavigate("analytics")} style={{ cursor: "pointer" }}>분석 대시보드</a>에서.
             {updatedAt && <span className="muted"> | 자동 갱신 {updatedAt.toLocaleTimeString("ko-KR")}</span>}</div>
@@ -147,15 +183,17 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
             <button className="ghost" style={{ fontSize: 12 }} onClick={() => onNavigate("triage")}>트리아지 전체 →</button>
           </div>
           <div className="hint">중요도 상위. 누르면 차량 케이스 진단으로.</div>
-          {topCases.filter((c) => !resolved.has(String(c[0]))).slice(0, 5).map((c, i) => {
+          {topCases.slice(0, 5).map((c, i) => {
             const fire = num(c[7]), inj = num(c[9]), dea = num(c[10]), prio = num(c[6]);
             const lvl = dea > 0 || fire > 0 ? "crit" : prio >= 20 ? "high" : "";
+            const st = statuses[String(c[0])];
             return (
               <div className="doc caserow" key={i} style={{ cursor: "pointer" }}
                 onClick={() => onNavigate("triage", `${c[2]}::${c[0]}`)}>
                 <span className={`prio ${lvl}`}>{prio}</span>
                 <span className="name" style={{ fontSize: 13 }} title={String(c[2])}>{koModel(String(c[2]))} | {String(c[3]).slice(0, 26)}</span>
                 <span className="spacer" />
+                {(st === "DIAGNOSING" || st === "REPAIRING") && <span className="pill warn">{st === "DIAGNOSING" ? "진단중" : "수리중"}</span>}
                 {dea > 0 && <span className="sevtag dea">사망 {dea}</span>}
                 {inj > 0 && <span className="sevtag inj">부상 {inj}</span>}
                 {fire > 0 && <span className="sevtag dea">화재</span>}
@@ -163,7 +201,7 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
               </div>
             );
           })}
-          {topCases.filter((c) => !resolved.has(String(c[0]))).length === 0 && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>대기 케이스 없음.</div>}
+          {topCases.length === 0 && <div className="muted" style={{ marginTop: 8, fontSize: 13 }}>대기 케이스 없음.</div>}
         </div>
 
         {/* 최근 리콜/불만 피드 (= 도메인 뉴스) */}
@@ -220,6 +258,38 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
             );
           })}
         </div>
+
+        {/* 리콜 대상 조회 — 고객 응대 첫 질문 "제 차 리콜 대상인가요?" */}
+        <div className="card" style={{ margin: 0 }}>
+          <h2>리콜 대상 조회</h2>
+          <div className="hint">차종과 연식으로 해당 리콜을 바로 확인합니다. 캠페인을 누르면 상세(결함·위험·시정조치)로.</div>
+          <div className="row" style={{ marginTop: 10 }}>
+            <Select value={rcModel} onChange={setRcModel} placeholder="차종 선택"
+              options={(sum?.byModel || []).map((m) => String(m[0]))} renderLabel={(v) => koModel(v)} title="차종" />
+            <input type="text" inputMode="numeric" placeholder="연식 (예: 2021, 생략 가능)" value={rcYear}
+              onChange={(e) => setRcYear(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+              onKeyDown={(e) => e.key === "Enter" && checkRecalls()} style={{ width: 170 }} />
+            <button className="btn" onClick={checkRecalls} disabled={!rcModel || rcLoading}>{rcLoading ? "조회 중…" : "조회"}</button>
+          </div>
+          {rcResult && (
+            <div style={{ marginTop: 10 }}>
+              <div className="hint" style={{ marginTop: 0 }}>
+                {koModel(rcModel)}{rcYear ? ` ${rcYear}년식` : ""} — 리콜 <b>{rcResult.length}건</b>{rcResult.some((r) => r.parkIt) && <span className="pill bad" style={{ marginLeft: 6 }}>주차 권고 포함(화재위험)</span>}
+              </div>
+              {rcResult.length === 0 && <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>해당 조건의 리콜이 없습니다.</div>}
+              {rcResult.slice(0, 8).map((r) => (
+                <div key={r.campaign} className="doc" style={{ cursor: "pointer" }} onClick={() => openRecall(r.campaign)}>
+                  {r.parkIt && <span className="pill bad">주차 권고</span>}
+                  <span className="name" style={{ fontSize: 13 }}>{r.component}</span>
+                  <span className="badge">{r.year}년식</span>
+                  <span className="spacer" />
+                  <span className="muted" style={{ fontSize: 12 }}>{r.date} | #{r.campaign} →</span>
+                </div>
+              ))}
+              {rcResult.length > 8 && <div className="hint">외 {rcResult.length - 8}건 — 자세히는 차종 진단 리포트에서.</div>}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* 우측: AI 어시스턴트 — 멀티턴 채팅 */}
@@ -228,9 +298,7 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
           <h2 style={{ margin: 0 }}>AI 어시스턴트</h2>
           <label className="field-model" title="답변 생성에 사용할 LLM">
             <span>모델</span>
-            <select value={model} onChange={(e) => setModel(e.target.value)}>
-              {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            <Select value={model} onChange={setModel} options={models?.available || []} title="답변 생성에 사용할 LLM" />
           </label>
         </div>
         <div className="hint">오너스 매뉴얼(취급설명서) 근거로 답하는 대화형 어시스턴트. 대화가 이어집니다. {msgs.length > 0 && <a onClick={() => setMsgs([])} style={{ cursor: "pointer" }}>대화 비우기</a>}</div>
