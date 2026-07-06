@@ -69,7 +69,49 @@
 - **NLP/LLM 직무**: RAG·Agent·도메인 LoRA 위에, 결정적 SQL + LLM 서술의 하이브리드(환각 차단).
 - **데이터 분석 직무**: 우선순위 트리아지(클레임 분류), 부품 수요·워런티 비용 프록시, 점검 체크리스트(품질 신호→현장 액션) — "분석에 LLM을 적용"하는 구체 사례.
 
-## 9. 로드맵 — 커넥티드카 개인화 (JD #2, 미구현)
+## 9. 케이스 워크플로 — 접수부터 완료까지 (2026-07 구현)
+
+케이스가 브라우저 로컬(localStorage)이 아니라 **DB에 영속되는 상태 머신**으로 관리된다.
+서비스 어드바이저의 하루 업무가 이 한 흐름 안에서 끝난다.
+
+```
+접수(RECEIVED)  ──진단 시작──▶  진단중(DIAGNOSING)
+      │                              │
+      │            "이 케이스로 예약"(정비 일정 생성, caseNumber 연결)
+      │                              ▼
+      └──────────────────────▶  수리중(REPAIRING)
+                                     │
+                     정비 스케줄에서 일정 "완료" 처리
+                                     ▼
+                                완료(DONE)  →  큐에서 제거, "해결 내역"에 등재
+```
+
+**상태 모델** — `resolved_case` 테이블 재사용(+`status` 컬럼). *접수는 행 없음*이 기본이라 저장하지 않고,
+구버전 행(status=null)은 완료로 해석해 하위호환. 진단중/수리중은 큐에 남아 **상태칩**으로 표시되고, 완료만 큐에서 빠진다.
+
+**API**
+
+| 동작 | 엔드포인트 | 비고 |
+|---|---|---|
+| 상태 설정/원복 | `POST /api/analytics/case-status` `{id, status, note?}` | RECEIVED면 행 삭제(원복) |
+| 상태 맵 조회 | `GET /api/analytics/case-status` | 홈·트리아지 상태칩 소스 |
+| 완료(기존 호환) | `POST /api/analytics/resolve` · `DELETE /resolve/{id}` | status=DONE과 동일 |
+| 예약 → 수리중 | `POST /api/maintenance` (caseNumber 포함 시) | `MaintenanceController.syncCase` |
+| 일정 완료 → 케이스 완료 | `PUT /api/maintenance/{id}/status?value=완료` | 루프 닫힘. 동기화 실패해도 일정 저장은 성공(부수효과 격리) |
+
+**케이스 상세에 함께 붙는 보조 기능**
+
+- **유사 케이스** (`GET /api/analytics/similar-cases?id=&k=`) — "과거 같은 증상 접수 있었나?"
+  요약 토큰화(불용어 제거) → 같은 부위 후보 우선 → 토큰 코사인 근사 top-5. 임베딩 없이 즉답.
+  정밀도 올릴 땐 complaints를 임베딩 적재 후 벡터 코사인으로 교체(코드에 ponytail 주석).
+- **리콜 대상 조회** (`GET /api/analytics/recall-check?model=&year=`) — 고객 응대 첫 질문. 홈 카드.
+  주차 권고(parkIt=화재위험) 리콜 최우선 정렬.
+- **인쇄/PDF** — 케이스 상세 🖨 버튼(`window.print`) + `app/styles/print.css`
+  (사이드바·컨트롤 `no-print` 숨김, 다크여도 항상 라이트 강제) → 고객 인계용 진단 리포트 산출물.
+
+검증 방식: 매 기능 curl E2E(상태 전이 왕복) + Playwright 실렌더 스크린샷(`frontend/design-shots/`).
+
+## 10. 로드맵 — 커넥티드카 개인화 (JD #2, 미구현)
 
 차량별 정비이력 + 운전 스타일로 **개인화 진단·예측 정비·맞춤 견적**을 하는 방향. JD #2(커넥티드카 ECU·워런티·예측)에 직결.
 
