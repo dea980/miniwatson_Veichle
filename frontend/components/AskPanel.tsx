@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, type AskResult, type Models } from "@/lib/api";
 import Select from "@/components/Select";
+import Markdown from "@/components/Markdown";
 
 export default function AskPanel() {
   const [question, setQuestion] = useState("");
@@ -159,7 +160,7 @@ export default function AskPanel() {
               </button>
             )}
           </div>
-          <div className="answer">{result.answer || "(No answer)"}</div>
+          <div className="answer">{result.answer ? <Markdown text={result.answer} /> : "(No answer)"}</div>
 
           <div className="label">근거</div>
           {(result.sources || []).length === 0 && <div className="muted">근거 없음</div>}

@@ -23,7 +23,7 @@ export default function Markdown({ text }: { text: string }) {
     const l = raw.trimEnd();
     if (l.startsWith("## ")) { flush(i); out.push(<h2 key={i}>{inline(l.slice(3))}</h2>); }
     else if (l.startsWith("### ")) { flush(i); out.push(<h3 key={i}>{inline(l.slice(4))}</h3>); }
-    else if (/^\s*[-*]\s+/.test(l)) { bullets.push(l.replace(/^\s*[-*]\s+/, "")); }
+    else if (/^\s*[-*•]\s+/.test(l)) { bullets.push(l.replace(/^\s*[-*•]\s+/, "")); }   // -, *, • 모두 불릿
     else if (l.trim() === "") { flush(i); }
     else { flush(i); out.push(<p key={i}>{inline(l)}</p>); }
   });

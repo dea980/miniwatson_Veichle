@@ -25,8 +25,8 @@ input[type="file"]::file-selector-button:hover { background: var(--surface); col
 .sel-btn:focus-visible { outline: none; border-color: var(--accent-2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-2) 18%, transparent); }
 .sel-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sel-caret { width: 12px; height: 12px; color: var(--muted); flex-shrink: 0; }
-.sel-menu { position: absolute; z-index: 50; top: calc(100% + 4px); left: 0; min-width: 100%; max-height: 300px; overflow-y: auto;
-  background: var(--card); border: 1px solid var(--border-strong, var(--border)); border-radius: 4px;
+.sel-menu { position: absolute; z-index: 100; top: calc(100% + 4px); left: 0; min-width: 100%; max-height: 300px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border-strong, var(--border)); border-radius: 4px;
   box-shadow: 0 8px 28px rgba(0,0,0,.30); padding: 4px; }
 .sel-opt { padding: 7px 10px; font-size: 13px; border-radius: 3px; cursor: pointer; white-space: nowrap; color: var(--text); }
 .sel-opt.hi { background: var(--surface-2); }

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, cleanText, koModel, severityPct, isSafetyCritical, type Summary, type Source, type Models, type CaseRecord, type RecallDetail, type RecallCheckItem } from "@/lib/api";
 import CarImage from "@/components/CarImage";
 import Select from "@/components/Select";
+import Markdown from "@/components/Markdown";
 
 const num = (v: unknown) => Number(v) || 0;
 
@@ -317,7 +318,7 @@ export default function HomePanel({ onNavigate }: { onNavigate: (id: string, pay
           )}
           {msgs.map((m, i) => (
             <div key={i} className={`bubble ${m.role}`}>
-              <div className="bubble-text">{m.text}</div>
+              <div className="bubble-text">{m.role === "assistant" ? <Markdown text={m.text} /> : m.text}</div>
               {m.sources && m.sources.length > 0 && (
                 <div className="bubble-src">근거: {m.sources.map((s) => s.title).slice(0, 3).join(", ")}</div>
               )}
