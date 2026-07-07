@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Value;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.stream.Collectors;
 import java.util.Map;
 
@@ -33,7 +35,16 @@ public class RagService {
     private final Map<String, Reranker> rerankers; //요청키로  고르기 위해 보관
 
     private final Reranker reranker; //
-
+    private static String stripArtifacts(String a){
+        if (a == null) return "";
+        return a
+                .replaceAll("(?i)\\blabels?\\s*:\\s*\\d+", "")   // labels: 41
+                .replaceAll("(?i)\\[\\s*OCR\\s*\\]", "")          // [OCR] 마커
+                .replaceAll("(?i)#\\d{3,}\\b", "")                // 청크 id (#232 등)
+                .replaceAll("\\s{2,}", " ")
+                .replaceAll("\\s+([.,;])", "$1")                  // 스트립 후 남은 공백+구두점 정리
+                .trim();
+    }
     @Value("${eval.overrides.enabled:false}")
     private boolean evalOverrides;
 
@@ -186,6 +197,7 @@ public class RagService {
         log.info("Augmented prompt length: {} chars", prompt.length());
 
         String answer = ollamaService.ask(prompt, model, question, sources);
+        answer = stripArtifacts(answer);
         Long logId = ollamaService.lastQueryLogId();
 
         log.info("Ollama answer length: {} chars", answer != null ? answer.length() : 0);
@@ -194,4 +206,29 @@ public class RagService {
     }
 
     public record RagResult(String answer, List<Article> sources, Long logId) {}
+
+    /**
+     * 진단 계측 — 리랭크 전 1차 검색 후보 풀(top-N)을 그대로 노출.
+     * 리랭커 투자 판단용: 정답 문서가 이 풀에 들어오면 정밀도(리랭커가 순위 교정) 문제,
+     * 아예 없으면 회수 문제(리랭커 무의미 → 메타필터/하이브리드가 정답)다.
+     * 순위(rank)는 1차 검색(벡터+BM25 하이브리드) 순서 그대로 — 리랭크 미적용.
+     */
+    public List<Map<String, Object>> retrievalCandidates(String question, String namespace, int fetchN) throws IOException {
+        String ns = (namespace == null || namespace.isBlank()) ? DEFAULT_NS : namespace;
+        accessChecker.check(ns);
+        int n = fetchN <= 0 ? FETCH_N : Math.min(fetchN, 100);
+        List<Float> emb = embeddingService.embedQuery(question);
+        List<Article> cands = hybridRetriever.search(ns, emb, question, n, null);
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (int i = 0; i < cands.size(); i++) {
+            Article a = cands.get(i);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("rank", i + 1);
+            m.put("title", a.getTitle());
+            m.put("carModel", a.getCarModel());
+            m.put("year", a.getYear());
+            out.add(m);
+        }
+        return out;
+    }
 }

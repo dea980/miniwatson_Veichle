@@ -45,6 +45,18 @@ public class RagController {
                             false);
     }
 
+    /**
+     * 진단: 리랭크 전 1차 검색 후보 풀(top-N)을 노출 — 리랭커 투자 판단용.
+     * 정답 문서가 풀에 있으면 정밀도 문제(리랭커 유효), 없으면 회수 문제(메타필터가 먼저).
+     */
+    @GetMapping("/diag/candidates")
+    public Map<String, Object> diagCandidates(@org.springframework.web.bind.annotation.RequestParam String question,
+                                              @org.springframework.web.bind.annotation.RequestParam(defaultValue = "vehicle") String namespace,
+                                              @org.springframework.web.bind.annotation.RequestParam(defaultValue = "20") int fetchN) throws IOException {
+        var cands = ragService.retrievalCandidates(question, namespace, fetchN);
+        return Map.of("question", question, "count", cands.size(), "candidates", cands);
+    }
+
     /** Multi-LLM: list selectable chat models and the default. */
     @GetMapping("/models")
     public Map<String, Object> models() {
