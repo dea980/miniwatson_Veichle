@@ -14,15 +14,6 @@ const toolClass = (t?: string) => {
   return "";
 };
 
-// 도구명 → 색 클래스(트레이스 시각화). RAG=액션블루 / SQL=네이비 / 복합=주황.
-const toolClass = (t?: string) => {
-  const s = String(t || "").toLowerCase();
-  if (s.includes("both") || s.includes("복합") || s.includes("둘")) return "both";
-  if (s.includes("sql") || s.includes("리콜") || s.includes("tabular")) return "sql";
-  if (s.includes("rag") || s.includes("매뉴얼") || s.includes("검색")) return "rag";
-  return "";
-};
-
 export default function AgentPanel() {
   const [question, setQuestion] = useState("");
   const [namespace, setNamespace] = useState("vehicle");
