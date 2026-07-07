@@ -125,29 +125,48 @@ def context_recall(expected, contexts):
     return found / len(claims)
 
 
-def run(cases, filters=None):
-    print(f"\n=== RAGAS-lite ({len(cases)} cases, judge={JUDGE_MODEL}) ===\n")
+def eval_case(c, filters=None):
+    """한 케이스의 RAG 호출 + 4메트릭 판정. 스레드 하나가 이걸 통째로 담당(케이스 간 독립)."""
+    try:
+        resp = ask_rag(c["question"], c.get("namespace", "vehicle"), **(filters or {}))
+        answer = resp.get("answer", "") or ""
+        srcs = resp.get("sources", []) or []
+        contexts = [s.get("summary", "") for s in srcs if s.get("summary")]   # sources=Article, summary가 context
+    except Exception as e:
+        return {"id": c["id"], "err": str(e)}
+    return {"id": c["id"], "f": (
+        faithfulness(answer, contexts),
+        answer_relevance(c["question"], answer),
+        context_precision(c["question"], contexts),
+        context_recall(c.get("expectAnswer"), contexts) if c.get("expectAnswer") else None,
+    )}
+
+
+def run(cases, filters=None, workers=1):
+    print(f"\n=== RAGAS-lite ({len(cases)} cases, judge={JUDGE_MODEL}, workers={workers}) ===\n")
+    if workers > 1:
+        print(f"  ⚠ 병렬 {workers} — 모든 judge 호출이 단일 Ollama로 감. 크래시/타임아웃 나면 workers를 낮추고")
+        print(f"    Ollama를 OLLAMA_NUM_PARALLEL={workers} 로 띄워야 실제 병렬 처리됨.\n")
     print(f"{'id':22} {'faith':>7} {'ans-rel':>8} {'ctx-prec':>9} {'ctx-rec':>8}")
     print("-" * 60)
+
+    # 케이스 단위 병렬(순서 보존). workers=1이면 순차.
+    if workers > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            results = list(ex.map(lambda c: eval_case(c, filters), cases))
+    else:
+        results = [eval_case(c, filters) for c in cases]
+
     aggs = {k: [] for k in ("faith", "rel", "prec", "rec")}
-    for c in cases:
-        try:
-            resp = ask_rag(c["question"], c.get("namespace", "vehicle"), **(filters or {}))
-            answer = resp.get("answer", "") or ""
-            srcs = resp.get("sources", []) or []
-            # sources는 Article 객체 — summary가 contexts
-            contexts = [s.get("summary", "") for s in srcs if s.get("summary")]
-        except Exception as e:
-            print(f"{c['id']:22}  ERR: {e}")
-            continue
-        f1 = faithfulness(answer, contexts)
-        f2 = answer_relevance(c["question"], answer)
-        f3 = context_precision(c["question"], contexts)
-        f4 = context_recall(c.get("expectAnswer"), contexts) if c.get("expectAnswer") else None
+    def fmt(v): return "-" if v is None else f"{v:.2f}"
+    for r in results:   # 입력 순서대로 출력
+        if "err" in r:
+            print(f"{r['id']:22}  ERR: {r['err']}"); continue
+        f1, f2, f3, f4 = r["f"]
         for k, v in zip(("faith", "rel", "prec", "rec"), (f1, f2, f3, f4)):
             if v is not None: aggs[k].append(v)
-        def fmt(v): return "-" if v is None else f"{v:.2f}"
-        print(f"{c['id']:22} {fmt(f1):>7} {fmt(f2):>8} {fmt(f3):>9} {fmt(f4):>8}")
+        print(f"{r['id']:22} {fmt(f1):>7} {fmt(f2):>8} {fmt(f3):>9} {fmt(f4):>8}")
     print("-" * 60)
     def avg(xs): return f"{statistics.mean(xs):.2f}" if xs else "-"
     print(f"{'avg':22} {avg(aggs['faith']):>7} {avg(aggs['rel']):>8} {avg(aggs['prec']):>9} {avg(aggs['rec']):>8}")
@@ -161,14 +180,18 @@ def main():
     ap.add_argument("--year", type=int)
     ap.add_argument("--lang", help="ko|en")
     ap.add_argument("--powertrain", help="hybrid|electric|phev|fcev|sv")
+    ap.add_argument("--rerank", help="리랭커 A/B — none|mmr|cross|cross-sidecar|llm (지정 시 답변 캐시 우회)")
+    ap.add_argument("--workers", type=int, default=1, help="케이스 병렬 수(기본 1=순차). 2~3 권장, 그 이상은 단일 Ollama 크래시 위험")
     args = ap.parse_args()
     if not os.path.exists(args.golden):
         print(f"golden 없음: {args.golden}"); sys.exit(1)
     with open(args.golden, encoding="utf-8") as f:
         cases = json.load(f)
-    filters = {k: getattr(args, k) for k in ("car", "year", "lang", "powertrain")}
+    filters = {k: getattr(args, k) for k in ("car", "year", "lang", "powertrain", "rerank")}
     filters = {k: v for k, v in filters.items() if v}
-    run(cases, filters or None)
+    if args.rerank:
+        print(f"(rerank override = {args.rerank} — 답변 캐시 우회)")
+    run(cases, filters or None, workers=max(1, args.workers))
 
 
 if __name__ == "__main__":

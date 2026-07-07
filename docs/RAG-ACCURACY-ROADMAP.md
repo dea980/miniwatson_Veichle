@@ -42,7 +42,7 @@ kona_electric보다 위)이 정답을 밀어낸다. → **크로스인코더 리
 | 0 — 측정 레이어 | RAGAS-lite 4메트릭(Ollama judge) | ✅ 하네스 완료 | [`RAG-EVAL-RAGAS.md`](RAG-EVAL-RAGAS.md) |
 | 1 — 메타 1차 필터 | 차종·연식·언어·구동계 컬럼 + 파일명 표준화 + 필터 API | ✅ 코드 통합 (앱 재기동 필요) | [`RAG-MANUAL-METADATA.md`](RAG-MANUAL-METADATA.md) |
 | 2 — 하이브리드 검색 보강 | BM25 한글 토크나이저 fix(어절 + 2-gram) | ✅ 코드 통합 (앱 재기동 필요) | [`RAG-HYBRID-RETRIEVAL.md`](RAG-HYBRID-RETRIEVAL.md) |
-| 3 — 크로스인코더 리랭커 | bge-reranker-base (top-K 정렬 정확도) | 🔄 진단 완료(정밀도 문제 확정, 위 §참고) — 사이드카로 실측 예정 | — |
+| 3 — 크로스인코더 리랭커 | bge-reranker-base (top-K 정렬 정확도) | 🔄 진단 완료(정밀도 확정) + 사이드카 배선 완료, 실측 대기 | [`GUIDE-reranker-eval.md`](GUIDE-reranker-eval.md) |
 | (별도) 섹션 메타 | 매뉴얼 헤딩/TOC 파싱 → 안전/정비/제원 청크 라벨 | ⚪ 예정 | — |
 
 현재 KB 적재 상태(`GET /api/data/documents?namespace=vehicle`): **2 매뉴얼 / 378 청크**(`hyundai_2025_ioniq5_NE1_owners_KR.pdf #366`, `hyundai_2025_ioniq5_n_NE1N_owners_KR.pdf #12`). 두 매뉴얼 모두 이미 신규 파일명 규칙(`hyundai_<year>_<model>[_pt]_<code>_owners_<region>.pdf`)으로 적재됨. 나머지 매뉴얼은 신규 코드(파일명 표준화·메타 파서·백필 잡)가 살아 있는 상태로 재인제스트하면 메타가 자동 채워진다.

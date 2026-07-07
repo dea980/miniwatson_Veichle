@@ -30,7 +30,9 @@ storage:
   expand-acronyms: true    # 약어->정식명 주입(CAIO->Chief AI Officer). false로 A/B 비교. 근거 docs/CHUNKING.md
 
 rerank:
-  strategy: mmr          # none | llm | mmr | cross  (mmr 기본: eval recall 100%, cross는 맥에서 폴백)
+  strategy: mmr          # none | llm | mmr | cross | cross-sidecar  (mmr 기본: eval recall 100%, cross는 맥 DJL 폴백)
+  sidecar:
+    url: ${RERANKER_SIDECAR_URL:http://127.0.0.1:8002}   # cross-sidecar: Python 크로스인코더(reranker_sidecar.py)
 
 server:
   port: 8080

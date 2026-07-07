@@ -33,6 +33,17 @@ public class RagController {
      */
     @PostMapping("/ask")
     public RagService.RagResult ask(@RequestBody AskRequest request) throws IOException {
+        // EVAL 경로: rerank/hybrid 오버라이드가 오면 캐시 우회하고 원본 RAG를 직접 호출한다.
+        //   캐시 키엔 rerank 전략이 없어(답 캐시는 최종 답만 저장) 캐시를 타면 A/B가 무의미하기 때문.
+        //   운영/일반 질의(오버라이드 없음)는 그대로 캐시 경유(compute-once).
+        boolean evalOverride = (request.getRerank() != null && !request.getRerank().isBlank())
+                            || request.getHybrid() != null;
+        if (evalOverride) {
+            return ragService.ask(
+                    request.getQuestion(), request.getNamespace(), request.getModel(),
+                    request.getRerank(), request.getHybrid(), request.getTitle(),
+                    request.getCar(), request.getYear(), request.getLang(), request.getPowertrain());
+        }
         return ragCache.askCached(
                             request.getQuestion(),
                             request.getNamespace(),
