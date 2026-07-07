@@ -119,6 +119,47 @@ git push origin main                 # GitHub Actions: test 게이트 → GHCR �
 
 ---
 
+## 빠른 실행 (pgvector + Ollama, 매번 쓰는 순서)
+
+```bash
+cd ~/Desktop/miniwatson_Veichle
+sdk use java 21.0.7-tem                     # 이 셸에 Temurin(필수)
+ollama serve                                # 별도 터미널("in use"면 이미 켜진 것=정상)
+docker compose up -d postgres               # pgvector(:55433) — 적재 데이터(124문서/38k청크)가 여기
+nc -zv localhost 55433                       # "succeeded!" = 준비됨
+VECTOR_STORE=pgvector ./mvnw spring-boot:run -Dspring-boot.run.jvmArguments="-Xmx4g"
+#   → "Started MiniwatsonApplication in Xs" / curl localhost:8080/api/analytics/summary
+cd frontend && npm run dev                   # 프론트 :3000 (별도 터미널)
+```
+
+**제공자 스왑**(chat만 vLLM, 임베딩은 Ollama 유지):
+```bash
+vllm serve Qwen/Qwen2.5-7B-Instruct --max-model-len 8192
+LLM_PROVIDER=vllm VLLM_URL=http://localhost:8000 VECTOR_STORE=pgvector ./mvnw spring-boot:run -Dspring-boot.run.jvmArguments="-Xmx4g"
+```
+
+## 트러블슈팅 표 (실제 겪은 것)
+
+| 증상 (로그) | 원인 | 해결 |
+|---|---|---|
+| **exit 134**(SIGABRT) / `java -version`에 OpenJ9·Semeru | JVM 벤더 | `sdk use java 21.0.7-tem` (Temurin) |
+| **exit 137**(SIGKILL) / **255**(heap OOM) | RAM 부족 | `-Xmx4g` 고정, 무거운 프로세스(vLLM) 끄기, 인제스트는 wave |
+| `pgVectorStore: Invocation of init method failed` | pgvector DB 미기동 | `docker compose up -d postgres` → `nc -zv localhost 55433` |
+| `Port 8080 was already in use` | 좀비 백엔드 | `lsof -ti:8080 \| xargs kill -9` 후 재실행 |
+| `EmbeddingClient ... could not be found` | 임베딩 빈 미활성 | 임베딩은 `embedding.provider`(기본 ollama)로 분리 — Ollama 떠 있는지 확인 |
+| eval `Connection refused [Errno 61]` | 백엔드(:8080)/Ollama(:11434) 미기동 | 백엔드 "Started" 확인 후 eval 실행 |
+| 답변에 `labels: 41; [OCR]` 누수 / 문장 붕괴 | 약한(FT 1.5B) 모델이 컨텍스트 아티팩트 복붙 | 강한 베이스 서빙 + 답변 아티팩트 스크럽 ([SESSION-DECISIONS-2026-07-07.md](SESSION-DECISIONS-2026-07-07.md)) |
+
+## 평가 / 데모
+```bash
+JUDGE_MODEL=qwen3:8b python3 eval/run_ragas.py             # RAGAS(강한 judge 필수, 1.5B는 점수 부풀림)
+JUDGE_MODEL=qwen3:8b python3 eval/run_ragas.py --workers 3 # 병렬(OLLAMA_NUM_PARALLEL=3 권장)
+python3 eval/check_cjk.py                                  # CJK 회귀(서버 불필요)
+cloudflared tunnel --url http://localhost:3000            # 잠깐 시연 공개 링크(프론트만 터널)
+```
+
+---
+
 ## 참고 문서
 
 - 런타임: [HOTSPOT-RUNTIME.md](HOTSPOT-RUNTIME.md)
