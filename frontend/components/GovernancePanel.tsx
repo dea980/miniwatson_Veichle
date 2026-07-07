@@ -6,6 +6,16 @@ export default function GovernancePanel() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [logs, setLogs] = useState<QueryLog[]>([]);
   const [err, setErr] = useState("");
+  // PII 마스킹 before/after 데모
+  const [piiText, setPiiText] = useState("");
+  const [piiBusy, setPiiBusy] = useState(false);
+  const [piiResult, setPiiResult] = useState<{ original: string; masked: string; count: number } | null>(null);
+
+  async function runMask() {
+    if (!piiText.trim() || piiBusy) return;
+    setPiiBusy(true);
+    try { setPiiResult(await api.maskPreview(piiText)); } catch {} finally { setPiiBusy(false); }
+  }
 
   async function refresh() {
     setErr("");
@@ -52,6 +62,29 @@ export default function GovernancePanel() {
             </>
           );
         })()}
+      </div>
+
+      {/* PII 마스킹 before/after — H-Chat류 게이트웨이의 핵심을 눈으로. 원문은 저장 안 됨(마스킹이 저장 전 단계). */}
+      <div className="card">
+        <h2>PII 마스킹 테스트 <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>(before/after — 원문은 저장되지 않습니다)</span></h2>
+        <div className="row" style={{ alignItems: "stretch" }}>
+          <textarea className="grow" value={piiText} onChange={(e) => setPiiText(e.target.value)}
+            placeholder={"예: 고객 김철수 연락처는 010-1234-5678, 이메일 kim@example.com 카드번호 1234-5678-9012-3456"}
+            style={{ minHeight: 64, resize: "vertical", padding: "9px 11px", fontSize: 13.5, border: "1px solid var(--border-strong)", background: "var(--surface)", color: "var(--text)", borderRadius: 3 }} />
+          <button className="btn" style={{ alignSelf: "flex-end" }} onClick={runMask} disabled={!piiText.trim() || piiBusy}>{piiBusy ? "…" : "마스킹"}</button>
+        </div>
+        {piiResult && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
+            <div>
+              <div className="label" style={{ margin: "0 0 6px" }}>Before <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(원문 — LLM/저장소로 안 나감)</span></div>
+              <div className="answer" style={{ marginTop: 0, borderLeftColor: "var(--danger)", whiteSpace: "pre-wrap", fontSize: 13.5 }}>{piiResult.original}</div>
+            </div>
+            <div>
+              <div className="label" style={{ margin: "0 0 6px" }}>After <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(마스킹 {piiResult.count}건 — 이것만 밖으로)</span></div>
+              <div className="answer" style={{ marginTop: 0, borderLeftColor: "var(--ok)", whiteSpace: "pre-wrap", fontSize: 13.5 }}>{piiResult.masked}</div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="card">

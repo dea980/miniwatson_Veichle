@@ -233,7 +233,9 @@ def main():
     if "--mechanic" in sys.argv:          # 정비사 wedge 트랙 (진단 recall + 저신뢰 폴백)
         mechanic_run()
         return
-    with open(os.path.join(HERE, "golden.json")) as f:   # 비정형 RAG 트랙
+    # 기본 golden.json, 또는 GOLDEN 환경변수로 다른 골든셋 지정(예: golden_vehicle.json). RUNBOOK과 정합.
+    golden = os.environ.get("GOLDEN") or os.path.join(HERE, "golden.json")
+    with open(golden) as f:   # 비정형 RAG 트랙
         cases = json.load(f)
     recall_sweep(cases)
     if "--judge" in sys.argv:

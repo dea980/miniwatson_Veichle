@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, type AskResult, type Models } from "@/lib/api";
+import Select from "@/components/Select";
+import Markdown from "@/components/Markdown";
 
 export default function AskPanel() {
   const [question, setQuestion] = useState("");
@@ -115,9 +117,7 @@ export default function AskPanel() {
         )}
         <label className="field-model" title="답변 생성에 사용할 LLM">
           <span>모델</span>
-          <select value={model} onChange={(e) => setModel(e.target.value)}>
-            {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <Select value={model} onChange={setModel} options={models?.available || []} title="답변 생성에 사용할 LLM" />
         </label>
         <button className="btn" onClick={() => ask()} disabled={loading}>{loading ? "검색 중…" : "질문"}</button>
       </div>
@@ -160,7 +160,7 @@ export default function AskPanel() {
               </button>
             )}
           </div>
-          <div className="answer">{result.answer || "(No answer)"}</div>
+          <div className="answer">{result.answer ? <Markdown text={result.answer} /> : "(No answer)"}</div>
 
           <div className="label">근거</div>
           {(result.sources || []).length === 0 && <div className="muted">근거 없음</div>}

@@ -1,13 +1,18 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, cleanText, koModel, severityPct, isSafetyCritical, type CaseRecord, type CaseReport } from "@/lib/api";
+import { api, cleanText, koModel, severityPct, isSafetyCritical, type CaseRecord, type CaseReport, type CaseWorkStatus, type SimilarCase } from "@/lib/api";
 import CarImage from "@/components/CarImage";
 import PartImage from "@/components/PartImage";
 import Markdown from "@/components/Markdown";
+import Select from "@/components/Select";
 
 const num = (v: unknown) => Number(v) || 0;
 const won = (n: number) => Math.round(Number(n) || 0).toLocaleString("ko-KR") + "원";
 const PAGE = 8;
+
+// 워크플로 상태 라벨 — RECEIVED는 행 없음(기본)
+const ST_LABEL: Record<CaseWorkStatus, string> = { RECEIVED: "접수", DIAGNOSING: "진단중", REPAIRING: "수리중", DONE: "완료" };
+const ST_ORDER: CaseWorkStatus[] = ["RECEIVED", "DIAGNOSING", "REPAIRING", "DONE"];
 
 function Badges({ c }: { c: CaseRecord }) {
   const fire = num(c[7]), crash = num(c[8]), inj = num(c[9]), dea = num(c[10]);
@@ -47,6 +52,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [resolvedCount, setResolvedCount] = useState(0);
+  const [statuses, setStatuses] = useState<Record<string, CaseWorkStatus>>({});
   const [showResolved, setShowResolved] = useState(false);
   const [resolvedList, setResolvedList] = useState<{ caseNumber: string; note: string; resolvedAt: string }[]>([]);
   const [selected, setSelected] = useState<CaseRecord | null>(null);
@@ -56,6 +62,12 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
   const [noteText, setNoteText] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteSaved, setNoteSaved] = useState(false);
+  // 정비 예약 (진단→예약→완료 루프) — 예약 생성 시 케이스가 수리중으로 넘어감
+  const [bookDate, setBookDate] = useState("");
+  const [booking, setBooking] = useState(false);
+  const [booked, setBooked] = useState(false);
+  // 유사 케이스 — "과거에 같은 증상 접수 있었나?"
+  const [similar, setSimilar] = useState<SimilarCase[] | "loading" | null>(null);
 
   useEffect(() => {
     api.summary().then((s) => setCarModels((s.byModel || []).map((m) => String(m[0])))).catch(() => {});
@@ -76,6 +88,21 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
 
   function refreshResolvedCount() {
     api.resolvedCases().then((r) => setResolvedCount((r.resolved || []).length)).catch(() => {});
+    api.caseStatuses().then((r) => {
+      const m: Record<string, CaseWorkStatus> = {};
+      (r.statuses || []).forEach((s) => { m[s.caseNumber] = s.status; });
+      setStatuses(m);
+    }).catch(() => {});
+  }
+
+  /** 워크플로 상태 변경 — DONE이면 큐에서 사라지므로 목록 재조회 */
+  async function setStatus(id: string, st: CaseWorkStatus) {
+    try { await api.setCaseStatus(id, st); } catch {}
+    refreshResolvedCount();
+    if (st === "DONE") {
+      const lastPage = Math.max(0, Math.ceil((total - 1) / PAGE) - 1);
+      await load(Math.min(page, lastPage));
+    }
   }
 
   async function load(p: number, sortOverride?: "priority" | "date" | "model") {
@@ -105,8 +132,26 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
     load(page);
   }
 
+  /** 이 케이스로 정비 예약 — 일정 생성 + 케이스 수리중(백엔드가 동기화) */
+  async function book(c: CaseRecord) {
+    const id = String(c[0]);
+    setBooking(true);
+    try {
+      await api.maintenanceCreate({
+        model: String(c[2]), caseNumber: id,
+        title: `${String(c[3]).slice(0, 40)} 점검·수리`,
+        scheduledDate: bookDate || undefined,
+      });
+      setBooked(true);
+      refreshResolvedCount();   // 상태칩 수리중 반영
+    } catch {} finally { setBooking(false); }
+  }
+
   function openCase(c: CaseRecord) {
     setSelected(c); setReport("loading"); setNoteText(""); setNoteSaved(false);
+    setBooked(false); setBookDate(new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+    setSimilar("loading");
+    api.similarCases(String(c[0])).then((r) => setSimilar(r.similar || [])).catch(() => setSimilar(null));
     api.caseReport(String(c[0]))
       .then((r) => { setReport(r); setNoteText(r.note || ""); })
       .catch((e) => setReport({ caseNumber: String(c[0]), error: String(e) } as CaseReport));
@@ -133,11 +178,17 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
     const carChk = rep?.checklistCar?.additional || [];
     return (
       <div className="card">
-        <div className="row" style={{ justifyContent: "space-between" }}>
+        <div className="row no-print" style={{ justifyContent: "space-between" }}>
           <button className="ghost" style={{ fontSize: 12 }} onClick={() => setSelected(null)}>← 케이스 큐</button>
           <div className="row" style={{ gap: 6 }}>
+            <button className="ghost" style={{ fontSize: 12 }} onClick={() => window.print()} title="이 진단 리포트를 인쇄하거나 PDF로 저장">🖨 인쇄/PDF</button>
             <button className="ghost" style={{ fontSize: 12 }} onClick={() => regenReport(id)} disabled={report === "loading"} title="진단·견적·점검을 새로 생성해 적재본 갱신">↻ 재생성</button>
             {onNavigate && <button className="ghost" style={{ fontSize: 12 }} onClick={() => onNavigate("report", mdl)}>차종 카테고리 →</button>}
+            <Select value={statuses[id] || "RECEIVED"} title="워크플로 상태"
+              options={ST_ORDER as unknown as string[]}
+              renderLabel={(v) => ST_LABEL[v as CaseWorkStatus]}
+              onChange={(v) => { const s = v as CaseWorkStatus; setStatus(id, s); if (s === "DONE") setSelected(null); }}
+              style={{ fontSize: 12 }} />
             <button className="btn" style={{ fontSize: 12 }} onClick={() => { resolve(id); setSelected(null); }}>해결 처리</button>
           </div>
         </div>
@@ -155,7 +206,31 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
           <Badges c={c} />
           {rep?.generatedAt && <span className="muted" style={{ fontSize: 12 }}>적재 {rep.generatedAt.slice(0, 16).replace("T", " ")}{rep.cached ? " | 캐시" : " | 방금"}</span>}
         </div>
+
+        {/* 정비 예약 — 예약하면 케이스가 수리중, 일정 완료 시 케이스도 완료(루프) */}
+        <div className="row no-print" style={{ marginTop: 10, gap: 8, alignItems: "center" }}>
+          <span className="label" style={{ margin: 0 }}>정비 예약</span>
+          <input type="date" value={bookDate} onChange={(e) => setBookDate(e.target.value)}
+            style={{ padding: "7px 9px", border: "1px solid var(--border-strong)", background: "var(--surface)", color: "var(--text)", borderRadius: 3, fontSize: 13 }} />
+          <button className="btn" style={{ fontSize: 12 }} onClick={() => book(c)} disabled={booking || booked}>
+            {booking ? "예약 중…" : booked ? "예약됨 ✓" : "이 케이스로 예약"}</button>
+          {booked && <span className="muted" style={{ fontSize: 12 }}>케이스가 <b>수리중</b>으로 전환됨 — 정비 스케줄에서 완료하면 케이스도 완료됩니다.</span>}
+        </div>
         <div className="snip" style={{ marginTop: 10, fontStyle: "italic" }}>접수 내용: {cleanText(rep?.summary || String(c[5]))}</div>
+
+        {/* 유사 케이스 — 같은 증상 과거 접수 (요약 토큰 유사도, 부위 우선) */}
+        <div className="label" style={{ marginTop: 16 }}>유사 케이스 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>(과거 같은 증상 접수)</span></div>
+        {similar === "loading" ? <div className="muted" style={{ fontSize: 13 }}>검색 중…</div>
+          : !similar || similar.length === 0 ? <div className="muted" style={{ fontSize: 13 }}>유사한 과거 접수를 찾지 못했습니다.</div>
+          : similar.map((s) => (
+            <div key={s.caseNumber} className="row" style={{ gap: 8, padding: "7px 0", borderBottom: "1px solid var(--border)", cursor: "pointer", alignItems: "baseline" }}
+              onClick={() => api.caseById(s.caseNumber).then((r) => { if (Array.isArray(r.case) && r.case.length) openCase(r.case as CaseRecord); }).catch(() => {})}>
+              <span className="badge" style={{ marginLeft: 0, flexShrink: 0 }}>유사 {s.score}%</span>
+              <span style={{ fontWeight: 600, fontSize: 13, flexShrink: 0 }} title={s.model}>{koModel(s.model)}{s.year && s.year !== "null" ? ` ${s.year}` : ""}</span>
+              <span className="muted" style={{ fontSize: 12, flexShrink: 0 }}>#{s.caseNumber}</span>
+              <span className="snip" style={{ fontSize: 12.5, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{cleanText(s.snippet)}</span>
+            </div>
+          ))}
 
         {report === "loading" && <div className="muted" style={{ fontSize: 13, marginTop: 14 }}>리포트 불러오는 중(최초 1회 생성 시 진단에 수십 초)…</div>}
         {report === null && <div className="err" style={{ marginTop: 14 }}>리포트를 불러오지 못했습니다.</div>}
@@ -173,7 +248,7 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
           <textarea value={noteText} onChange={(e) => { setNoteText(e.target.value); setNoteSaved(false); }}
             placeholder="점검 소견·작업 내용·고객 안내 등을 적으면 이 접수번호 리포트에 저장됩니다."
             style={{ width: "100%", minHeight: 90, resize: "vertical", padding: "10px 12px", fontSize: 13.5, lineHeight: 1.5, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)" }} />
-          <div className="row" style={{ justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
+          <div className="row no-print" style={{ justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
             {noteSaved && <span className="muted" style={{ fontSize: 12, color: "var(--ok, var(--accent))" }}>저장됨 ✓</span>}
             <button className="btn" style={{ fontSize: 12 }} onClick={() => saveNote(id)} disabled={noteSaving}>{noteSaving ? "저장 중…" : "메모 저장"}</button>
           </div>
@@ -230,23 +305,20 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
   return (
     <div className="card">
       <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-        <h2 style={{ margin: 0 }}>케이스 트리아지 <span className="muted" style={{ fontSize: 13 }}>· 중요도·입고순 큐</span></h2>
+        <h2 style={{ margin: 0 }}>케이스 트리아지 <span className="muted" style={{ fontSize: 13 }}>| 중요도·입고 순 큐</span></h2>
         <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
-          <select value={sort} onChange={(e) => { const s = e.target.value as "priority" | "date" | "model"; setSort(s); load(0, s); }} title="정렬 기준">
-            <option value="priority">중요도순</option>
-            <option value="date">입고순 (최신)</option>
-            <option value="model">차종별 | 중요도순</option>
-          </select>
-          <select value={model} onChange={(e) => setModel(e.target.value)}>
-            <option value="">전체 차종</option>
-            {carModels.map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <Select value={sort} title="정렬 기준"
+            onChange={(v) => { const s = v as "priority" | "date" | "model"; setSort(s); load(0, s); }}
+            options={["priority", "date", "model"]}
+            renderLabel={(v) => ({ priority: "중요도순", date: "입고순 (최신)", model: "차종별 | 중요도순" }[v])} />
+          <Select value={model} onChange={setModel} options={["", ...carModels]} title="차종 필터"
+            renderLabel={(v) => (v === "" ? "전체 차종" : koModel(v))} />
           <input type="text" placeholder="부위 키워드" value={component} onChange={(e) => setComponent(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load(0)} style={{ width: 160 }} />
           <button className="btn" onClick={() => load(0)} disabled={loading}>{loading ? "조회 중…" : "조회"}</button>
         </div>
       </div>
       <div className="hint">
-        <b>중요도 지수(0~100%)</b> — 사망 90~100 · 부상 60~89 · 화재 40~59 · 사고 20~39 밴드(사망 절대 최우선). 정렬은 원점수(사망×10000+부상×10+화재×5+사고×3+최신성)로, {sort === "date" ? "입고(접수)일 최신순" : sort === "model" ? "차종별로 묶어 그 안에서 중요도순" : "중요도 높은 순"} | 총 <b>{total.toLocaleString("ko-KR")}건</b> | 페이지 {page + 1}/{lastPage}. 카드를 누르면 접수번호 리포트로, "해결"하면 큐에서 사라집니다(서버 저장).
+        <b>중요도 지수(0~100%)</b> — 사망 90~100 | 부상 60~89 | 화재 40~59 | 사고 20~39 밴드(사망 절대 최우선). 정렬은 원점수(사망×10000+부상×10+화재×5+사고×3+최신성)로, {sort === "date" ? "입고(접수)일 최신순" : sort === "model" ? "차종별로 묶어 그 안에서 중요도순" : "중요도 높은 순"} | 총 <b>{total.toLocaleString("ko-KR")}건</b> | 페이지 {page + 1}/{lastPage}. 카드를 누르면 접수번호 리포트로, "해결"하면 큐에서 사라집니다(서버 저장).
         {resolvedCount > 0 && <> | <a onClick={toggleResolved} style={{ cursor: "pointer" }}>해결 내역 {resolvedCount}건 {showResolved ? "닫기" : "보기"}</a></>}
       </div>
 
@@ -279,8 +351,16 @@ export default function CaseTriagePanel({ onNavigate, initialModel, initialCaseI
                   <div className="snip" style={{ marginTop: 4 }}>{cleanText(String(c[5])).slice(0, 140)}…</div>
                 </div>
                 <div className="row" style={{ gap: 6, whiteSpace: "nowrap" }}>
+                  {(statuses[id] === "DIAGNOSING" || statuses[id] === "REPAIRING") &&
+                    <span className="pill warn">{ST_LABEL[statuses[id]]}</span>}
                   <span className="muted" style={{ fontSize: 12 }}>진단 보기 →</span>
-                  <button className="ghost" style={{ fontSize: 12 }} onClick={(e) => { e.stopPropagation(); resolve(id); }}>해결</button>
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <Select value={statuses[id] || "RECEIVED"} title="워크플로 상태"
+                      options={ST_ORDER as unknown as string[]}
+                      renderLabel={(v) => ST_LABEL[v as CaseWorkStatus]}
+                      onChange={(v) => setStatus(id, v as CaseWorkStatus)}
+                      style={{ fontSize: 12 }} />
+                  </span>
                 </div>
               </div>
             </div>

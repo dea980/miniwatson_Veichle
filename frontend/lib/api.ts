@@ -52,6 +52,21 @@ export function koModel(name?: string, withOriginal = false): string {
 }
 
 export type Source = { id?: number; title: string; summary: string; url: string; namespace?: string };
+export type CaseWorkStatus = "RECEIVED" | "DIAGNOSING" | "REPAIRING" | "DONE";
+export type SimilarCase = { caseNumber: string; date: string; model: string; component: string; year: string; snippet: string; score: number };
+export type RecallCheckItem = { campaign: string; date: string; year: string; component: string; summary: string; parkIt: boolean };
+export type IntegratedAdvice = {
+  model: string; year?: number | null; complaints: number; recalls: number;
+  fires: number; crashes: number; injuries: number; deaths: number;
+  complaintTop: [string, number][]; recallTop: [string, number][];
+  evidence: { component: string; count: number; sources: string[] }[];
+  advice: string; cached?: boolean; generatedAt?: string; error?: string;
+};
+export type Briefing = {
+  from: string; to: string; complaints: number; recalls: number; deaths: number; injuries: number; fires: number;
+  topModels: [string, number][]; topComponents: [string, number][]; worstCases: [string, string, string, number][];
+  narrative: string; cached?: boolean; generatedAt?: string; error?: string;
+};
 export type AskResult = { answer: string; sources: Source[]; logId?: number };
 export type DocItem = { title: string; chunks: number; namespace: string; url: string; ids: number[] };
 export type Models = { default: string; available: string[] };
@@ -250,6 +265,16 @@ export const api = {
     return jget<{ cases: CaseRecord[]; total: number; offset: number; limit: number; error?: string }>(
       `/api/analytics/cases?${p.toString()}`);
   },
+  // 통합 질의 — 차종·연식 핫스팟(정형) + 매뉴얼 RAG(비정형) 종합 점검 추천
+  integrated: (model: string, year?: string, force = false) => {
+    const p = new URLSearchParams({ model });
+    if (year) p.set("year", year);
+    if (force) p.set("force", "true");
+    return jget<IntegratedAdvice>(`/api/agent/integrated?${p.toString()}`);
+  },
+  // 주간 품질 브리핑 — 결정적 집계 + LLM 서술, 주간 키 캐시
+  briefing: (force = false) =>
+    jget<Briefing>(`/api/agent/briefing${force ? "?force=true" : ""}`),
   // 케이스 해결 처리(영속) / 취소 / 목록
   resolveCase: (id: string, note?: string) =>
     jpost<{ resolved: boolean; id: string }>("/api/analytics/resolve", { id, note }),
@@ -257,6 +282,18 @@ export const api = {
     fetch(`/api/analytics/resolve/${encodeURIComponent(id)}`, { method: "DELETE" }).then((r) => r.json()),
   resolvedCases: () =>
     jget<{ resolved: { caseNumber: string; note: string; resolvedAt: string }[] }>("/api/analytics/resolved"),
+  // 케이스 워크플로 상태 (RECEIVED=행없음 | DIAGNOSING | REPAIRING | DONE)
+  setCaseStatus: (id: string, status: CaseWorkStatus, note?: string) =>
+    jpost<{ ok: boolean; id: string; status: string; error?: string }>("/api/analytics/case-status", { id, status, note }),
+  caseStatuses: () =>
+    jget<{ statuses: { caseNumber: string; status: CaseWorkStatus; updatedAt: string }[] }>("/api/analytics/case-status"),
+  // 유사 케이스 — 같은 증상 과거 접수 top-k
+  similarCases: (id: string, k = 5) =>
+    jget<{ similar: SimilarCase[]; error?: string }>(`/api/analytics/similar-cases?id=${encodeURIComponent(id)}&k=${k}`),
+  // 리콜 대상 조회 — "제 차(차종·연식) 리콜 대상인가요?"
+  recallCheck: (model: string, year?: string) =>
+    jget<{ recalls: RecallCheckItem[]; count: number; error?: string }>(
+      `/api/analytics/recall-check?model=${encodeURIComponent(model)}${year ? `&year=${encodeURIComponent(year)}` : ""}`),
   // 단일 리콜 상세 (캠페인번호)
   recall: (id: string) =>
     jget<RecallDetail>(`/api/analytics/recall?id=${encodeURIComponent(id)}`),
@@ -277,6 +314,8 @@ export const api = {
     fetch(`/api/maintenance/${id}`, { method: "DELETE" }).then((r) => r.json()),
 
   // Governance
+  maskPreview: (text: string) =>
+    jpost<{ original: string; masked: string; count: number }>("/api/governance/mask-preview", { text }),
   logs: () => jget<QueryLog[]>("/api/governance/logs"),
   stats: () => jget<Stats>("/api/governance/stats"),
   feedback: (id: number, value: string) =>

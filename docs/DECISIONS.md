@@ -210,6 +210,20 @@ LSH vs brute-force: 코퍼스가 작으면(수백~수천) brute-force가 항상 
 
 ---
 
+## 12. 통합 질의 — 정형으로 좁히고 비정형으로 답한다 (2026-07 구현)
+
+차종·연식을 주면 ① 불만/리콜 **핫스팟을 결정적 SQL로 집계**(`modelYearHotspots` — 무엇을 볼지), ② 상위 부위별로
+**그 차·연식 매뉴얼을 메타필터 RAG 검색**(어떻게 볼지), ③ 둘을 근거로 LLM이 우선순위 점검 추천을 서술한다
+(`integratedAdvice`, `GET /api/agent/integrated`). 숫자는 SQL에서만 오고 서술만 LLM — 환각 차단 구조를 유지한다.
+결과는 `GeneratedReport` ADVICE(key=`model:year`)로 compute-once 캐시(실측: 최초 55.8s → 캐시 0.08s).
+
+한계(정직): KB가 선별 적재라 해당 차·연식 매뉴얼이 없으면 RAG가 다른 차종 매뉴얼로 폴백한다(2020 PALISADE
+검증에서 ioniq5/sonata 근거가 섞임). 처방은 wave 적재 확대 — 검색 코드가 아니라 데이터 커버리지 문제.
+
+> 면접 한 줄: "정형 신호로 *무엇을 볼지*를 좁히고, 비정형 매뉴얼로 *어떻게 볼지*를 답한다."
+
+---
+
 ## 관통 규칙
 
 - 측정 없이 최적화 없다. chunking/rerank/hybrid/embedding은 정답셋으로 비교해 정한다.

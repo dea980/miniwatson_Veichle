@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, type Analytics, type Models } from "@/lib/api";
+import { api, koModel, type Analytics, type Models, type Briefing } from "@/lib/api";
 import Markdown from "@/components/Markdown";
 import Donut from "@/components/Donut";
 import TrendChart from "@/components/TrendChart";
+import Select from "@/components/Select";
 
 const won = (n: number) => Math.round(Number(n) || 0).toLocaleString("ko-KR") + "원";
 const num = (v: unknown) => Number(v) || 0;
@@ -36,7 +37,18 @@ export default function AnalyticsPanel() {
   const [recallTrend, setRecallTrend] = useState<[string, number][]>([]);
   const [complaintTrend, setComplaintTrend] = useState<[string, number][]>([]);
 
-  useEffect(() => { api.models().then((m) => { setModels(m); setModel(m.default); }).catch(() => {}); }, []);
+  // 주간 품질 브리핑 — 캐시 히트면 즉시, 최초 생성만 LLM 수십 초
+  const [brief, setBrief] = useState<Briefing | "loading" | null>(null);
+
+  function loadBriefing(force = false) {
+    setBrief("loading");
+    api.briefing(force).then((b) => setBrief(b.error ? null : b)).catch(() => setBrief(null));
+  }
+
+  useEffect(() => {
+    api.models().then((m) => { setModels(m); setModel(m.default); }).catch(() => {});
+    loadBriefing();
+  }, []);
 
   async function loadTrends(g = by) {
     try {
@@ -69,13 +81,44 @@ export default function AnalyticsPanel() {
   const t = res?.totals;
 
   return (
+    <>
+    {/* 주간 품질 브리핑 — 집계는 결정적 SQL, 서술만 LLM(주간 키 캐시) */}
+    <div className="card">
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <h2 style={{ margin: 0 }}>주간 품질 브리핑</h2>
+        <div className="row" style={{ gap: 8 }}>
+          {brief && brief !== "loading" && brief.generatedAt &&
+            <span className="muted" style={{ fontSize: 12 }}>{brief.cached ? "캐시" : "방금 생성"} | {brief.generatedAt.slice(0, 16).replace("T", " ")}</span>}
+          <button className="ghost" style={{ fontSize: 12 }} onClick={() => loadBriefing(true)} disabled={brief === "loading"}>↻ 재생성</button>
+        </div>
+      </div>
+      {brief === "loading" && <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>브리핑 준비 중(최초 1회 생성 시 수십 초)…</div>}
+      {brief === null && <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>브리핑을 불러오지 못했습니다.</div>}
+      {brief && brief !== "loading" && (
+        <>
+          <div className="hint" style={{ marginTop: 4 }}>데이터 기준 주간: {brief.from} ~ {brief.to} (접수일 최신 7일)</div>
+          <div className="cards" style={{ marginTop: 12 }}>
+            <div className="stat"><div className="v">{num(brief.complaints)}</div><div className="l">신규 불만</div></div>
+            <div className="stat"><div className="v">{num(brief.recalls)}</div><div className="l">신규 리콜</div></div>
+            <div className={`stat ${num(brief.deaths) > 0 ? "danger" : ""}`}><div className="v">{num(brief.deaths)}</div><div className="l">사망</div></div>
+            <div className={`stat ${num(brief.fires) > 0 ? "danger" : num(brief.injuries) > 0 ? "warn" : ""}`}><div className="v">{num(brief.fires)}</div><div className="l">화재</div></div>
+          </div>
+          <div className="row" style={{ gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+            {(brief.topModels || []).map((m, i) => <span key={i} className="badge" style={{ marginLeft: 0 }}>{koModel(String(m[0]))} {num(m[1])}건</span>)}
+            {(brief.topComponents || []).map((c, i) => <span key={i} className="badge" style={{ marginLeft: 0 }}>{String(c[0]).slice(0, 24)} {num(c[1])}건</span>)}
+          </div>
+          {brief.narrative
+            ? <div className="answer" style={{ marginTop: 12 }}><Markdown text={brief.narrative} /></div>
+            : <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>서술 없음 — 위 집계를 참고하세요.</div>}
+        </>
+      )}
+    </div>
+
     <div className="card">
       <div className="row" style={{ justifyContent: "space-between" }}>
         <h2 style={{ margin: 0 }}>플릿 분석 대시보드</h2>
         <div className="row" style={{ gap: 6 }}>
-          <select value={model} onChange={(e) => setModel(e.target.value)}>
-            {(models?.available || []).map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
+          <Select value={model} onChange={setModel} options={models?.available || []} title="인사이트 생성 LLM" />
           <button className="btn" onClick={load} disabled={loading}>{loading ? "분석 중…" : "새로고침"}</button>
         </div>
       </div>
@@ -115,7 +158,7 @@ export default function AnalyticsPanel() {
 
           {/* 추세 분석 — 연/월/일 그래뉼래리티 (분석가용) */}
           <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
-            <div className="label" style={{ margin: 0 }}>추세 분석 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>· 전 차종</span></div>
+            <div className="label" style={{ margin: 0 }}>추세 분석 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>| 전 차종</span></div>
             <div className="row" style={{ gap: 4 }}>
               {(["year", "month", "day"] as const).map((g) => (
                 <button key={g} className={by === g ? "btn" : "ghost"} style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setBy(g)}>
@@ -171,5 +214,6 @@ export default function AnalyticsPanel() {
         </>
       )}
     </div>
+    </>
   );
 }

@@ -74,6 +74,23 @@ public class AgentController {
         catch (Throwable t) { return Map.of("caseNumber", id, "error", t.toString()); }
     }
 
+    /** 통합 질의 — 차종·연식 핫스팟(정형) + 매뉴얼 RAG(비정형) 종합 점검 추천. ADVICE 캐시. */
+    @GetMapping("/integrated")
+    public Map<String, Object> integrated(@RequestParam String model,
+                                          @RequestParam(required = false) Integer year,
+                                          @RequestParam(required = false, name = "llm") String llm,
+                                          @RequestParam(defaultValue = "false") boolean force) {
+        try { return report.integratedAdvice(model, year, llm, force); }
+        catch (Throwable t) { return Map.of("error", t.toString()); }
+    }
+
+    /** 주간 품질 브리핑 — 결정적 집계 + LLM 서술, 주간 키 캐시(compute-once). */
+    @GetMapping("/briefing")
+    public Map<String, Object> briefing(@RequestParam(defaultValue = "false") boolean force) {
+        try { return report.briefing(force); }
+        catch (Throwable t) { return Map.of("error", t.toString()); }
+    }
+
     /** 정비사 메모 저장(문서화·적재). body: {id, note, model?} */
     @PostMapping("/case-report/note")
     public Map<String, Object> saveCaseNote(@RequestBody Map<String, String> body) {

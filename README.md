@@ -4,7 +4,7 @@
 
 > **자동차 도메인 특화 LLM 플랫폼.** 오너스 매뉴얼(취급설명서) RAG, 리콜/불만 text-to-SQL, 온디바이스 LoRA 파인튜닝, Agentic 진단과 부품 견적, 거버넌스까지 한 곳에서 다룬다.
 >
-> 스택: Spring Boot 4, Next.js, Ollama, DuckDB, MLX(LoRA), Qwen2.5 / IBM Granite.
+> 스택: Spring Boot 4, Next.js, **Ollama·vLLM**(chat 기본 `qwen3:8b`), **granite-embedding:278m**(다국어 임베딩), DuckDB, MLX(LoRA·Q4).
 >
 > 현대차 NLP/LLM 직무 JD(도메인 특화 LLM 최적화, 경량화/추론, RAG와 Agent 고도화, 밸류체인 NLP, MLOps)에 매핑한 엔드투엔드 구현이다.
 
@@ -12,9 +12,9 @@
 
 ## 핵심 기능
 
-- **매뉴얼 RAG** — 현대차 오너스 매뉴얼(취급설명서)을 근거로 한국어 답변과 출처를 준다. 다국어 임베딩으로 한국어 질문이 영어 매뉴얼을 교차 검색한다. (공개 코퍼스는 오너스 매뉴얼이며, 공장 정비 매뉴얼은 비공개·유료라 미포함.)
+- **매뉴얼 RAG** — 현대차 오너스 매뉴얼(취급설명서)을 근거로 한국어 답변과 출처를 준다. 다국어 임베딩으로 한국어 질문이 영어 매뉴얼을 교차 검색한다. (공개 코퍼스는 오너스 매뉴얼이며, 공장 정비 매뉴얼은 비공개·유료라 미포함.) **RAGAS 3-judge 삼각검증으로 faithfulness ~0.5를 정량화**했다 — 강한 judge(qwen3:8b·granite4)는 합의, 약한 1.5B judge는 1.0으로 부풀림(= "약한 judge는 못 믿는다"를 데이터로 확인). 개선 대상은 retrieval 품질 ([docs/RAG-EVAL-RAGAS.md](docs/RAG-EVAL-RAGAS.md) §8).
 - **리콜/불만 text-to-SQL** — NHTSA 리콜/불만과 부품 CSV를 자연어로 질의(DuckDB)해 집계하고 차트로 본다. SQL 자기수정이 내장돼 있다.
-- **온디바이스 LoRA 파인튜닝** — Qwen2.5-1.5B를 자동차 도메인으로 학습(MLX, GPU 없는 맥)한 뒤 GGUF Q4로 양자화해 Ollama로 서빙한다.
+- **온디바이스 LoRA 파인튜닝 — 그리고 한계의 측정** — Qwen2.5-1.5B를 자동차 도메인으로 LoRA 학습(MLX, GPU 없는 맥) → GGUF Q4 양자화 → Ollama 등록. **다만 eval에서 1.5B FT는 한국어 다중사실 종합에서 영어 회귀·환각으로 최하점(0.31)** 이 나왔다 — "작다고 파인튜닝이 답은 아니다"를 실측으로 확인하고, **서빙 기본 모델을 강한 오픈 베이스(qwen3:8b, 누수 0·eval 1등)로 교체**했다. FT는 base↔FT 비교와 역할 한정(도메인 말투) 옵션으로 유지. 근거·수치 [docs/RESULTS.md](docs/RESULTS.md) §2.2.
 - **Agentic Search** — 질문을 받아 도구(RAG / 리콜SQL / 복합)를 고르고, 실행한 뒤 한국어로 종합하며 트레이스를 남긴다.
 - **차종 진단 리포트** — 한 차종의 리콜·불만·매뉴얼을 종합(집계는 결정적 SQL, 서술은 LLM)하고, 그 차종의 **개별 케이스(접수 건)를 검색·진단**까지 한 화면에 잇는다.
 - **케이스 트리아지 (중요도·입고순)** — 고객 불만(접수)을 **중요도**(사망×10000+부상×10+화재×5+사고×3, *사망은 절대 최우선*) 또는 **입고(접수)일 순**으로 정렬해 먼저 대응할 건을 위로 올린다. 차종·부위 필터 + 건별 진단.
@@ -22,10 +22,10 @@
 - **정비 스케줄** — 달력으로 정비 일정을 예약·관리(예정/진행/완료). 새 DB 없이 기존 JPA 데이터소스에 테이블만 추가해 영속.
 - **이미지 진단에서 부품까지** — 차량 사진을 Vision과 OCR로 읽어 매뉴얼 기반 진단을 하고 필요 부품과 샘플 견적을 낸다.
 - **대화형 어시스턴트 & 차종 사진** — 멀티턴 RAG 채팅(출처 표시), 위키백과 기반 차종 사진을 홈·리포트에 표시.
-- **응답 캐시·성능** — 같은 질문·SQL·요약은 결과를 영속 캐시(compute-once)해 재요청 시 LLM을 건너뛴다. RAG 답변 캐시로 반복 질의가 p95 **57s → 3.9ms**(k6 실측, [docs/GUIDE-answer-cache.md](docs/GUIDE-answer-cache.md)). 빈 질문 사전차단·비답변 사후가드로 헛출력을 줄인다.
+- **응답 캐시·성능** — 같은 질문·SQL·요약은 결과를 영속 캐시(compute-once)해 재요청 시 LLM을 건너뛴다. **콜드(최초 생성) p95는 57s**(LLM 병목)지만, **캐시 히트 시** DB 조회라 **p95 3.9ms**(k6 실측, [docs/GUIDE-answer-cache.md](docs/GUIDE-answer-cache.md)) — 즉 반복 질의를 없애는 최적화지 생성 자체를 빠르게 하는 건 아니다. 빈 질문 사전차단·비답변 사후가드로 헛출력을 줄인다.
 - **거버넌스** — 모든 LLM 호출을 감사 로그에 남기고 PII를 마스킹하며, 멀티프로바이더로 현대 H-Chat 게이트웨이와 정합한다.
 
-> 데모 화면과 정량 결과는 [docs/RESULTS.md](docs/RESULTS.md), 설계 근거는 [docs/VEHICLE_ARCHITECTURE.md](docs/VEHICLE_ARCHITECTURE.md), A/S 운영 기능(트리아지·체크리스트·스케줄)은 [docs/AS-OPERATIONS.md](docs/AS-OPERATIONS.md), 전체 문서 색인은 [docs/README.md](docs/README.md)를 참고.
+> 데모 화면과 정량 결과는 [docs/RESULTS.md](docs/RESULTS.md), 설계 근거는 [docs/VEHICLE_ARCHITECTURE.md](docs/VEHICLE_ARCHITECTURE.md), A/S 운영 기능(트리아지·체크리스트·스케줄)은 [docs/AS-OPERATIONS.md](docs/AS-OPERATIONS.md), 주 페르소나·성공지표는 [docs/PRD-mechanic-agent.md](docs/PRD-mechanic-agent.md), RAG 정량 평가는 [docs/RAG-EVAL-RAGAS.md](docs/RAG-EVAL-RAGAS.md), 실행·트러블슈팅은 [docs/RUNBOOK.md](docs/RUNBOOK.md), 결정 기록은 [SESSION-DECISIONS-2026-07-07](docs/SESSION-DECISIONS-2026-07-07.md)·[07-01](docs/SESSION-DECISIONS-2026-07-01.md), 전체 색인은 [docs/README.md](docs/README.md)를 참고.
 
 ---
 
@@ -56,7 +56,7 @@
 ```
 miniwatson_Veichle/
 ├── src/, pom.xml, Dockerfile     # 백엔드 — Spring Boot 4 / Java 21 (RAG, Agent, 거버넌스, 서빙)
-├── frontend/                     # 프론트 — Next.js (RAG, Agent, 진단서, SQL, 거버넌스 탭)
+├── frontend/                     # 프론트 — Next.js (탭별 컴포넌트, app/styles/ CSS 7모듈 분리)
 ├── ml/                           # ML 사이드카 — Python (데이터수집, LoRA, 양자화, 벤치)
 │   ├── data/      수집과 데이터셋 스크립트   ├── finetune/  LoRA 학습과 평가
 │   └── optimize/  양자화와 벤치마크          └── RUNBOOK.md 실행 가이드
@@ -90,6 +90,8 @@ miniwatson_Veichle/
 [ ML 사이드카 (ml/) ] Python — 데이터수집 → LoRA(MLX) → GGUF Q4 양자화 → 벤치
                   → 완성 모델을 Ollama/vLLM로 서빙 → 백엔드가 호출
 ```
+
+> **임베딩 제공자는 chat과 독립**(`embedding.provider`, 기본 ollama) — vLLM으로 챗을 돌려도 임베딩은 그대로 Ollama `granite-embedding`(768d)로 유지된다(모델 교체가 재인덱싱을 부르므로 chat 교체와 분리).
 
 자세한 내용은 [docs/VEHICLE_ARCHITECTURE.md](docs/VEHICLE_ARCHITECTURE.md)에 있다.
 
@@ -136,8 +138,9 @@ java --version            # → openjdk 21+
 
 # 2. Ollama + 모델
 brew install ollama
-ollama pull ibm/granite4:latest        # chat (default)
-ollama pull granite-embedding:278m     # 768-dim 다국어 임베딩
+ollama pull qwen3:8b                    # chat (default, eval 1등·누수 0)
+ollama pull granite-embedding:278m     # 768-dim 다국어 임베딩 (RAG 필수)
+ollama pull ibm/granite4:latest        # chat 대안(IBM 내러티브) — 선택
 ollama pull llava                      # vision (이미지 진단)
 
 # 3. OCR (이미지 정확 추출)
@@ -159,6 +162,15 @@ cd miniwatson_Veichle
 # 프론트 (frontend/, 별도 터미널)
 cd frontend && npm install && npm run dev   # → http://localhost:3000
 ```
+
+> 적재 데이터(pgvector) 붙여 띄우려면 `docker compose up -d postgres` 후 `VECTOR_STORE=pgvector ./mvnw spring-boot:run -Dspring-boot.run.jvmArguments="-Xmx4g"`. 기동·에러 해결(Temurin·pgvector·8080 포트 등)은 [docs/RUNBOOK.md](docs/RUNBOOK.md) "빠른 실행 + 트러블슈팅 표" 참고.
+
+**vLLM으로 서빙**(고부하 대응, 임베딩은 Ollama 유지):
+```bash
+vllm serve Qwen/Qwen2.5-7B-Instruct --max-model-len 8192   # 별도 터미널, :8000
+LLM_PROVIDER=vllm VLLM_URL=http://localhost:8000 ./mvnw spring-boot:run
+```
+성능 비교(고부하 vLLM 처리량 ~2.5×, prefix TTFT ~20%↓)는 [docs/SERVING.md](docs/SERVING.md) §5.
 
 ### 자동차 데모 흐름
 
@@ -223,13 +235,19 @@ curl -X POST http://localhost:8080/api/tabular/ask \
 - [x] **V15 문서 전용 어시스턴트** — 지식베이스 PDF 클릭 → 원본(새 탭) + 그 문서 청크만 검색하는 title-스코프 RAG
 - [x] **V16 UI 고도화** — 홈 대시보드(멀티턴 채팅·차종 사진), 케이스/정비 탭, 다크모드·가독성, 오너스 매뉴얼 13차종 코퍼스
 - [x] **V17 성능·CI/CD** — 응답/SQL/요약 캐시(compute-once, 반복 질의 p95 57s→3.9ms) + GitHub Actions(백엔드 테스트·프론트 빌드) → GHCR 멀티아치 이미지
-- [ ] **V18 서빙 트랙** — vLLM-Metal 로컬 서빙 + `llm.provider=vllm`, prefix-cache/배칭 벤치 ([docs/SERVING.md](docs/SERVING.md) 로드맵 P1~P4)
-- [ ] **V19 문서 파싱 고도화** — 표 구조추출(스캐폴드 `PdfTableExtractor`), 다이어그램 비전 경로 ([docs/INGESTION-FORMATS.md](docs/INGESTION-FORMATS.md) §5)
+- [x] **V18 서빙 트랙** — `llm.provider=vllm`(OpenAI 호환 `VllmLlmClient`) 배선 + vLLM-Metal 실증(P1·P2) + **prefix-cache/배칭 벤치 실측(P3)**: 고부하서 vLLM 처리량 c=1→8 ↑2.5× vs Ollama ↓, prefix TTFT ~20%↓ ([docs/SERVING.md](docs/SERVING.md)). 대규모(sglang/TRT)는 설계(P4)
+- [x] **V19 문서 파싱 (표 구조추출)** — `PdfTableExtractor` **구현·배선 완료**(정규식으로 `<table>`→마크다운, 의존성 0, IngestionService의 TIKA 경로에 연결). 다이어그램 비전 경로는 설계(스케일 칸) ([docs/INGESTION-FORMATS.md](docs/INGESTION-FORMATS.md) §5)
 - [ ] **V20 커넥티드카 개인화 (로드맵, JD #2)** — 차량별 정비이력 + **텔레매틱스/ECU**(속도·급가속·급제동·주행거리)로 운전 스타일 추론 → 예측 정비·개인화 견적. 데이터 요건: 텔레매틱스/ECU(딜러 독점) — 정비 기록만으론 운전 스타일 직접 추론 불가([docs/AS-OPERATIONS.md](docs/AS-OPERATIONS.md))
-- [ ] **V21 분산 학습 (Kaggle 2× T4)** — DDP(복제·처리량)/FSDP(샤딩·메모리)를 `accelerate`로 구성·실행. 스캐폴드: `ml/finetune/train_distributed.py` + `accel_ddp.yaml`/`accel_fsdp.yaml`. JD 우대(분산 학습) — "분산은 모델 코드가 아니라 런처/설정"이 요지 ([ml/finetune/DISTRIBUTED.md](ml/finetune/DISTRIBUTED.md))
+- [ ] **V21 분산 학습 (Kaggle 2× T4) — 옵션** — DDP(복제·처리량)/FSDP(샤딩·메모리)를 `accelerate`로 구성·실행. 스캐폴드: `ml/finetune/train_distributed.py` + `accel_ddp.yaml`/`accel_fsdp.yaml`. 2×GPU 하드웨어 필요라 **옵션으로 내림** — 지금은 "분산은 모델 코드가 아니라 런처/설정"을 설계로 방어 ([ml/finetune/DISTRIBUTED.md](ml/finetune/DISTRIBUTED.md))
 - [ ] **V22 (옵션)** — 임베딩 파인튜닝, 로컬 TTS·웨이크워드, 라이브 배포, GraphRAG 통합
+- [x] **V23 콕핏 디자인 시스템** — 다크 콕핏 기본 테마, 계기판 타이포(Rajdhani 디스플레이 폰트·44px KPI), 카운트업·스태거 모션, 히어로 계기 눈금 — 실렌더링 전/후 스크린샷 검증
+- [x] **V24 실사용 A/S 제품 트랙 (P1~P6 완료)** — 케이스 상태 워크플로 영속(접수→진단중→수리중→완료, localStorage→JPA), 진단→예약→완료 루프, 유사 케이스 검색(토큰 코사인 top-5), 차종·연식 리콜 대상 조회, 진단 리포트 인쇄/PDF, PII 마스킹 before/after, **주간 품질 브리핑**(결정적 집계+LLM 서술, 캐시 17s→0.16s). 프로세스 상세 [docs/AS-OPERATIONS.md](docs/AS-OPERATIONS.md) §9, 백로그 [docs/FEATURE-BACKLOG.md](docs/FEATURE-BACKLOG.md)
 
 > GraphRAG는 지금 설계서만 있고 구현은 안 됐다. 실제 RAG는 벡터+BM25 하이브리드로 동작한다. 고도화 방향은 [docs/GRAPHRAG_VEHICLE.md](docs/GRAPHRAG_VEHICLE.md)에 정리했다.
+
+> **우선순위 통합 백로그**(기술 트랙 + 제품 트랙, 상태·노력·근거 포함)는 [docs/FEATURE-BACKLOG.md](docs/FEATURE-BACKLOG.md)가 단일 소스다.
+
+> **다음 우선순위**: ① **라이브 배포**(Oracle Always Free ARM + Ollama, provider 스왑 — JD 우대의 구체 성과, [docs/RUNBOOK.md](docs/RUNBOOK.md)·[docs/CLOUD-DEPLOYMENT.md](docs/CLOUD-DEPLOYMENT.md)) → ② **V20 커넥티드카**(텔레매틱스 실데이터가 딜러 독점이라 **합성 데이터 PoC + 설계**로) → V21(분산 학습)·GraphRAG는 하드웨어·범위상 **옵션**.
 
 ---
 

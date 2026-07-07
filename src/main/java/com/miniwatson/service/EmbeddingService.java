@@ -9,7 +9,9 @@ import java.util.List;
 import com.miniwatson.service.llm.EmbeddingClient;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 @Service
-@ConditionalOnProperty(name = "llm.provider", havingValue = "ollama", matchIfMissing = true)
+// 임베딩 제공자는 chat 제공자(llm.provider)와 독립이다. vLLM으로 챗을 돌려도 임베딩은 Ollama(granite-embedding)로.
+// 기본(embedding.provider 미설정) = ollama → llm.provider=vllm 이어도 임베딩 빈이 유지된다.
+@ConditionalOnProperty(name = "embedding.provider", havingValue = "ollama", matchIfMissing = true)
 public class EmbeddingService implements EmbeddingClient {
 //    private final String OllAMA_EMBED_URL = "http://localhost:11434/api/embed";
     @Value("${ollama.url}")

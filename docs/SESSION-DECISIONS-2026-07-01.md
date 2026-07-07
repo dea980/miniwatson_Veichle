@@ -87,7 +87,32 @@
 
 ---
 
+## 9. V18 서빙 트랙 — `llm.provider=vllm` 배선
+
+**요구**: 서빙 로드맵 P2 — 앱을 Ollama 외에 **vLLM**(OpenAI 호환)으로도 서빙 가능하게.
+
+**사전 검증**: SERVING.md가 근거로 든 **vLLM-Metal**이 내 지식 컷오프(2025-05) 이후 프로젝트라 실재를 웹으로 확인 — vLLM 공식 org 산하 플러그인, MLX 백엔드, v0.2.0(2026-04)에서 Metal 커널로 TTFT 83×·처리량 3.6×, OpenAI 호환 API·PagedAttention 지원. **주장 사실 확인됨** → 맥에서 실증 가능.
+
+**결정**:
+- `VllmLlmClient.java` 신규 — OpenAI 호환 `POST /v1/chat/completions` 호출. `@ConditionalOnProperty(llm.provider=vllm)`로 활성. 기존 `RawLlmProvider` 인터페이스를 그대로 구현해 거버넌스 래퍼(`OllamaService`)가 감싸므로 **호출처 코드 변경 0**. Ollama 제공자와 **동일한 한국어 가드 system**(외국문자 0)·타임아웃(5s/120s)·모델 화이트리스트·비전(`image_url` data URI).
+- `application.yaml` — `vllm.url/api-key/chat-model/chat-models/num-predict` 추가, `llm.provider` 주석에 `vllm` 포함.
+- `SERVING.md` P2 완료 표시 + 실행법, README V18 갱신.
+- **실증 중 발견·수정**: `llm.provider=vllm`으로 기동 시 앱이 *EmbeddingClient 빈 없음*으로 실패. 임베딩 클라이언트(`EmbeddingService`·`WatsonxEmbeddingClient`)가 chat 제공자(`llm.provider`)에 묶여 있던 게 원인 → **임베딩을 `embedding.provider`(기본 ollama)로 분리**. 이제 vLLM으로 챗해도 임베딩은 Ollama(granite-embedding)로 유지. 임베딩은 chat과 독립이 맞다(재인덱싱 차원 고정 등). *운영 주의*: vLLM 챗 중에도 임베딩용 **Ollama는 떠 있어야** 한다(RAG 인제스트·검색 시).
+
+**실행**(맥): `curl -fsSL .../vllm-metal/main/install.sh | bash` → `source ~/.venv-vllm-metal/bin/activate` → `vllm serve <model>`(:8000) → 앱은 `LLM_PROVIDER=vllm VLLM_URL=http://localhost:8000 ./mvnw spring-boot:run`.
+
+**근거/트레이드오프(정직)**: OpenAI 호환을 택해 vLLM-Metal(맥)·vLLM CUDA(클라우드)·기타 호환 서버를 **URL만 바꿔 스왑** 가능 — LLM-ABSTRACTION 패턴의 실증. 한계: (1) 샌드박스에 javac가 없어 **구조 검증만**(YAML 유효·괄호 균형·기존 OllamaLlmClient 패턴 동일), 실제 컴파일·기동은 맥에서. (2) vLLM-Metal 멀티모달은 paged 백엔드에서 vision-only로 제한적 — 비전은 모델별 지원 확인 필요. (3) 실제 설치·prefix-cache/배칭 **벤치(P3)**는 맥 실측이라 로드맵으로 남김.
+
+---
+
+## 10. 마무리 폴싱 (문서 정확성·코드 청결)
+
+- **V19 문서 파싱 = 이미 완료 확인**: `PdfTableExtractor`가 실제 구현(정규식으로 `<table>`→마크다운, 의존성 0)돼 있고 `IngestionService`의 TIKA 경로(`toTextWithTables(toXhtml(in))`)에 **배선까지 됨**. 낡은 "TODO 네가 구현" 주석만 정리. 다이어그램 비전은 §5.3 결정대로 스케일 칸(로컬 llava on-demand / 클라우드 VLM / ColQwen).
+- **파괴적 엔드포인트 보안 posture 정정**: 앞서 "무인증 개방"으로 적었으나 실제로는 `/api/**`가 **fail-closed API 키 필터**(`ApiKeyAuthFilter`, 키 없으면 401)로 보호되고 **prod 프로파일은 `security.enabled=true` 기본**. 진짜 리스크는 *dev 프로파일(보안 off)을 외부 노출*하는 것 → 노출 시 `SECURITY_ENABLED=true`+API 키 필수. PRD §7·[SECURITY.md](SECURITY.md) 반영. (즉 이 P0는 "코드로 새로 막기"가 아니라 "정확히 문서화 + 노출 시 켜기"로 닫힘.)
+
+---
+
 ## 배포/적용 메모
 - 프론트 변경(차종명·중요도%·추세차트·안전배지·CJK표시가드)은 **새로고침**이면 반영.
-- 백엔드 변경(`OllamaLlmClient` 프롬프트, `ReportService` 요약, `RagCacheService` 폴백)은 **재빌드 필요** — 샌드박스에선 Java 컴파일 불가라 코드만 수정.
-- 검증 통과: 프론트 `tsc --noEmit` 0, `check_cjk.py` self-test 0(버그 샘플 정확 검출), 골든셋 파싱 OK, `ci.yml` YAML 유효.
+- 백엔드 변경(`OllamaLlmClient` 프롬프트, `ReportService` 요약, `RagCacheService` 폴백, **신규 `VllmLlmClient`**)은 **재빌드 필요** — 샌드박스에선 Java 컴파일 불가라 코드만 수정.
+- 검증 통과: 프론트 `tsc --noEmit` 0, `check_cjk.py` self-test 0(버그 샘플 정확 검출), 골든셋 파싱 OK, `ci.yml`·`application.yaml` YAML 유효, `VllmLlmClient` 괄호 균형·제네릭(`Map.<String,Object>of`) 정리.

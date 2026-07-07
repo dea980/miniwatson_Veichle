@@ -1,0 +1,54 @@
+/* 파일 입력 — 브라우저 기본 'Choose File' 대신 버튼 부분을 우리 스타일로(::file-selector-button) */
+input[type="file"] { font-size: 13px; color: var(--muted); max-width: 100%; }
+input[type="file"]::file-selector-button {
+  font: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 14px; margin-right: 12px;
+  background: var(--surface-2); color: var(--accent-2);
+  border: 1px solid var(--border-strong); border-radius: 3px; cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+input[type="file"]::file-selector-button:hover { background: var(--surface); color: var(--accent); border-color: var(--accent-2); }
+
+/* 모델 셀렉터 — 의도된 라벨 컨트롤(맨 select 드롭다운처럼 안 보이게) */
+.field-model { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; }
+.field-model > span { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+.field-model select { min-width: 150px; font-size: 13px; }
+
+/* 커스텀 셀렉트 (Select.tsx) — 네이티브 옵션 팝업이 OS라 스타일 불가 → 직접 구현 */
+.sel { position: relative; display: inline-block; }
+.sel.grow { display: block; }
+.field-model .sel { min-width: 150px; }
+.sel-btn { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 3px;
+  padding: 8px 10px; font-size: 13px; font-family: inherit; cursor: pointer; text-align: left; }
+.sel-btn:hover { border-color: var(--accent-2); }
+.sel-btn:focus-visible { outline: none; border-color: var(--accent-2); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-2) 18%, transparent); }
+.sel-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sel-caret { width: 12px; height: 12px; color: var(--muted); flex-shrink: 0; }
+.sel-menu { position: absolute; z-index: 100; top: calc(100% + 4px); left: 0; min-width: 100%; max-height: 300px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border-strong, var(--border)); border-radius: 4px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.30); padding: 4px; }
+.sel-opt { padding: 7px 10px; font-size: 13px; border-radius: 3px; cursor: pointer; white-space: nowrap; color: var(--text); }
+.sel-opt.hi { background: var(--surface-2); }
+.sel-opt.on { color: var(--accent-2); font-weight: 600; }
+.grow { flex: 1; min-width: 180px; }
+
+button.btn { padding: 10px 18px; background: var(--accent); color: #fff; border: none; cursor: pointer; font-size: 13px; border-radius: 3px; font-weight: 600; letter-spacing: .01em; }
+button.btn:hover { background: #013a78; }
+[data-theme="dark"] button.btn { background: var(--accent-2); }
+[data-theme="dark"] button.btn:hover { background: var(--accent-2-hover); }
+button.btn:disabled { opacity: .5; cursor: not-allowed; }
+button.ghost { background: var(--surface); color: var(--accent-2); border: 1px solid var(--border-strong); padding: 7px 12px; cursor: pointer; border-radius: 3px; }
+button.ghost:hover { background: var(--surface-2); }
+button.ghost.iconbtn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 12px; min-width: 42px; }
+button.ghost.iconbtn svg, button.ghost.spk svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+button.ghost.spk { display: inline-flex; align-items: center; gap: 6px; }
+.spk-stop { width: 11px; height: 11px; background: currentColor; border-radius: 2px; display: inline-block; }
+button.ghost.listening { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); border-color: var(--danger); animation: pulse 1.2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+
+.answer { background: var(--surface-2); border-left: 3px solid var(--accent); padding: 15px 17px; margin-top: 12px; border-radius: 0 3px 3px 0; }
+.muted { color: var(--muted); }
+.label { color: var(--muted); font-family: var(--display); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; margin: 18px 0 8px; font-weight: 600; }
+
+.source { border: 1px solid var(--border); padding: 11px 13px; margin-bottom: 7px; background: var(--surface-2); border-radius: 3px; border-left: 3px solid var(--border-strong); }

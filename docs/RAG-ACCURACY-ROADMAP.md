@@ -14,6 +14,27 @@
 
 처방의 방향성: 검색 정확도는 단일 기법으로 해결되지 않는다. **메타 필터(coarse) → 의미+키워드(medium) → 리랭커(fine)**로 점진적으로 좁히는 것이 표준 패턴.
 
+## 진단 — 리랭커가 맞는 레버인가? (2026-07-07)
+
+리랭커에 투자하기 전에 실패 케이스가 **정밀도 문제**(정답 문서가 후보 풀엔 있는데 순위가 밀림 → 리랭커가 교정)
+인지 **회수 문제**(후보 풀에 아예 없음 → 리랭커 무의미, 메타필터/하이브리드가 먼저)인지부터 판정했다.
+
+**계측**: `GET /api/rag/diag/candidates?question=&fetchN=20` — 리랭크 전 1차 검색(벡터+BM25) 후보 풀을 순위째 노출.
+KB는 141 매뉴얼(2026-07-07 기준). judge/골든셋은 [`golden_vehicle.json`](../eval/golden_vehicle.json) 10문항.
+
+| 실패 문항 | 정답 문서 | 후보 풀(top-20) 순위 | TOP_K=2 통과? | 판정 |
+|---|---|---|---|---|
+| 코나EV 충전 | `kona_electric_SX2EV` | **rank 13·15** (top2 = ioniq5 + 가솔린 kona) | ✗ 잘림 | **정밀도** |
+| 하이브리드 회생제동 | `*_hybrid_*` | rank 2~ (top1 = sonata_phev) | △ 1개만 | 정밀도(경미) |
+
+**결론: 정밀도 문제 확정.** 정답 문서가 후보 20 안에 들어오는데 `TOP_K=2` 컷과 1차 랭킹의 근접 중복(ioniq5·가솔린 kona가
+kona_electric보다 위)이 정답을 밀어낸다. → **크로스인코더 리랭커가 정확한 처방**(20개 재정렬로 정답을 top2로).
+부수 발견: `TOP_K=2`가 지나치게 타이트 — 리랭커가 있어도 슬롯이 2개뿐이라 3~4로 넓히는 것도 같이 검토.
+
+**구현 상태**: `CrossEncoderReranker`(`@Component("cross")`, `BAAI/bge-reranker-base`, DJL PyTorch)가 이미 있으나
+**M2 맥에서 네이티브 폴백**(재정렬 없이 top-K 반환)이라 실측 불가. 처방 순서: ① Python 사이드카(sentence-transformers,
+`ml/serve/` 패턴 재사용)로 맥에서 뜨게 → ② `mmr` vs `cross`를 qwen3 judge·10문항으로 A/B, ctx-precision delta로 판정.
+
 ## 현 상황 (2026-06-24 기준)
 
 | 단계 | 무엇 | 상태 | 문서 |
@@ -21,7 +42,7 @@
 | 0 — 측정 레이어 | RAGAS-lite 4메트릭(Ollama judge) | ✅ 하네스 완료 | [`RAG-EVAL-RAGAS.md`](RAG-EVAL-RAGAS.md) |
 | 1 — 메타 1차 필터 | 차종·연식·언어·구동계 컬럼 + 파일명 표준화 + 필터 API | ✅ 코드 통합 (앱 재기동 필요) | [`RAG-MANUAL-METADATA.md`](RAG-MANUAL-METADATA.md) |
 | 2 — 하이브리드 검색 보강 | BM25 한글 토크나이저 fix(어절 + 2-gram) | ✅ 코드 통합 (앱 재기동 필요) | [`RAG-HYBRID-RETRIEVAL.md`](RAG-HYBRID-RETRIEVAL.md) |
-| 3 — 크로스인코더 리랭커 | bge-reranker-base 등 (top-K 정렬 정확도) | ⚪ 예정 — 2단계 측정 후 판단 | — |
+| 3 — 크로스인코더 리랭커 | bge-reranker-base (top-K 정렬 정확도) | 🔄 진단 완료(정밀도 확정) + 사이드카 배선 완료, 실측 대기 | [`GUIDE-reranker-eval.md`](GUIDE-reranker-eval.md) |
 | (별도) 섹션 메타 | 매뉴얼 헤딩/TOC 파싱 → 안전/정비/제원 청크 라벨 | ⚪ 예정 | — |
 
 현재 KB 적재 상태(`GET /api/data/documents?namespace=vehicle`): **2 매뉴얼 / 378 청크**(`hyundai_2025_ioniq5_NE1_owners_KR.pdf #366`, `hyundai_2025_ioniq5_n_NE1N_owners_KR.pdf #12`). 두 매뉴얼 모두 이미 신규 파일명 규칙(`hyundai_<year>_<model>[_pt]_<code>_owners_<region>.pdf`)으로 적재됨. 나머지 매뉴얼은 신규 코드(파일명 표준화·메타 파서·백필 잡)가 살아 있는 상태로 재인제스트하면 메타가 자동 채워진다.

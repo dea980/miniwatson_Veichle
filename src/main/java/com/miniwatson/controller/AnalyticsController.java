@@ -124,4 +124,43 @@ public class AnalyticsController {
         try { return Map.of("resolved", analytics.resolvedCases()); }
         catch (Throwable t) { return Map.of("resolved", java.util.List.of(), "error", t.toString()); }
     }
+
+    /** 케이스 워크플로 상태 설정. body: {id, status: RECEIVED|DIAGNOSING|REPAIRING|DONE, note?}. */
+    @PostMapping("/case-status")
+    public Map<String, Object> setCaseStatus(@RequestBody Map<String, String> body) {
+        try {
+            analytics.setCaseStatus(body.get("id"), body.get("status"), body.get("note"));
+            return Map.of("ok", true, "id", body.getOrDefault("id", ""), "status", body.getOrDefault("status", ""));
+        } catch (Throwable t) { return Map.of("ok", false, "error", t.toString()); }
+    }
+
+    /** 전체 케이스 상태 맵 (행 없음 = RECEIVED). */
+    @GetMapping("/case-status")
+    public Map<String, Object> caseStatuses() {
+        try { return Map.of("statuses", analytics.caseStatuses()); }
+        catch (Throwable t) { return Map.of("statuses", java.util.List.of(), "error", t.toString()); }
+    }
+
+    /** 차종·연식 핫스팟 — 부위별 불만/리콜 top + 화재/부상/사망 합 (통합 질의 정형 신호). */
+    @GetMapping("/hotspots")
+    public Map<String, Object> hotspots(@RequestParam String model, @RequestParam(required = false) Integer year) {
+        try { return analytics.modelYearHotspots(model, year); }
+        catch (Throwable t) { return Map.of("error", t.toString()); }
+    }
+
+    /** 리콜 대상 조회 — 차종(+연식)으로 해당 리콜 목록. 고객 응대 "제 차 리콜 대상인가요?" */
+    @GetMapping("/recall-check")
+    public Map<String, Object> recallCheck(@RequestParam String model, @RequestParam(required = false) Integer year) {
+        try {
+            var list = analytics.recallCheck(model, year);
+            return Map.of("recalls", list, "count", list.size());
+        } catch (Throwable t) { return Map.of("recalls", java.util.List.of(), "count", 0, "error", t.toString()); }
+    }
+
+    /** 유사 케이스 — 같은 증상 과거 접수 top-k (요약 토큰 유사도). */
+    @GetMapping("/similar-cases")
+    public Map<String, Object> similarCases(@RequestParam String id, @RequestParam(defaultValue = "5") int k) {
+        try { return Map.of("similar", analytics.similarCases(id, k)); }
+        catch (Throwable t) { return Map.of("similar", java.util.List.of(), "error", t.toString()); }
+    }
 }

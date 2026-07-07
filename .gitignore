@@ -131,3 +131,12 @@ CLAUDE.md.fablize-bak.*
 # omc
 .omc
 CLAUDE.mdㅂ
+# 로컬 전용 — 깃허브에 안 올림
+docs/superpowers/
+.playwright-mcp/
+out.csv
+before-home-light.jpeg
+hs_err_pid*.log
+replay_pid*.log
+Snap.*.trc
+outputs/

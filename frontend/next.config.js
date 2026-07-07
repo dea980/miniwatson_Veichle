@@ -4,6 +4,8 @@ const BACKEND = process.env.BACKEND_URL || "http://localhost:8080";
 
 const nextConfig = {
   reactStrictMode: true,
+  // 컨테이너 배포용 최소 런타임 번들(.next/standalone) 생성.
+  output: "standalone",
   // /api/* 요청을 백엔드로 프록시 → 브라우저는 동일 출처라 CORS 불필요.
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${BACKEND}/api/:path*` }];

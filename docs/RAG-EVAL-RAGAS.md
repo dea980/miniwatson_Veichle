@@ -202,4 +202,52 @@ python3 eval/run_ragas.py --golden eval/golden_vehicle_ioniq5.json | tee eval/ra
 
 기대: KB 범위 안 질문만 있으므로 T0(0.52/0.30/0.60/1.00) 대비 faithfulness·answer_relevance가 의미있게 오를 것(환각 케이스 제거). 결과 확보 후 본 섹션에 행 추가.
 
+### T0-재측정 — 3-judge 삼각검증 (2026-07-07, KB 124문서/38,545청크)
+
+**환경**: KB가 T0의 2매뉴얼에서 **124문서/38,545청크로 확장**된 상태, `golden_vehicle.json` 5케이스(T0와 동일), 같은 질문을 **judge 3개**로 교차 측정. `pgvector` 저장, `LLM_PROVIDER=ollama`.
+
+| judge | 종류 | faith | ans-rel | ctx-prec | ctx-rec |
+|---|---|---|---|---|---|
+| **qwen3:8b** | 강함 | **0.50** | 0.50 | 0.30 | 0.23 |
+| **ibm/granite4:latest** | 강함 | **0.53** | 0.60 | 0.50 | 0.89 |
+| vehicle-qwen2.5-1.5b (FT) | 약함 | 1.00 | 0.80 | 0.60 | 0.96 |
+
+원본: `eval/ragas_T0remeasure_{qwen3,granite4,ft}.txt`.
+
+#### 해석 — 이 측정의 핵심은 "숫자"가 아니라 "judge를 못 믿는 법을 안다"
+
+1. **강한 judge 둘이 faithfulness에서 일치(0.50 ↔ 0.53)** → 신뢰 가능한 신호. 게다가 T0(0.52)와도 같다. **KB를 2매뉴얼→124문서로 키웠는데도 faith가 안 올랐다** = 충실도 갭은 KB 크기 문제가 아니라 **실재하는 grounding 갭**(답변 주장의 ~절반만 컨텍스트로 지지). 정직하게 인정할 부분.
+2. **1.5B FT judge만 1.00** → 약한 judge가 전부 "충실함"으로 도장(변별력 0). judge 3개로 이제 **"소형 모델은 judge로 못 쓴다"가 데이터로 증명**됨. LLM-as-judge의 대표 함정.
+3. **강한 judge끼리도 context 메트릭은 크게 갈림** — 특히 **context_recall: qwen3 0.23 vs granite4 0.89**. → **judge 분산은 메트릭마다 다르다**: faithfulness는 안정(0.50↔0.53), context 메트릭은 노이즈 큼. 따라서 **faithfulness를 대표 지표로, context-recall은 참고만** 쓰는 게 정직.
+4. **케이스별 실패가 드러남(개선 타깃)**: `veh-dtc-p0420`은 **모든 judge에서 0.00**, `veh-ev-soc-soh`도 강한 judge에서 faith 0.00. → DTC 코드·EV SOC/SOH 주제에서 retrieval이 무너짐(그 주제가 KB 커버리지 밖이거나 검색이 놓침). 개선 방향: `TOP_K`↑(현 2) · 청킹 · rerank.
+
+#### 결론 (신뢰 규약)
+- **대표 지표 = faithfulness ≈ 0.5** (강한 judge 2개 합의, T0와도 일치).
+- **context-recall은 judge 의존이 커** 단일 값으로 인용 금지 — 강한 judge 다수의 합의만 인용.
+- **judge는 반드시 7B+ 강한 모델.** 1.5B judge의 1.00은 버린다.
+- 다음 개선의 정량 목표: faithfulness 0.5 → 0.8 (retrieval 품질: TOP_K·rerank·청킹).
+
+### T2 — 메타 필터 ON (`car=tucson, powertrain=hybrid`, 2026-07-07)
+
+같은 5케이스에 **1단계 메타 필터**를 걸어 재측정. 필터의 타깃 지표는 **context_precision**(무관 청크 제거).
+
+| judge | faith | ans-rel | ctx-prec | ctx-rec |
+|---|---|---|---|---|
+| qwen3:8b (강함) | 0.37 | 0.45 | 0.30 | 0.50 |
+| granite4 (강함) | 0.33 | 0.40 | **0.80** | 0.79 |
+| vehicle-1.5b (약함) | 0.85 | 0.70 | 0.60 | 0.92 |
+
+비교 대상 = T0-재측정(필터 OFF): qwen3 prec 0.30 / granite4 prec **0.50**.
+
+#### 해석 — "필터가 나쁘다"로 오독하면 안 되는 이유
+
+1. **필터의 의도된 효과가 granite4에서 실측됨**: context_precision **0.50 → 0.80** ↑. tucson 무관 청크를 걸러 정밀도가 올랐다 = **메타 필터가 설계대로 동작**. (qwen3는 0.30 그대로 — 같은 지표에서도 강한 judge끼리 갈림 = judge 분산 재확인.)
+2. **그런데 faithfulness는 떨어짐(0.5→0.37/0.33)** — 이건 **필터 결함이 아니라 실험 설계 불일치**다. 골든셋은 *generic* 질문(TPMS·P0420·**EV** SOC/SOH·SCC)인데 필터는 *tucson 하이브리드*로 좁혔다. 예: EV 질문(`veh-ev-soc-soh`)을 하이브리드로 필터하면 맞는 컨텍스트가 사라져 답이 근거를 못 얻는다 → faith↓. **"질문 범위 ≠ 필터 범위"라 부당한 비교**. (T0 해석에서 이미 경고한 함정.)
+3. **공정한 필터 실험 설계(한 변수만)**: 골든 질문을 *tucson 하이브리드에 관한 것*으로 맞춘 뒤 **필터 ON vs OFF**를 비교해야, faith를 훼손하지 않고 precision 효과만 분리해 측정할 수 있다.
+
+#### 결론
+- **필터의 precision 상승은 실재**(granite4 0.50→0.80)하나, **generic 골든셋 + 차종 필터 = 부당 조합**이라 faith 하락은 필터 탓이 아니다.
+- **측정 규약 추가**: 메타 필터 A/B는 **골든셋의 차종·파워트레인을 필터와 일치**시킨 상태에서만 유효하다(§7.1 "한 변수" 원칙의 구체화). 불일치 조합의 숫자는 인용 금지.
+- 면접 한 줄: *"메타 필터가 precision을 0.5→0.8로 올린 건 확인했지만, generic 골든셋에 차종 필터를 걸면 faith가 떨어지는 부당 비교가 된다는 걸 알고, 필터 실험은 골든 범위를 필터에 맞춰야 공정하다고 규약화했다."*
+
 

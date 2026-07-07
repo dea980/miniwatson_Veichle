@@ -1,0 +1,15 @@
+/* 인쇄(PDF) — 진단 리포트를 고객에게 건네는 산출물로. 다크 테마여도 항상 라이트로 뽑는다. */
+@media print {
+  :root, [data-theme="dark"], [data-theme="light"] {
+    --bg: #fff; --surface: #fff; --surface-2: #f4f6f8; --border: #c9d1da; --border-strong: #aab4c0;
+    --text: #111; --muted: #555; --accent: #002c5f; --accent-2: #0a4f9c;
+  }
+  .sidebar, .topbar, .hero, .footer, .no-print { display: none !important; }
+  .shell, [data-theme="dark"] .shell { background: #fff !important; color: #111 !important; background-image: none !important; }
+  .main { padding: 0 !important; }
+  .panels { padding: 0 !important; max-width: 100% !important; }
+  .panels > *, .panels .card { animation: none !important; }
+  .card { border: none !important; padding: 0 !important; }
+  .car-hero::after { display: none !important; }
+  a { color: inherit; text-decoration: none; }
+}

@@ -22,12 +22,24 @@ public class GovernanceController {
 
     private final ModelRegistry modelRegistry;
 
+    private final com.miniwatson.governance.PiiRedactionService pii;
+
     public GovernanceController(QueryLogRepository queryLogRepository,
                                 DocumentCatalogRepository catalogRepo,
-                                ModelRegistry modelRegistry){
+                                ModelRegistry modelRegistry,
+                                com.miniwatson.governance.PiiRedactionService pii){
         this.queryLogRepository = queryLogRepository;
         this.catalogRepo = catalogRepo;
         this.modelRegistry = modelRegistry;
+        this.pii = pii;
+    }
+
+    /** PII 마스킹 미리보기 — before/after 데모. 원문은 저장하지 않는다(마스킹이 저장 전 단계라는 설계 그대로). */
+    @PostMapping("/mask-preview")
+    public Map<String, Object> maskPreview(@RequestBody Map<String, String> body) {
+        String text = body.getOrDefault("text", "");
+        var r = pii.redact(text);
+        return Map.of("original", text, "masked", r.text() == null ? "" : r.text(), "count", r.count());
     }
 
     // 현재 모델/설정 지문 — 지금 이 서비스가 어떤 구성으로 답하는지.

@@ -33,6 +33,17 @@ public class RagController {
      */
     @PostMapping("/ask")
     public RagService.RagResult ask(@RequestBody AskRequest request) throws IOException {
+        // EVAL 경로: rerank/hybrid 오버라이드가 오면 캐시 우회하고 원본 RAG를 직접 호출한다.
+        //   캐시 키엔 rerank 전략이 없어(답 캐시는 최종 답만 저장) 캐시를 타면 A/B가 무의미하기 때문.
+        //   운영/일반 질의(오버라이드 없음)는 그대로 캐시 경유(compute-once).
+        boolean evalOverride = (request.getRerank() != null && !request.getRerank().isBlank())
+                            || request.getHybrid() != null;
+        if (evalOverride) {
+            return ragService.ask(
+                    request.getQuestion(), request.getNamespace(), request.getModel(),
+                    request.getRerank(), request.getHybrid(), request.getTitle(),
+                    request.getCar(), request.getYear(), request.getLang(), request.getPowertrain());
+        }
         return ragCache.askCached(
                             request.getQuestion(),
                             request.getNamespace(),
@@ -43,6 +54,18 @@ public class RagController {
                             request.getLang(),
                             request.getPowertrain(),
                             false);
+    }
+
+    /**
+     * 진단: 리랭크 전 1차 검색 후보 풀(top-N)을 노출 — 리랭커 투자 판단용.
+     * 정답 문서가 풀에 있으면 정밀도 문제(리랭커 유효), 없으면 회수 문제(메타필터가 먼저).
+     */
+    @GetMapping("/diag/candidates")
+    public Map<String, Object> diagCandidates(@org.springframework.web.bind.annotation.RequestParam String question,
+                                              @org.springframework.web.bind.annotation.RequestParam(defaultValue = "vehicle") String namespace,
+                                              @org.springframework.web.bind.annotation.RequestParam(defaultValue = "20") int fetchN) throws IOException {
+        var cands = ragService.retrievalCandidates(question, namespace, fetchN);
+        return Map.of("question", question, "count", cands.size(), "candidates", cands);
     }
 
     /** Multi-LLM: list selectable chat models and the default. */
