@@ -250,4 +250,21 @@ python3 eval/run_ragas.py --golden eval/golden_vehicle_ioniq5.json | tee eval/ra
 - **측정 규약 추가**: 메타 필터 A/B는 **골든셋의 차종·파워트레인을 필터와 일치**시킨 상태에서만 유효하다(§7.1 "한 변수" 원칙의 구체화). 불일치 조합의 숫자는 인용 금지.
 - 면접 한 줄: *"메타 필터가 precision을 0.5→0.8로 올린 건 확인했지만, generic 골든셋에 차종 필터를 걸면 faith가 떨어지는 부당 비교가 된다는 걸 알고, 필터 실험은 골든 범위를 필터에 맞춰야 공정하다고 규약화했다."*
 
+### T-rerank 기준선 — 10문항 골든셋 · qwen3 고정 judge (2026-07-07)
+
+**환경**: `golden_vehicle.json` **10문항**(KB 실재 매뉴얼 기준으로 확장), judge=**qwen3:8b 고정**(3-judge 삼각검증에서 가장 변별력 있어 채택), rerank=`mmr`(현 기본), 캐시 우회(`--rerank mmr`). 리랭커 A/B의 **기준선**이다.
+
+| 지표 | avg | 채점된 문항 |
+|---|---|---|
+| faithfulness | 1.00 | 7/10 (3개는 주장 추출 없음=`-`) |
+| answer_relevance | 0.72 | 9/10 |
+| **ctx-precision** | **0.70** | 10/10 — **리랭커 판정 핵심 지표** |
+| ctx-recall | 0.55 | 10/10 |
+
+문항별 ctx-precision: tpms·scc·brake·jumpstart·smartkey **1.00**(천장), engine-oil **0.00**, isofix·tire-rotation·kona-ev·hybrid-regen **0.50**.
+
+**해석**: 강한 5문항은 이미 1.00이라 리랭커가 더 올릴 여지 없음 → **cross-sidecar의 delta는 약한 5문항(engine-oil·isofix·tire·kona-ev·hybrid)에서만 갈린다.** 진단(`RAG-ACCURACY-ROADMAP §진단`)에서 정답 문서가 후보 풀엔 있으나 TOP_K=2 밖으로 밀린 정밀도 문제로 확인됐으므로, 크로스인코더가 그 순위를 교정하면 이 5문항의 precision이 올라야 한다.
+
+**A/B 절차·판정**: [`GUIDE-reranker-eval.md`](GUIDE-reranker-eval.md). `cross-sidecar`의 ctx-precision avg가 이 기준선(0.70)을 유의미하게 넘으면 채택, 아니면 mmr 유지(지연 비용 대비 이득 없음). 원본: `eval/ragas_qwen3_mmr.txt`, cross 결과는 `eval/ragas_qwen3_cross.txt`(측정 중).
+
 

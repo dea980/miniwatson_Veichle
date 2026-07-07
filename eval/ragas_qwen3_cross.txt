@@ -1,0 +1,19 @@
+(rerank override = cross-sidecar — 답변 캐시 우회)
+
+=== RAGAS-lite (10 cases, judge=qwen3:8b, workers=1) ===
+
+id                       faith  ans-rel  ctx-prec  ctx-rec
+------------------------------------------------------------
+veh-tpms                  1.00     0.75      1.00     0.75
+veh-scc                   1.00     0.75      1.00     1.00
+veh-engine-oil            1.00     0.50      1.00     1.00
+veh-isofix                1.00     0.75      1.00     0.00
+veh-brake-warning         1.00     0.75      1.00     1.00
+veh-jumpstart             1.00     0.75      1.00     1.00
+veh-tire-rotation         0.67     0.75      0.00     0.00
+veh-kona-ev-charging      1.00     0.75      0.00     0.50
+veh-hybrid-regen          1.00     0.75      1.00     0.67
+veh-smartkey-battery      0.75     0.75      1.00     0.00
+------------------------------------------------------------
+avg                       0.94     0.72      0.80     0.59
+

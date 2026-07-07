@@ -1,6 +1,10 @@
 # Oracle Always Free + watsonx 배포 (따라 하기)
 
-목표: miniwatson을 Oracle Always Free 박스에 올려 **공개 URL**을 얻는다. LLM은 watsonx(eu-gb), 컴퓨트는 Oracle 무료, 비용 $0. 추론 자체호스팅(Ollama) 없이 `docker-compose.watsonx.yml`로 앱+pgvector만 띄운다.
+목표: miniwatson을 Oracle Always Free 박스에 올려 **공개 URL**을 얻는다. 컴퓨트는 Oracle 무료, 비용 $0.
+
+> **역할 구분 (헷갈리기 쉬움)**: **Oracle = 우리 박스(집)** — 앱·pgvector·임베딩이 사는 서버. **Groq/watsonx = chat 두뇌(외주)** — 무거운 LLM 추론을 대신 돌려주는 호스티드 API. Oracle 박스엔 GPU가 없어 8B chat을 직접 돌리면 수십 초라, **chat만 밖(Groq/watsonx)으로 빼고 박스는 app+pgvector+경량 임베딩만** 돌린다. 배경·결정은 [LLMOPS-INFERENCE-PLACEMENT.md](LLMOPS-INFERENCE-PLACEMENT.md).
+>
+> **호스티드 chat 선택지 (§4 `.env`에서 택1)**: **A. Groq**(권장 — 가장 빠름·간단, 무료 키) / **B. watsonx**(IBM 서사 강조 시). 임베딩은 로컬 Ollama 또는 watsonx 중 택1.
 
 전제: [WATSONX-SETUP.md]로 watsonx 검증(`generated_text`) 통과 + `.env` 준비 + 코드 push로 GHCR 이미지 빌드.
 
@@ -52,6 +56,19 @@ sudo usermod -aG docker ubuntu   # 재로그인 후 sudo 없이 docker
 git clone https://github.com/dea980/miniwatson.git
 cd miniwatson
 # .env 작성 (로컬 .env 참고, 시크릿 채움)
+# ── 옵션 A: Groq(권장) — chat=Groq, 임베딩=로컬 Ollama ──
+cat > .env <<'EOF'
+DB_PASSWORD=<강한 비번>
+GRAFANA_PASSWORD=<비번>
+LLM_PROVIDER=vllm
+VLLM_URL=https://api.groq.com/openai
+VLLM_API_KEY=<groq 무료 키>
+VLLM_CHAT_MODEL=llama-3.3-70b-versatile
+EMBEDDING_PROVIDER=ollama                 # 임베딩은 박스 로컬(granite-278m)
+SECURITY_ENABLED=false
+EOF
+
+# ── 옵션 B: watsonx — chat+임베딩 모두 watsonx ──
 cat > .env <<'EOF'
 DB_PASSWORD=<강한 비번>
 GRAFANA_PASSWORD=<비번>
@@ -64,6 +81,7 @@ WATSONX_EMBED_MODEL=ibm/granite-embedding-278m-multilingual
 SECURITY_ENABLED=false
 EOF
 ```
+> 옵션 A는 임베딩이 로컬이라 compose에 **Ollama 컨테이너 포함본**(`docker-compose.prod.yml` 등)을 쓰고 최초 1회 `ollama pull granite-embedding:278m`. 옵션 B는 `docker-compose.watsonx.yml`(앱+pgvector만).
 
 ## 5. 기동
 
