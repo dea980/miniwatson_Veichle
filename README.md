@@ -238,7 +238,8 @@ curl -X POST http://localhost:8080/api/tabular/ask \
 - [x] **V19 문서 파싱 (표 구조추출)** — `PdfTableExtractor` **구현·배선 완료**(정규식으로 `<table>`→마크다운, 의존성 0, IngestionService의 TIKA 경로에 연결). 다이어그램 비전 경로는 설계(스케일 칸) ([docs/INGESTION-FORMATS.md](docs/INGESTION-FORMATS.md) §5)
 - [ ] **V20 커넥티드카 개인화 (로드맵, JD #2)** — 차량별 정비이력 + **텔레매틱스/ECU**(속도·급가속·급제동·주행거리)로 운전 스타일 추론 → 예측 정비·개인화 견적. 데이터 요건: 텔레매틱스/ECU(딜러 독점) — 정비 기록만으론 운전 스타일 직접 추론 불가([docs/AS-OPERATIONS.md](docs/AS-OPERATIONS.md))
 - [ ] **V21 분산 학습 (Kaggle 2× T4) — 옵션** — DDP(복제·처리량)/FSDP(샤딩·메모리)를 `accelerate`로 구성·실행. 스캐폴드: `ml/finetune/train_distributed.py` + `accel_ddp.yaml`/`accel_fsdp.yaml`. 2×GPU 하드웨어 필요라 **옵션으로 내림** — 지금은 "분산은 모델 코드가 아니라 런처/설정"을 설계로 방어 ([ml/finetune/DISTRIBUTED.md](ml/finetune/DISTRIBUTED.md))
-- [ ] **V22 (옵션, 상태 혼재)** — 정확히 나누면: **온디바이스 음성 사이드카**(`ml/serve/tts_piper.py` 로컬 TTS·`ml/serve/wakeword.py` 웨이크워드)는 **스크립트 구현됨(앱 미통합, 브라우저 없는 오프라인용)**. **임베딩 파인튜닝·라이브 배포·GraphRAG 통합은 미구현**(GraphRAG는 설계 문서 + 미연결 `EntityExtractionService`만).
+- [ ] **V22 (옵션, 상태 혼재)** — **온디바이스 음성 사이드카**(`ml/serve/tts_piper.py` 로컬 TTS·`ml/serve/wakeword.py` 웨이크워드)는 **스크립트 구현됨(앱 미통합, 브라우저 없는 오프라인용)**. **라이브 배포·GraphRAG 통합은 미구현**(GraphRAG는 설계 문서 + 미연결 `EntityExtractionService`만 — eval에서 recall이 벡터+BM25 하이브리드를 못 이겨 **스코프 아웃**, 쓴다면 recall 아닌 *설명가능성* 용도).
+- [ ] **V25 임베딩 파인튜닝 (retrieval 개선 트랙)** — RAGAS에서 드러난 **ctx-precision 0.3~0.5(검색 병목)** 를 직접 겨냥. 도메인 (질문→정답 청크) 대조학습(hard-negative 마이닝)으로 `P0420↔촉매`·한글질문↔영문매뉴얼·DTC/부품 동의어를 임베딩 공간에서 정렬. **768차원 유지(pgvector 스키마 불변) + 전체 재인덱싱 필요.** LLM 생성 FT("1.5B는 최악")와 달리 **retrieval을 직접 개선하는 별도의 더 확실한 승부처.** 데이터(Q→청크 쌍) 확보 + 재인덱싱이라 배포 다음 단계.
 - [x] **V23 콕핏 디자인 시스템** — 다크 콕핏 기본 테마, 계기판 타이포(Rajdhani 디스플레이 폰트·44px KPI), 카운트업·스태거 모션, 히어로 계기 눈금 — 실렌더링 전/후 스크린샷 검증
 - [x] **V24 실사용 A/S 제품 트랙 (P1~P6 완료)** — 케이스 상태 워크플로 영속(접수→진단중→수리중→완료, localStorage→JPA), 진단→예약→완료 루프, 유사 케이스 검색(토큰 코사인 top-5), 차종·연식 리콜 대상 조회, 진단 리포트 인쇄/PDF, PII 마스킹 before/after, **주간 품질 브리핑**(결정적 집계+LLM 서술, 캐시 17s→0.16s). 프로세스 상세 [docs/AS-OPERATIONS.md](docs/AS-OPERATIONS.md) §9, 백로그 [docs/FEATURE-BACKLOG.md](docs/FEATURE-BACKLOG.md)
 
@@ -246,7 +247,7 @@ curl -X POST http://localhost:8080/api/tabular/ask \
 
 > **우선순위 통합 백로그**(기술 트랙 + 제품 트랙, 상태·노력·근거 포함)는 [docs/FEATURE-BACKLOG.md](docs/FEATURE-BACKLOG.md)가 단일 소스다.
 
-> **다음 우선순위**: ① **라이브 배포**(Oracle Always Free ARM + Ollama, provider 스왑 — JD 우대의 구체 성과, [docs/RUNBOOK.md](docs/RUNBOOK.md)·[docs/CLOUD-DEPLOYMENT.md](docs/CLOUD-DEPLOYMENT.md)) → ② **V20 커넥티드카**(텔레매틱스 실데이터가 딜러 독점이라 **합성 데이터 PoC + 설계**로) → V21(분산 학습)·GraphRAG는 하드웨어·범위상 **옵션**.
+> **다음 우선순위**: ① **라이브 배포**(Oracle Always Free ARM + Ollama, provider 스왑 — JD 우대의 구체 성과, [docs/RUNBOOK.md](docs/RUNBOOK.md)·[docs/CLOUD-DEPLOYMENT.md](docs/CLOUD-DEPLOYMENT.md)) → ② **V25 임베딩 파인튜닝**(측정된 병목 ctx-precision을 직접 개선하는 retrieval 트랙) → ③ **V20 커넥티드카**(텔레매틱스 실데이터가 딜러 독점이라 **합성 데이터 PoC + 설계**로, [docs/V20-CONNECTED-CAR-SYNTHETIC.md](docs/V20-CONNECTED-CAR-SYNTHETIC.md)) → V21(분산 학습)·GraphRAG는 하드웨어·범위상 **옵션**(GraphRAG는 측정으로 스코프 아웃).
 
 ---
 
