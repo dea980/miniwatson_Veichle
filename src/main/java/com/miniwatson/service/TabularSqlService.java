@@ -153,22 +153,42 @@ public class TabularSqlService {
         String q = sql.strip();
         try (Statement st = conn.createStatement();
              ResultSet rs = st.executeQuery(q)) {
-            ResultSetMetaData md = rs.getMetaData();
-            int n = md.getColumnCount();
-            List<String> cols = new ArrayList<>();
-            for (int i = 1; i <= n; i++) cols.add(md.getColumnName(i));
-            List<List<Object>> rows = new ArrayList<>();
-            while (rs.next() && rows.size() < 100) {
-                List<Object> row = new ArrayList<>();
-                for (int i = 1; i <= n; i++) row.add(rs.getObject(i));
-                rows.add(row);
-            }
-            return new QueryResult(cols, rows);
+            return mapResult(rs);
         } catch (SQLException e) {
             String m = String.valueOf(e.getMessage());
             if (m.contains("invalidated") || m.contains("FATAL")) reconnect();   // 죽은 DB 재생성 → 이후 호출 복구
             throw e;
         }
+    }
+
+    /** 파라미터 바인딩 SELECT — 사용자 입력은 문자열 조립 대신 반드시 이 오버로드로(SQL 인젝션 차단).
+     *  '' 이스케이프는 방어가 아니라 관례였음 — PreparedStatement가 근본 처방. */
+    public synchronized QueryResult runSelect(String sql, Object... params) throws SQLException {
+        requireReadOnly(sql);
+        try (java.sql.PreparedStatement ps = conn.prepareStatement(sql.strip())) {
+            for (int i = 0; i < params.length; i++) ps.setObject(i + 1, params[i]);
+            try (ResultSet rs = ps.executeQuery()) {
+                return mapResult(rs);
+            }
+        } catch (SQLException e) {
+            String m = String.valueOf(e.getMessage());
+            if (m.contains("invalidated") || m.contains("FATAL")) reconnect();
+            throw e;
+        }
+    }
+
+    private QueryResult mapResult(ResultSet rs) throws SQLException {
+        ResultSetMetaData md = rs.getMetaData();
+        int n = md.getColumnCount();
+        List<String> cols = new ArrayList<>();
+        for (int i = 1; i <= n; i++) cols.add(md.getColumnName(i));
+        List<List<Object>> rows = new ArrayList<>();
+        while (rs.next() && rows.size() < 100) {
+            List<Object> row = new ArrayList<>();
+            for (int i = 1; i <= n; i++) row.add(rs.getObject(i));
+            rows.add(row);
+        }
+        return new QueryResult(cols, rows);
     }
 
     /** DuckDB 인메모리 DB가 치명 오류로 죽었을 때 커넥션 재생성(테이블은 비므로 호출부가 재등록). */

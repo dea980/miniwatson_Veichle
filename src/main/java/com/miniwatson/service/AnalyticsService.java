@@ -140,7 +140,7 @@ public class AnalyticsService {
      *  에러를 삼키지 않고 던진다 → 컨트롤러가 응답에 원인을 담아 화면에서 바로 보이게. */
     public List<List<Object>> vehiclesByModel(String model) throws Exception {
         ensure("complaints");
-        String esc = (model == null ? "" : model).replace("'", "''").toUpperCase();
+        String m = (model == null ? "" : model).trim().toUpperCase();   // ? 바인딩(SQL 인젝션 차단)
         String fireT  = "CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
         String crashT = "CASE WHEN lower(cast(crash AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
         String inj    = "COALESCE(TRY_CAST(numberofinjuries AS INTEGER),0)";
@@ -155,8 +155,8 @@ public class AnalyticsService {
             "SELECT odinumber, datecomplaintfiled, components, modelyear, substr(summary,1,2000), "
             + "(" + dea + "*10000 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3 + " + rec + ") AS priority, "
             + fireT + " AS fire, " + crashT + " AS crash, " + inj + " AS injuries, " + dea + " AS deaths "
-            + "FROM complaints WHERE upper(model)='" + esc + "' "
-            + "ORDER BY priority DESC, datecomplaintfiled DESC NULLS LAST LIMIT 20").rows();
+            + "FROM complaints WHERE upper(model)=? "
+            + "ORDER BY priority DESC, datecomplaintfiled DESC NULLS LAST LIMIT 20", m).rows();
     }
 
     /** 케이스 우선순위 트리아지(전 차종) — 필터(차종/부위) + 우선순위 정렬 + 서버 페이지네이션 + 해결 제외.
@@ -181,21 +181,26 @@ public class AnalyticsService {
             + "TRY_CAST(CAST(datecomplaintfiled AS VARCHAR) AS DATE))";                          // ISO 폴백
         String rec     = "COALESCE(ROUND(12 * exp(-date_diff('day', " + recDate + ", current_date) / 180.0)), 0)";
         StringBuilder where = new StringBuilder("WHERE 1=1");
-        if (model != null && !model.isBlank())
-            where.append(" AND upper(model)='").append(model.replace("'", "''").toUpperCase()).append("'");
-        if (component != null && !component.isBlank())
-            where.append(" AND upper(components) LIKE '%").append(component.replace("'", "''").toUpperCase()).append("%'");
+        List<Object> args = new ArrayList<>();   // 사용자 입력은 전부 ? 바인딩(SQL 인젝션 차단)
+        if (model != null && !model.isBlank()) {
+            where.append(" AND upper(model)=?");
+            args.add(model.trim().toUpperCase());
+        }
+        if (component != null && !component.isBlank()) {
+            where.append(" AND upper(components) LIKE ?");
+            args.add("%" + component.trim().toUpperCase() + "%");
+        }
         // 완료(DONE) 케이스만 제외 (DB 영속) — 진단중/수리중은 큐에 상태칩으로 남는다
         List<String> resolved = resolvedRepo.findAll().stream()
             .filter(rc -> rc.getStatus() == null || "DONE".equals(rc.getStatus()))
             .map(com.miniwatson.cases.ResolvedCase::getCaseNumber)
             .filter(s -> s != null && !s.isBlank()).toList();
         if (!resolved.isEmpty()) {
-            String in = resolved.stream().map(s -> "'" + s.replace("'", "''") + "'")
-                .reduce((a, b) -> a + "," + b).orElse("");
-            where.append(" AND odinumber NOT IN (").append(in).append(")");
+            where.append(" AND odinumber NOT IN (")
+                 .append("?,".repeat(resolved.size() - 1)).append("?)");
+            args.addAll(resolved);
         }
-        long total = scalar("SELECT COUNT(*) FROM complaints " + where);
+        long total = scalar("SELECT COUNT(*) FROM complaints " + where, args.toArray());
         int lim = limit <= 0 ? 50 : Math.min(limit, 200);
         int off = Math.max(0, offset);
         // 정렬: priority=중요도순(심각도), date=입고순(접수일 최신), model=차종그룹 후 중요도.
@@ -210,7 +215,7 @@ public class AnalyticsService {
             + "(" + dea + "*10000 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3 + " + rec + ") AS priority, "
             + fireT + " AS fire, " + crashT + " AS crash, " + inj + " AS injuries, " + dea + " AS deaths "
             + "FROM complaints " + where + " "
-            + orderBy + " LIMIT " + lim + " OFFSET " + off);
+            + orderBy + " LIMIT " + lim + " OFFSET " + off, args.toArray());
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("cases", rows);
         out.put("total", total);
@@ -292,20 +297,22 @@ public class AnalyticsService {
             default       -> "strftime(" + d + ", '%Y')";
         };
         StringBuilder w = new StringBuilder("WHERE " + d + " IS NOT NULL");
-        if (model != null && !model.isBlank())
-            w.append(" AND upper(model)='").append(model.replace("'", "''").toUpperCase()).append("'");
+        List<Object> args = new ArrayList<>();   // 사용자 입력은 ? 바인딩(SQL 인젝션 차단)
+        if (model != null && !model.isBlank()) {
+            w.append(" AND upper(model)=?");
+            args.add(model.trim().toUpperCase());
+        }
         // 최근 120개 버킷만(DESC LIMIT) 가져온 뒤 표시용으로 오름차순 재정렬 — 일별도 최근 구간이 보이게.
         return rows("SELECT bucket, n FROM (SELECT " + bucket + " AS bucket, COUNT(*) n FROM " + table + " " + w
-            + " GROUP BY bucket ORDER BY bucket DESC LIMIT 120) t ORDER BY bucket");
+            + " GROUP BY bucket ORDER BY bucket DESC LIMIT 120) t ORDER BY bucket", args.toArray());
     }
 
     /** 단일 리콜 상세 (캠페인번호) — 결함내용·위험·시정조치 포함. */
     public Map<String, Object> recall(String id) {
         ensure("recalls");
-        String esc = (id == null ? "" : id).replace("'", "''");
         List<List<Object>> r = rows("SELECT nhtsacampaignnumber, reportreceiveddate, model, modelyear, component, "
             + "summary, consequence, remedy, cast(parkit AS varchar), cast(parkoutside AS varchar) "
-            + "FROM recalls WHERE nhtsacampaignnumber='" + esc + "' LIMIT 1");
+            + "FROM recalls WHERE nhtsacampaignnumber=? LIMIT 1", id == null ? "" : id.trim());
         if (r.isEmpty()) return new LinkedHashMap<>();
         List<Object> row = r.get(0);
         String[] keys = {"campaign", "date", "model", "year", "component", "summary", "consequence", "remedy", "parkIt", "parkOutside"};
@@ -317,7 +324,7 @@ public class AnalyticsService {
     /** 단일 케이스(접수번호) — cases()와 동일 11열 형태(상세 진단 열기용). */
     public List<List<Object>> caseById(String id) {
         ensure("complaints");
-        String esc = (id == null ? "" : id).replace("'", "''");
+        String cid = (id == null ? "" : id).trim();   // ? 바인딩(SQL 인젝션 차단)
         String fireT = "CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
         String crashT = "CASE WHEN lower(cast(crash AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
         String inj = "COALESCE(TRY_CAST(numberofinjuries AS INTEGER),0)";
@@ -331,7 +338,7 @@ public class AnalyticsService {
         return rows("SELECT odinumber, datecomplaintfiled, model, components, modelyear, substr(summary,1,2000), "
             + "(" + dea + "*10000 + " + inj + "*10 + " + fireT + "*5 + " + crashT + "*3 + " + rec + ") AS priority, "
             + fireT + ", " + crashT + ", " + inj + ", " + dea + " "
-            + "FROM complaints WHERE odinumber='" + esc + "' LIMIT 1");
+            + "FROM complaints WHERE odinumber=? LIMIT 1", cid);
     }
 
     // ── 점검 체크리스트: 공통(표준 성능·상태점검) + 차종별 추가(리콜·불만 부위 → 점검 항목) ──
@@ -416,10 +423,10 @@ public class AnalyticsService {
             return out;
         }
         ensure("complaints");
-        String esc = (model == null ? "" : model).replace("'", "''").toUpperCase();
+        String m = (model == null ? "" : model).trim().toUpperCase();   // ? 바인딩(SQL 인젝션 차단)
         List<List<Object>> topComp = rows(
-            "SELECT components, COUNT(*) n FROM complaints WHERE upper(model)='" + esc + "' "
-            + "GROUP BY components ORDER BY n DESC LIMIT 25");
+            "SELECT components, COUNT(*) n FROM complaints WHERE upper(model)=? "
+            + "GROUP BY components ORDER BY n DESC LIMIT 25", m);
         LinkedHashMap<String, Integer> agg = new LinkedHashMap<>();
         LinkedHashMap<String, String> sample = new LinkedHashMap<>();
         for (List<Object> r : topComp) {
@@ -490,9 +497,10 @@ public class AnalyticsService {
     public Map<String, Object> modelYearHotspots(String model, Integer year) {
         ensure("recalls"); ensure("complaints");
         if (model == null || model.isBlank()) return Map.of();
-        String m = model.replace("'", "''").toUpperCase();
-        String yearW = year == null ? "" : " AND CAST(modelyear AS VARCHAR)='" + year + "'";
-        String cw = "WHERE upper(model)='" + m + "'" + yearW;
+        String m = model.trim().toUpperCase();
+        // 사용자 입력(model·year)은 ? 바인딩 — 문자열 조립 금지(SQL 인젝션). 연식 없으면 조건 생략.
+        String cw = "WHERE upper(model)=?" + (year == null ? "" : " AND CAST(modelyear AS VARCHAR)=?");
+        Object[] p = year == null ? new Object[]{m} : new Object[]{m, String.valueOf(year)};
         String fireT = "CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
         String crashT = "CASE WHEN lower(cast(crash AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END";
         String inj = "COALESCE(TRY_CAST(numberofinjuries AS INTEGER),0)";
@@ -500,17 +508,16 @@ public class AnalyticsService {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("model", m);
         out.put("year", year);
-        out.put("complaints", scalar("SELECT COUNT(*) FROM complaints " + cw));
+        out.put("complaints", scalar("SELECT COUNT(*) FROM complaints " + cw, p));
         out.put("complaintTop", rows("SELECT components, COUNT(*) n FROM complaints " + cw
-            + " GROUP BY components ORDER BY n DESC LIMIT 6"));
-        out.put("fires", scalar("SELECT COALESCE(SUM(" + fireT + "),0) FROM complaints " + cw));
-        out.put("crashes", scalar("SELECT COALESCE(SUM(" + crashT + "),0) FROM complaints " + cw));
-        out.put("injuries", scalar("SELECT COALESCE(SUM(" + inj + "),0) FROM complaints " + cw));
-        out.put("deaths", scalar("SELECT COALESCE(SUM(" + dea + "),0) FROM complaints " + cw));
-        String rw = "WHERE upper(model)='" + m + "'" + (year == null ? "" : " AND CAST(modelyear AS VARCHAR)='" + year + "'");
-        out.put("recalls", scalar("SELECT COUNT(*) FROM recalls " + rw));
-        out.put("recallTop", rows("SELECT component, COUNT(*) n FROM recalls " + rw
-            + " GROUP BY component ORDER BY n DESC LIMIT 6"));
+            + " GROUP BY components ORDER BY n DESC LIMIT 6", p));
+        out.put("fires", scalar("SELECT COALESCE(SUM(" + fireT + "),0) FROM complaints " + cw, p));
+        out.put("crashes", scalar("SELECT COALESCE(SUM(" + crashT + "),0) FROM complaints " + cw, p));
+        out.put("injuries", scalar("SELECT COALESCE(SUM(" + inj + "),0) FROM complaints " + cw, p));
+        out.put("deaths", scalar("SELECT COALESCE(SUM(" + dea + "),0) FROM complaints " + cw, p));
+        out.put("recalls", scalar("SELECT COUNT(*) FROM recalls " + cw, p));
+        out.put("recallTop", rows("SELECT component, COUNT(*) n FROM recalls " + cw
+            + " GROUP BY component ORDER BY n DESC LIMIT 6", p));
         return out;
     }
 
@@ -552,11 +559,12 @@ public class AnalyticsService {
     public List<Map<String, Object>> recallCheck(String model, Integer year) {
         ensure("recalls");
         if (model == null || model.isBlank()) return List.of();
-        String where = "WHERE upper(model)='" + model.replace("'", "''").toUpperCase() + "'";
-        if (year != null) where += " AND TRY_CAST(modelyear AS INTEGER)=" + year;
+        // 사용자 입력은 ? 바인딩(SQL 인젝션 차단)
+        String where = "WHERE upper(model)=?" + (year == null ? "" : " AND TRY_CAST(modelyear AS INTEGER)=?");
+        Object[] p = year == null ? new Object[]{model.trim().toUpperCase()} : new Object[]{model.trim().toUpperCase(), year};
         List<List<Object>> r = rows("SELECT nhtsacampaignnumber, reportreceiveddate, modelyear, component, "
             + "substr(summary,1,300), cast(parkit AS varchar) FROM recalls " + where
-            + " ORDER BY (CASE WHEN lower(cast(parkit AS varchar))='true' THEN 0 ELSE 1 END), reportreceiveddate DESC LIMIT 50");
+            + " ORDER BY (CASE WHEN lower(cast(parkit AS varchar))='true' THEN 0 ELSE 1 END), reportreceiveddate DESC LIMIT 50", p);
         return r.stream().map(row -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("campaign", String.valueOf(row.get(0)));
@@ -579,12 +587,11 @@ public class AnalyticsService {
         String comp = String.valueOf(t.get(3));
         java.util.Set<String> tTok = simTokens(String.valueOf(t.get(5)));
         if (tTok.isEmpty()) return List.of();
-        String esc = caseNumber.replace("'", "''");
         String sel = "SELECT odinumber, datecomplaintfiled, model, components, modelyear, substr(summary,1,800) FROM complaints "
-            + "WHERE odinumber<>'" + esc + "'";
+            + "WHERE odinumber<>?";   // 사용자 입력은 ? 바인딩(SQL 인젝션 차단)
         // 후보: 같은 부위 우선(정밀) → 부족하면 전체로 확장(회수). 비용 상한 2000건.
-        List<List<Object>> cands = rows(sel + " AND upper(components)=upper('" + comp.replace("'", "''") + "') LIMIT 2000");
-        if (cands.size() < 50) cands = rows(sel + " LIMIT 2000");
+        List<List<Object>> cands = rows(sel + " AND upper(components)=upper(?) LIMIT 2000", caseNumber, comp);
+        if (cands.size() < 50) cands = rows(sel + " LIMIT 2000", caseNumber);
         int kk = k <= 0 ? 5 : Math.min(k, 20);
         return cands.stream()
             .map(r -> {
@@ -637,6 +644,23 @@ public class AnalyticsService {
 
     private List<List<Object>> rows(String sql) {
         try { return tabular.runSelect(sql).rows(); }
+        catch (Exception e) { log.warn("[analytics] rows 실패: {}", e.getMessage()); return new ArrayList<>(); }
+    }
+
+    /** 파라미터 바인딩 버전 — 사용자 입력(차종·부위·접수번호 등)은 반드시 이쪽으로(SQL 인젝션 차단). */
+    private long scalar(String sql, Object... params) {
+        try {
+            var r = tabular.runSelect(sql, params);
+            if (!r.rows().isEmpty() && !r.rows().get(0).isEmpty()) {
+                Object v = r.rows().get(0).get(0);
+                return v == null ? 0 : Long.parseLong(v.toString().split("\\.")[0]);
+            }
+        } catch (Exception e) { log.warn("[analytics] scalar 실패({}): {}", sql, e.getMessage()); }
+        return 0;
+    }
+
+    private List<List<Object>> rows(String sql, Object... params) {
+        try { return tabular.runSelect(sql, params).rows(); }
         catch (Exception e) { log.warn("[analytics] rows 실패: {}", e.getMessage()); return new ArrayList<>(); }
     }
 }
