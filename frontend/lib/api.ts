@@ -113,6 +113,8 @@ export type Analytics = {
   recallTopComponents: [string, number][];
   complaintTopComponents: [string, number][];
   complaintByModel: [string, number][];
+  complaintsByState: [string, number, number, number, number, number, string][];
+    // state, complaints, fires, injuries, deaths, crashes, topComponent
   safetyHotspots: [string, number, number, number][];        // model, fires, injuries, crashes
   partsDemand: [string, string, number, number, number][];   // part, component, demand, unitPrice, estCost
   insight?: string;   // 분리됨 — analyticsInsight()로 별도 로드

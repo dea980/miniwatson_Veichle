@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MiniWatson Vehicle — Automotive LLM",
+  title: "Automotive IR System — Hyundai Intelligence · LLM",
   description: "자동차 도메인 특화 LLM 플랫폼 (RAG | text-to-SQL | governance)",
 };
 

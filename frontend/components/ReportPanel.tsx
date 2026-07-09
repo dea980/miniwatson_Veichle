@@ -118,7 +118,7 @@ ${(res.inspection || []).map((r) => `<tr><td>${esc(String(r[0]))}</td><td>${esc(
 <h2>리콜 주요 부품</h2><table>${rows(res.recallTopComponents || [])}</table>
 <h2>불만 주요 부품</h2><table>${rows(res.complaintTopComponents || [])}</table>
 <h2>종합 진단</h2><pre>${esc(res.report)}</pre>
-<footer>MiniWatson Vehicle — Automotive Domain LLM | 생성 ${new Date().toLocaleString("ko-KR")} | 데이터: NHTSA·오너스 매뉴얼(샘플)</footer></body></html>`;
+<footer>Automotive IR System — Hyundai Intelligence · LLM | 생성 ${new Date().toLocaleString("ko-KR")} | 데이터: NHTSA·오너스 매뉴얼(샘플)</footer></body></html>`;
   }
 
   function download() {

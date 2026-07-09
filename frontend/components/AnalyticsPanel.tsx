@@ -5,9 +5,20 @@ import Markdown from "@/components/Markdown";
 import Donut from "@/components/Donut";
 import TrendChart from "@/components/TrendChart";
 import Select from "@/components/Select";
+import USStateMap from "./USStateMap";
 
 const won = (n: number) => Math.round(Number(n) || 0).toLocaleString("ko-KR") + "원";
 const num = (v: unknown) => Number(v) || 0;
+
+// drill-down 레벨 — 각 레벨이 답하는 질문(thinking line)이 다르다.
+const LEVEL_META = {
+  overview: { label: "개요", q: "무엇이 이상한가" },
+  recall: { label: "리콜", q: "규제 리스크는" },
+  safety: { label: "안전", q: "누가 다치나" },
+  parts: { label: "부품·워런티", q: "돈이 어디로" },
+  geo: { label: "지역", q: "어디서 터지나" },
+} as const;
+type Level = keyof typeof LEVEL_META;
 
 function Bars({ rows, unit = "", money = false }: { rows: [string, number][]; unit?: string; money?: boolean }) {
   const max = Math.max(1, ...rows.map((r) => num(r[1])));
@@ -32,6 +43,8 @@ export default function AnalyticsPanel() {
   const [err, setErr] = useState("");
   const [insight, setInsight] = useState("");
   const [insLoading, setInsLoading] = useState(false);
+  // drill-down 레벨 (L0 개요 → L1 딥다이브)
+  const [level, setLevel] = useState<Level>("overview");
   // 시계열 추세 (연/월/일)
   const [by, setBy] = useState<"year" | "month" | "day">("year");
   const [recallTrend, setRecallTrend] = useState<[string, number][]>([]);
@@ -79,6 +92,10 @@ export default function AnalyticsPanel() {
   useEffect(() => { if (res) loadTrends(by); /* eslint-disable-next-line */ }, [by]);
 
   const t = res?.totals;
+  // 3렌즈 요약(개요) — 기존 집계에서 파생. 볼륨·심각도·비용이 서로 다른 대상을 가리킨다.
+  const lensVolume = res?.complaintByModel?.[0];
+  const lensSeverity = res ? [...(res.safetyHotspots || [])].sort((a, b) => num(b[2]) - num(a[2]))[0] : undefined;
+  const lensCost = res?.partsDemand?.[0];
 
   return (
     <>
@@ -129,7 +146,7 @@ export default function AnalyticsPanel() {
 
       {res && (
         <>
-          {/* KPI */}
+          {/* KPI — 전 레벨 공통 컨텍스트 */}
           <div className="cards" style={{ marginTop: 14 }}>
             <div className="stat"><div className="v">{num(t?.recalls)}</div><div className="l">리콜</div></div>
             <div className="stat"><div className="v">{num(t?.complaints)}</div><div className="l">불만</div></div>
@@ -138,61 +155,133 @@ export default function AnalyticsPanel() {
             <div className="stat"><div className="v">{num(t?.crashes)}</div><div className="l">사고</div></div>
           </div>
 
-          {/* 부품 수요 / 워런티 비용 프록시 */}
-          <div className="label">부품 수요 | 예상 워런티 비용 (결함 신호 × 단가)</div>
-          <div style={{ overflowX: "auto" }}>
-            <table>
-              <thead><tr><th>부품</th><th>부위</th><th className="right">수요(신호)</th><th className="right">단가</th><th className="right">예상 비용</th></tr></thead>
-              <tbody>
-                {res.partsDemand.map((r, i) => (
-                  <tr key={i}>
-                    <td>{r[0]}</td><td className="muted">{r[1]}</td>
-                    <td className="right">{num(r[2])}</td><td className="right">{won(num(r[3]))}</td>
-                    <td className="right"><b>{won(num(r[4]))}</b></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* 레벨 서브탭 (drill-down): L0 개요 → L1 딥다이브 */}
+          <div className="row" style={{ gap: 4, marginTop: 14, flexWrap: "wrap" }}>
+            {(Object.keys(LEVEL_META) as Level[]).map((k) => (
+              <button key={k} className={level === k ? "btn" : "ghost"}
+                style={{ fontSize: 12, padding: "5px 12px" }} onClick={() => setLevel(k)}>
+                {LEVEL_META[k].label}
+              </button>
+            ))}
           </div>
-          <div className="hint">수요=불만에 해당 부위가 등장한 횟수(프록시). 예상비용=수요×(단가+공임). 정확 청구액 아닌 운영 우선순위용.</div>
-
-          {/* 추세 분석 — 연/월/일 그래뉼래리티 (분석가용) */}
-          <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
-            <div className="label" style={{ margin: 0 }}>추세 분석 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>| 전 차종</span></div>
-            <div className="row" style={{ gap: 4 }}>
-              {(["year", "month", "day"] as const).map((g) => (
-                <button key={g} className={by === g ? "btn" : "ghost"} style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setBy(g)}>
-                  {g === "year" ? "연도별" : g === "month" ? "월별" : "일별"}
-                </button>
-              ))}
-            </div>
+          <div className="hint" style={{ marginTop: 6 }}>
+            <b>{LEVEL_META[level].label}</b> — 이 레벨이 답하는 질문: <b>{LEVEL_META[level].q}</b>
           </div>
-          {(recallTrend.length > 0 || complaintTrend.length > 0)
-            ? <TrendChart unit="건" series={[
-                { name: "리콜", color: "#002c5f", data: recallTrend },
-                { name: "불만", color: "#d97706", data: complaintTrend },
-              ]} />
-            : <div className="muted" style={{ fontSize: 13 }}>추세 데이터 없음</div>}
 
-          {/* 결함 부위 */}
-          {res.recallTopComponents?.length > 0 && (<><div className="label">리콜 주요 부위</div><Donut rows={res.recallTopComponents} unit="건" /></>)}
-          {res.complaintTopComponents?.length > 0 && (<><div className="label">불만 주요 부위</div><Donut rows={res.complaintTopComponents} unit="건" /></>)}
-          {res.complaintByModel?.length > 0 && (<><div className="label">차종별 불만</div><Bars rows={res.complaintByModel} unit="건" /></>)}
-
-          {/* 안전 핫스팟 */}
-          {res.safetyHotspots?.length > 0 && (
+          {/* ── L0 개요: 추세 + 차종별 불만 ── */}
+          {level === "overview" && (
             <>
-              <div className="label">안전 핫스팟 (차종별 화재·부상·사고)</div>
+              {/* 3렌즈 요약 — 볼륨·심각도·비용이 서로 다른 대상을 가리킨다(핵심 인사이트) */}
+              <div className="label" style={{ marginTop: 8 }}>3렌즈 요약 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>| 볼륨·심각도·비용</span></div>
+              <div className="lens-cards">
+                <div className="lens-card">
+                  <div className="lens-k">볼륨 · 가장 많은 불만</div>
+                  <div className="lens-v">{koModel(String(lensVolume?.[0] ?? "-"))}</div>
+                  <div className="lens-s">불만 {num(lensVolume?.[1]).toLocaleString("ko-KR")}건</div>
+                </div>
+                <div className="lens-card">
+                  <div className="lens-k">심각도 · 가장 위험</div>
+                  <div className="lens-v">{koModel(String(lensSeverity?.[0] ?? "-"))}</div>
+                  <div className="lens-s">부상 {num(lensSeverity?.[2])} · 사고 {num(lensSeverity?.[3])}</div>
+                </div>
+                <div className="lens-card">
+                  <div className="lens-k">비용 · 워런티 최대</div>
+                  <div className="lens-v">{String(lensCost?.[0] ?? "-")}</div>
+                  <div className="lens-s">{won(num(lensCost?.[4]))}</div>
+                </div>
+              </div>
+
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
+                <div className="label" style={{ margin: 0 }}>추세 분석 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>| 전 차종</span></div>
+                <div className="row" style={{ gap: 4 }}>
+                  {(["year", "month", "day"] as const).map((g) => (
+                    <button key={g} className={by === g ? "btn" : "ghost"} style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setBy(g)}>
+                      {g === "year" ? "연도별" : g === "month" ? "월별" : "일별"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {(recallTrend.length > 0 || complaintTrend.length > 0)
+                ? <TrendChart unit="건" series={[
+                    { name: "리콜", color: "#002c5f", data: recallTrend },
+                    { name: "불만", color: "#d97706", data: complaintTrend },
+                  ]} />
+                : <div className="muted" style={{ fontSize: 13 }}>추세 데이터 없음</div>}
+              {res.complaintByModel?.length > 0 && (<><div className="label">차종별 불만</div><Bars rows={res.complaintByModel} unit="건" /></>)}
+            </>
+          )}
+
+          {/* ── L1 리콜: 규제 리스크 ── */}
+          {level === "recall" && (
+            res.recallTopComponents?.length > 0
+              ? (<><div className="label">리콜 주요 부위</div><Donut rows={res.recallTopComponents} unit="건" /></>)
+              : <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>리콜 데이터 없음</div>
+          )}
+
+          {/* ── L1 안전: 누가 다치나 ── */}
+          {level === "safety" && (
+            <>
+              {res.safetyHotspots?.length > 0 && (
+                <>
+                  <div className="label">안전 핫스팟 (차종별 화재·부상·사고)</div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table>
+                      <thead><tr><th>차종</th><th className="right">화재</th><th className="right">부상</th><th className="right">사고</th></tr></thead>
+                      <tbody>
+                        {res.safetyHotspots.map((r, i) => (
+                          <tr key={i}>
+                            <td>{r[0]}</td>
+                            <td className="right">{num(r[1]) > 0 ? <span className="pill bad">{num(r[1])}</span> : 0}</td>
+                            <td className="right">{num(r[2]) > 0 ? <span className="pill warn">{num(r[2])}</span> : 0}</td>
+                            <td className="right">{num(r[3])}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+              {res.complaintTopComponents?.length > 0 && (<><div className="label">불만 주요 부위</div><Donut rows={res.complaintTopComponents} unit="건" /></>)}
+            </>
+          )}
+
+          {/* ── L1 부품·워런티: 돈이 어디로 ── */}
+          {level === "parts" && (
+            <>
+              <div className="label">부품 수요 | 예상 워런티 비용 (결함 신호 × 단가)</div>
               <div style={{ overflowX: "auto" }}>
                 <table>
-                  <thead><tr><th>차종</th><th className="right">화재</th><th className="right">부상</th><th className="right">사고</th></tr></thead>
+                  <thead><tr><th>부품</th><th>부위</th><th className="right">수요(신호)</th><th className="right">단가</th><th className="right">예상 비용</th></tr></thead>
                   <tbody>
-                    {res.safetyHotspots.map((r, i) => (
+                    {res.partsDemand.map((r, i) => (
+                      <tr key={i}>
+                        <td>{r[0]}</td><td className="muted">{r[1]}</td>
+                        <td className="right">{num(r[2])}</td><td className="right">{won(num(r[3]))}</td>
+                        <td className="right"><b>{won(num(r[4]))}</b></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="hint">수요=불만에 해당 부위가 등장한 횟수(프록시). 예상비용=수요×(단가+공임). 정확 청구액 아닌 운영 우선순위용.</div>
+            </>
+          )}
+
+          {/* ── L1 지역: 어디서 터지나 ── */}
+          {level === "geo" && res.complaintsByState?.length > 0 && (
+            <>
+              <div className="label">지역 핫스팟 (주별 불만·화재·부상)</div>
+              <USStateMap data={res.complaintsByState} />
+              <div style={{ overflowX: "auto" }}>
+                <table>
+                  <thead><tr><th>주(State)</th><th className="right">불만</th><th className="right">화재</th><th className="right">부상</th></tr></thead>
+                  <tbody>
+                    {res.complaintsByState.slice(0, 10).map((r, i) => (
                       <tr key={i}>
                         <td>{r[0]}</td>
-                        <td className="right">{num(r[1]) > 0 ? <span className="pill bad">{num(r[1])}</span> : 0}</td>
-                        <td className="right">{num(r[2]) > 0 ? <span className="pill warn">{num(r[2])}</span> : 0}</td>
-                        <td className="right">{num(r[3])}</td>
+                        <td className="right">{num(r[1])}</td>
+                        <td className="right">{num(r[2]) > 0 ? <span className="pill bad">{num(r[2])}</span> : 0}</td>
+                        <td className="right">{num(r[3]) > 0 ? <span className="pill warn">{num(r[3])}</span> : 0}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -201,7 +290,7 @@ export default function AnalyticsPanel() {
             </>
           )}
 
-          {/* AI 인사이트 — 요청 시에만 생성(버튼) */}
+          {/* AI 인사이트 — 전 레벨 공통(집계 기반, 요청 시 생성) */}
           <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
             <div className="label" style={{ margin: 0 }}>AI 운영 인사이트</div>
             {!insLoading && <button className="btn" style={{ fontSize: 12 }} onClick={genInsight}>{insight ? "다시 생성" : "AI 인사이트 생성"}</button>}

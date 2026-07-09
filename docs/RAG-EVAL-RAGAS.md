@@ -265,6 +265,39 @@ python3 eval/run_ragas.py --golden eval/golden_vehicle_ioniq5.json | tee eval/ra
 
 **해석**: 강한 5문항은 이미 1.00이라 리랭커가 더 올릴 여지 없음 → **cross-sidecar의 delta는 약한 5문항(engine-oil·isofix·tire·kona-ev·hybrid)에서만 갈린다.** 진단(`RAG-ACCURACY-ROADMAP §진단`)에서 정답 문서가 후보 풀엔 있으나 TOP_K=2 밖으로 밀린 정밀도 문제로 확인됐으므로, 크로스인코더가 그 순위를 교정하면 이 5문항의 precision이 올라야 한다.
 
-**A/B 절차·판정**: [`GUIDE-reranker-eval.md`](GUIDE-reranker-eval.md). `cross-sidecar`의 ctx-precision avg가 이 기준선(0.70)을 유의미하게 넘으면 채택, 아니면 mmr 유지(지연 비용 대비 이득 없음). 원본: `eval/ragas_qwen3_mmr.txt`, cross 결과는 `eval/ragas_qwen3_cross.txt`(측정 중).
+**A/B 절차·판정**: [`GUIDE-reranker-eval.md`](GUIDE-reranker-eval.md). `cross-sidecar`의 ctx-precision avg가 이 기준선(0.70)을 유의미하게 넘으면 채택, 아니면 mmr 유지(지연 비용 대비 이득 없음). 원본: `eval/ragas_qwen3_mmr.txt`.
+
+### T-rerank A/B — mmr vs cross-sidecar (2026-07-07, 단일 실행)
+
+| 지표 | mmr | cross-sidecar | delta |
+|---|---|---|---|
+| **ctx-precision** | **0.70** | **0.80** | **+0.10** ⭐ |
+| faithfulness | 1.00 | 0.94 | −0.06 |
+| answer_relevance | 0.72 | 0.72 | 0 |
+| ctx-recall | 0.55 | 0.59 | +0.04 |
+
+문항별 ctx-precision(mmr→cross):
+
+| 문항 | mmr→cross | |
+|---|---|---|
+| engine-oil | 0.00→**1.00** | ✅ 大 |
+| isofix | 0.50→**1.00** | ✅ |
+| hybrid-regen | 0.50→**1.00** | ✅ |
+| tire-rotation | 0.50→**0.00** | ❌ 후퇴 |
+| kona-ev-charging | 0.50→**0.00** | ❌ 후퇴 |
+| tpms·scc·brake·jumpstart·smartkey | 1.00→1.00 | = 천장 |
+
+#### 결론 (정직하게)
+- **핵심 지표 ctx-precision +0.10(0.70→0.80) = 리랭커가 올린 실제 방향.** 약한 5문항 중 3개(engine-oil·isofix·hybrid)를
+  크게 교정 — 진단대로 후보 풀엔 있으나 순위에 밀린 정답을 크로스인코더가 top-2로 끌어올린 게 작동.
+- **그러나 혼재**: tire·kona-ev는 0.50→0.00 **후퇴**. 특히 **kona-ev는 우리가 고치려던 타깃인데 악화** — 크로스인코더가
+  그 KB의 kona_electric 청크보다 다른 충전 문단(ioniq5)을 더 관련 있다고 판단. **골든 기대("kona_electric이어야")가
+  지나치게 엄격**할 가능성(ioniq5 충전 답도 정답으로 볼 수 있음).
+- **채택 보류 — 재측정 필요**: (1) TOP_K=2라 문항당 0/0.5/1.0 3단계뿐 + qwen3 judge 확률적 → **+0.10이 노이즈인지
+  2~3회 반복으로 확정**해야. (2) faithfulness −0.06도 확인. (3) **TOP_K=2→3~4 확대**가 후퇴 2건을 살릴 가능성(슬롯↑).
+- 면접 한 줄: *"크로스인코더가 ctx-precision을 0.70→0.80으로 올렸지만, 2문항 후퇴와 단일 실행·거친 눈금 때문에
+  바로 채택하지 않고 반복 측정과 TOP_K 확대를 조건으로 걸었다 — 측정 없이 최적화하지 않는다."*
+
+원본: `eval/ragas_qwen3_mmr.txt`, `eval/ragas_qwen3_cross.txt`.
 
 

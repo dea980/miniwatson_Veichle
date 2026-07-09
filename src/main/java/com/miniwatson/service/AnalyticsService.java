@@ -90,6 +90,14 @@ public class AnalyticsService {
             + "FROM parts p ORDER BY est_cost DESC LIMIT 10"));
 
         // (OTA 비율 지표는 SELECT-전용 가드가 컬럼명 'overTheAirUpdate'의 'update'를 DML로 오탐 → 일시 제거.)
+        // 지역 핫스팟:  주(state)별 불만 , 화재, 부상 (Geographic 렌즈) ──
+        out.put("complaintsByState", rows(
+                "SELECT state, COUNT(*) n, "
+                        + "SUM(CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END) fires, "
+                        + "COALESCE(SUM(TRY_CAST(numberofinjuries AS INTEGER)),0) injuries "
+                        + "FROM complaints WHERE state IS NOT NULL AND state <> '' "
+                        + "GROUP BY state ORDER BY n DESC LIMIT 10"));
+
         // LLM 인사이트는 분리(/insight) — 집계(차트)는 즉시 반환하고 느린 LLM은 별도 호출로.
         return out;
     }
@@ -450,14 +458,23 @@ public class AnalyticsService {
 
     @SuppressWarnings("unchecked")
     private String insight(Map<String, Object> agg, long recalls, long complaints, long fires, long injuries, String llmModel) {
-        String stats = "리콜 총 " + recalls + "건, 불만 총 " + complaints + "건, 화재 " + fires + "건, 부상 " + injuries + "명.\n"
-                + "리콜 주요 부위: " + fmtTop((List<List<Object>>) agg.get("recallTopComponents")) + "\n"
-                + "불만 주요 부위: " + fmtTop((List<List<Object>>) agg.get("complaintTopComponents")) + "\n"
-                + "차종별 불만: " + fmtTop((List<List<Object>>) agg.get("complaintByModel")) + "\n"
-                + "부품 수요 상위: " + fmtTop((List<List<Object>>) agg.get("partsDemand"));
-        String prompt = "당신은 현대자동차 데이터 분석가입니다. 아래 플릿 통계만 근거로 운영 인사이트를 한국어로 작성하세요.\n"
-                + "규칙: 주어진 수치만 인용, 지어내지 말 것. 대괄호·표 기호 없이 자연스러운 문장으로 4~6문장. "
-                + "품질 우선순위, 워런티/부품 수요, 안전 위험 관점에서 시사점을 제시하세요.\n\n통계:\n" + stats + "\n\n인사이트:";
+        String stats = "리콜 " + recalls + "건 · 불만 " + complaints + "건 · 화재 " + fires + "건 · 부상 " + injuries + "명\n"
+                + "· 볼륨(불만 많은 차종): " + fmtTop((List<List<Object>>) agg.get("complaintByModel")) + "\n"
+                + "· 볼륨(불만 많은 부위): " + fmtTop((List<List<Object>>) agg.get("complaintTopComponents")) + "\n"
+                + "· 심각도(차종·화재수): " + fmtTop((List<List<Object>>) agg.get("safetyHotspots")) + "\n"
+                + "· 비용(부품 예상 워런티): " + fmtTop((List<List<Object>>) agg.get("partsDemand")) + "\n"
+                + "· 리콜 주요 부위: " + fmtTop((List<List<Object>>) agg.get("recallTopComponents"));
+        // 3렌즈(볼륨·심각도·비용) 분석 매뉴얼을 프롬프트로 강제 — 자유서술 대신 근거서술.
+        String prompt = "당신은 현대자동차 품질 데이터 분석가입니다. 아래 집계(결정적 SQL 결과)만 근거로 운영 인사이트를 한국어로 작성하세요.\n\n"
+                + "[분석 매뉴얼] 반드시 아래 3렌즈 순서로, 각 항목에 실제 수치를 인용해 서술하세요.\n"
+                + "1) 볼륨: 불만이 가장 많은 차종·부위.\n"
+                + "2) 심각도: 부상·화재·사고가 집중된 차종(볼륨과 다를 수 있음).\n"
+                + "3) 비용: 예상 워런티 비용이 큰 부품.\n"
+                + "그다음 두 렌즈 이상에서 겹치는 대상이 있으면 '최우선'으로 지목하고, 렌즈별 조치를 "
+                + "품질기획/품질안전/AS·재무 관점에서 한 가지씩 제시하세요.\n"
+                + "[규칙] 주어진 수치만 인용(지어내지 말 것). 표·대괄호 없이 자연스러운 문장 5~7문장. "
+                + "마지막에 한 줄로 한계 표기(수요는 프록시, 예상비용은 우선순위용).\n\n"
+                + "[집계]\n" + stats + "\n\n인사이트:";
         try {
             return ollama.ask(prompt, llmModel, "분석 인사이트");
         } catch (Throwable t) {

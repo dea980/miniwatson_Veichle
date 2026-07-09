@@ -21,7 +21,7 @@
   width: 36px; height: 36px; flex-shrink: 0; display: inline-flex;
 }
 .brand .logo svg { width: 36px; height: 36px; }
-.brand .name { font-weight: 700; font-size: 15px; letter-spacing: -.01em; color: #fff; }
+.brand .name { font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: -.01em; color: #fff; }
 .brand .sub { color: var(--rail-text); font-size: 10px; font-family: var(--display); font-weight: 600; text-transform: uppercase; letter-spacing: .14em; }
 
 .nav { display: flex; flex-direction: column; gap: 2px; }
