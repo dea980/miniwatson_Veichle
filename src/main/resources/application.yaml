@@ -65,6 +65,7 @@ vllm:
   chat-model: ${VLLM_CHAT_MODEL:Qwen/Qwen2.5-7B-Instruct}
   chat-models: ${VLLM_CHAT_MODELS:Qwen/Qwen2.5-7B-Instruct}
   num-predict: ${VLLM_NUM_PREDICT:512}
+  temperature: ${VLLM_TEMPERATURE:0.2}     # 낮을수록 결정적(집계 수치 인용 충실도↑)
 
 # watsonx.ai (llm.provider=watsonx 일 때만 사용). 키/프로젝트는 .env로 주입(커밋 금지).
 watsonx:

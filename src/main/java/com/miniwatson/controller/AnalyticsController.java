@@ -26,8 +26,9 @@ public class AnalyticsController {
 
     /** LLM 인사이트만 별도 (느려서 집계와 분리). */
     @GetMapping("/insight")
-    public Map<String, Object> insight(@RequestParam(value = "model", required = false) String model) {
-        try { return Map.of("insight", analytics.insightText(model)); }
+    public Map<String, Object> insight(@RequestParam(value = "model", required = false) String model,
+                                       @RequestParam(value = "level", required = false) String level) {
+        try { return Map.of("insight", analytics.insightText(model, level)); }
         catch (Throwable t) { return Map.of("insight", "(인사이트 생성 실패: " + t + ")"); }
     }
 

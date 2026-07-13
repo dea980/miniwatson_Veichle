@@ -113,6 +113,7 @@ export type Analytics = {
   recallTopComponents: [string, number][];
   complaintTopComponents: [string, number][];
   complaintByModel: [string, number][];
+  recallByModel: [string, number, number][];   // model, recalls, parkIt(화재위험 주차권고)
   complaintsByState: [string, number, number, number, number, number, string][];
     // state, complaints, fires, injuries, deaths, crashes, topComponent
   safetyHotspots: [string, number, number, number][];        // model, fires, injuries, crashes
@@ -241,8 +242,13 @@ export const api = {
   // 분석 대시보드 (플릿 집계 + LLM 인사이트)
   analytics: (model?: string) =>
     jget<Analytics>(`/api/analytics/overview${model ? `?model=${encodeURIComponent(model)}` : ""}`),
-  analyticsInsight: (model?: string) =>
-    jget<{ insight: string }>(`/api/analytics/insight${model ? `?model=${encodeURIComponent(model)}` : ""}`),
+  analyticsInsight: (model?: string, level?: string) => {
+    const q = new URLSearchParams();
+    if (model) q.set("model", model);
+    if (level) q.set("level", level);
+    const qs = q.toString();
+    return jget<{ insight: string }>(`/api/analytics/insight${qs ? `?${qs}` : ""}`);
+  },
   // 홈 대시보드용 경량 요약 (총계 + 최근 리콜/불만)
   summary: () => jget<Summary>("/api/analytics/summary"),
   // 드릴다운: 특정 차종의 개별 차량 기록(불만)

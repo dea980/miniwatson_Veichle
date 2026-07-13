@@ -71,6 +71,12 @@ public class AnalyticsService {
         out.put("complaintByModel", rows(
             "SELECT model, COUNT(*) n FROM complaints GROUP BY model ORDER BY n DESC LIMIT 8"));
 
+        // ── 차종별 리콜 + 주차권고(화재위험) 리콜 수 — 리콜 딥다이브용 ──
+        out.put("recallByModel", rows(
+            "SELECT model, COUNT(*) n, "
+            + "SUM(CASE WHEN lower(cast(parkit AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END) parkit "
+            + "FROM recalls GROUP BY model ORDER BY n DESC LIMIT 8"));
+
         // ── 안전 핫스팟: 차종별 화재/부상/사고 ──
         out.put("safetyHotspots", rows(
             "SELECT model, "
@@ -102,14 +108,180 @@ public class AnalyticsService {
         return out;
     }
 
-    /** LLM 인사이트만 별도로 (느린 LLM이 집계 응답을 막지 않게 분리). */
-    public String insightText(String llmModel) {
+    /** LLM 인사이트 — 레벨(탭)별로 다른 데이터·프레이밍 + 시간축(연간·계절). 느린 LLM이라 요청 시에만. */
+    public String insightText(String llmModel) { return insightText(llmModel, null); }
+
+    @SuppressWarnings("unchecked")
+    public String insightText(String llmModel, String level) {
         Map<String, Object> agg = overview(llmModel);
-        long recalls    = scalar("SELECT COUNT(*) FROM recalls");
-        long complaints = scalar("SELECT COUNT(*) FROM complaints");
-        long fires      = scalar("SELECT COUNT(*) FROM complaints WHERE lower(cast(fire AS varchar)) IN ('true','1','yes','y')");
-        long injuries   = scalar("SELECT COALESCE(SUM(TRY_CAST(numberofinjuries AS INTEGER)),0) FROM complaints");
-        return insight(agg, recalls, complaints, fires, injuries, llmModel);
+        String lv = (level == null || level.isBlank()) ? "overview" : level.toLowerCase();
+        String annual = fmtYears((List<List<Object>>) agg.get("complaintByYear"));
+        String seasonal = fmtSeason(seasonalComplaints());
+        String deltas = deltaFacts();   // 주간·연간 증감률(%) — Java에서 결정적으로 계산(LLM 계산 금지)
+        String stats, focus;
+        switch (lv) {
+            case "recall" -> {
+                focus = "리콜(규제 리스크)";
+                stats = "리콜 주요 부위: " + fmtTop((List<List<Object>>) agg.get("recallTopComponents")) + "\n"
+                      + "리콜 연도별: " + fmtYears((List<List<Object>>) agg.get("recallByYear"));
+            }
+            case "safety" -> {
+                focus = "안전(누가 언제 다치나)";
+                stats = "차종별 위해(화재·부상·사고): " + fmtSafety((List<List<Object>>) agg.get("safetyHotspots")) + "\n"
+                      + "계절별 불만·화재: " + seasonal;
+            }
+            case "parts" -> {
+                focus = "부품·워런티(비용)";
+                stats = "부품 예상 워런티 상위: " + fmtParts((List<List<Object>>) agg.get("partsDemand")) + "\n"
+                      + "불만 연도별(수요 추이 프록시): " + annual;
+            }
+            case "geo" -> {
+                focus = "지역(어디서 터지나)";
+                stats = "주별 불만 상위: " + fmtTop((List<List<Object>>) agg.get("complaintsByState")) + "\n"
+                      + "계절별 불만·화재: " + seasonal;
+            }
+            default -> {
+                focus = "종합(3렌즈: 볼륨·심각도·비용)";
+                stats = "볼륨(불만 많은 차종): " + fmtTop((List<List<Object>>) agg.get("complaintByModel")) + "\n"
+                      + "심각도(차종·화재): " + fmtTop((List<List<Object>>) agg.get("safetyHotspots")) + "\n"
+                      + "비용(부품 워런티): " + fmtParts((List<List<Object>>) agg.get("partsDemand")) + "\n"
+                      + "연도별 불만: " + annual + "\n"
+                      + "계절별 불만·화재: " + seasonal;
+            }
+        }
+        String prompt = "당신은 현대자동차 품질 데이터 분석가입니다. 아래 집계(결정적 SQL 결과)만 근거로 "
+                + "'" + focus + "' 관점의 운영 인사이트를 한국어로 작성하세요.\n\n"
+                + "[규칙]\n"
+                + "1) 언급하는 모든 항목에 반드시 정확한 수치를 괄호로 인용하세요. "
+                + "예: \"팰리세이드 불만이 가장 많다(2,248건)\".\n"
+                + "2) 수치는 반올림·생략·근사하지 말고 집계에 나온 값을 그대로 쓰세요. 집계에 없는 수는 만들지 마세요.\n"
+                + "3) [시간 비교]의 증감률(%)을 반드시 인용하세요. 퍼센트는 직접 계산하지 말고 주어진 값을 그대로 쓰세요. "
+                + "예: \"최근 7일 불만이 직전 대비 +12% 상승(59건 vs 53건)\".\n"
+                + "4) 연도별·계절별 변화도 시작→끝 값으로 대비하세요.\n"
+                + "5) 출력은 마크다운으로 가독성 있게 작성하세요:\n"
+                + "   - 첫 줄: 가장 중요한 신호를 한 문장으로 요약하되 **굵게**.\n"
+                + "   - 그다음 관점별 불릿 3~4개. 각 불릿은 '- **라벨**: 내용(수치)' 형식. 라벨 예: 비용/추세/계절/리스크.\n"
+                + "   - 마지막 불릿: '- **권고**: 구체적 조치'.\n"
+                + "   - 각 불릿은 1문장으로 짧게. 수치·증감률(%)은 괄호로. (수요는 프록시·예상비용은 우선순위용)\n\n"
+                + (deltas.isEmpty() ? "" : "[시간 비교]\n" + deltas + "\n\n")
+                + "[집계]\n" + stats + "\n\n인사이트:";
+        try {
+            return ollama.ask(prompt, llmModel, focus + " 인사이트");
+        } catch (Throwable t) {
+            log.warn("[analytics] 인사이트 생성 실패({}, {}): {}", lv, llmModel, t.toString());
+            return "## 인사이트 (자동 생성 실패)\n수치는 위 차트를 참고하세요. 더 가벼운 모델을 권장합니다.";
+        }
+    }
+
+    /** 계절(봄/여름/가을/겨울)별 불만·화재 집계 — 시간 패턴 인사이트용. */
+    private List<List<Object>> seasonalComplaints() {
+        ensure("complaints");
+        String cDate = "COALESCE("
+            + "CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%m/%d/%Y') AS DATE), "
+            + "CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%Y%m%d') AS DATE), "
+            + "TRY_CAST(CAST(datecomplaintfiled AS VARCHAR) AS DATE))";
+        return rows("SELECT CASE "
+            + "WHEN month(" + cDate + ") IN (3,4,5) THEN '봄' "
+            + "WHEN month(" + cDate + ") IN (6,7,8) THEN '여름' "
+            + "WHEN month(" + cDate + ") IN (9,10,11) THEN '가을' "
+            + "ELSE '겨울' END AS season, COUNT(*) n, "
+            + "SUM(CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END) fires "
+            + "FROM complaints WHERE " + cDate + " IS NOT NULL GROUP BY season ORDER BY n DESC");
+    }
+
+    /** 연도별 [year,n] 중 최근 6개만 서술용 문자열로. */
+    private String fmtYears(List<List<Object>> rows) {
+        if (rows == null || rows.isEmpty()) return "없음";
+        StringBuilder sb = new StringBuilder();
+        for (int i = Math.max(0, rows.size() - 6); i < rows.size(); i++) {
+            List<Object> r = rows.get(i);
+            if (r.size() < 2) continue;
+            if (sb.length() > 0) sb.append(" · ");
+            sb.append(r.get(0)).append(" ").append(r.get(1));
+        }
+        return sb.length() == 0 ? "없음" : sb.toString();
+    }
+
+    /** 계절 [season,n,fires] 서술용. */
+    private String fmtSeason(List<List<Object>> rows) {
+        if (rows == null || rows.isEmpty()) return "없음";
+        StringBuilder sb = new StringBuilder();
+        for (List<Object> r : rows) {
+            if (r.size() < 2) continue;
+            if (sb.length() > 0) sb.append(" · ");
+            sb.append(r.get(0)).append(" 불만").append(r.get(1));
+            if (r.size() >= 3) sb.append("(화재").append(r.get(2)).append(")");
+        }
+        return sb.length() == 0 ? "없음" : sb.toString();
+    }
+
+    /** 안전 핫스팟 [model,fires,injuries,crashes] top5 서술용. */
+    private String fmtSafety(List<List<Object>> rows) {
+        if (rows == null || rows.isEmpty()) return "없음";
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        for (List<Object> r : rows) {
+            if (r.size() < 4) continue;
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(r.get(0)).append("(화재").append(r.get(1)).append("·부상").append(r.get(2)).append("·사고").append(r.get(3)).append(")");
+            if (++i >= 5) break;
+        }
+        return sb.length() == 0 ? "없음" : sb.toString();
+    }
+
+    /** 부품 수요 [part,comp,demand,price,cost] top5 서술용(예상비용). */
+    private String fmtParts(List<List<Object>> rows) {
+        if (rows == null || rows.isEmpty()) return "없음";
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        for (List<Object> r : rows) {
+            if (r.size() < 5) continue;
+            long cost = 0;
+            try { cost = Math.round(Double.parseDouble(String.valueOf(r.get(4)))); } catch (Exception ignore) {}
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(r.get(0)).append("(약 ").append(String.format("%,d", cost)).append("원)");
+            if (++i >= 5) break;
+        }
+        return sb.length() == 0 ? "없음" : sb.toString();
+    }
+
+    /** 퍼센트 증감(now vs prev) — LLM 대신 결정적으로 계산. */
+    private static String pct(long now, long prev) {
+        if (prev == 0) return now == 0 ? "0%" : "신규";
+        return String.format("%+.0f%%", (now - prev) * 100.0 / prev);
+    }
+
+    private static long parseLong(Object o) {
+        try { return Long.parseLong(String.valueOf(o).split("\\.")[0]); } catch (Exception e) { return 0; }
+    }
+
+    /** 주간(WoW)·연간(YoY) 증감 사실 — 인사이트에 "직전 대비 +X%"로 쓰이게 Java에서 미리 계산. */
+    private String deltaFacts() {
+        ensure("complaints");
+        String cDate = "COALESCE("
+            + "CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%m/%d/%Y') AS DATE), "
+            + "CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%Y%m%d') AS DATE), "
+            + "TRY_CAST(CAST(datecomplaintfiled AS VARCHAR) AS DATE))";
+        List<List<Object>> mx = rows("SELECT CAST(max(" + cDate + ") AS VARCHAR) FROM complaints");
+        if (mx.isEmpty() || mx.get(0).isEmpty() || mx.get(0).get(0) == null) return "";
+        String to = String.valueOf(mx.get(0).get(0));
+        long tw = scalar("SELECT COUNT(*) FROM complaints WHERE " + cDate
+            + " BETWEEN CAST('" + to + "' AS DATE) - INTERVAL 6 DAY AND CAST('" + to + "' AS DATE)");
+        long lw = scalar("SELECT COUNT(*) FROM complaints WHERE " + cDate
+            + " BETWEEN CAST('" + to + "' AS DATE) - INTERVAL 13 DAY AND CAST('" + to + "' AS DATE) - INTERVAL 7 DAY");
+        StringBuilder sb = new StringBuilder();
+        sb.append("주간(WoW): 최근 7일 불만 ").append(tw).append("건 vs 직전 7일 ").append(lw)
+          .append("건 → ").append(pct(tw, lw));
+        List<List<Object>> yr = rows("SELECT year(" + cDate + ") y, COUNT(*) n FROM complaints WHERE "
+            + cDate + " IS NOT NULL GROUP BY y ORDER BY y");
+        if (yr.size() >= 2) {
+            List<Object> a = yr.get(yr.size() - 2), b = yr.get(yr.size() - 1);
+            long an = parseLong(a.get(1)), bn = parseLong(b.get(1));
+            sb.append("\n연간(YoY): ").append(a.get(0)).append("년 ").append(an).append("건 → ")
+              .append(b.get(0)).append("년 ").append(bn).append("건 → ").append(pct(bn, an))
+              .append(" (최신 연도는 진행중일 수 있음)");
+        }
+        return sb.toString();
     }
 
     /** 홈 대시보드용 경량 요약 — LLM 안 거치고 빠르게(총계 + 최근 이벤트 피드). */
@@ -301,6 +473,7 @@ public class AnalyticsService {
             + "TRY_CAST(CAST(" + dc + " AS VARCHAR) AS DATE))";
         String bucket = switch (by == null ? "year" : by) {
             case "day"   -> "strftime(" + d + ", '%Y-%m-%d')";
+            case "week"  -> "strftime(date_trunc('week', " + d + "), '%Y-%m-%d')";   // 그 주 월요일 기준
             case "month" -> "strftime(" + d + ", '%Y-%m')";
             default       -> "strftime(" + d + ", '%Y')";
         };
@@ -456,32 +629,6 @@ public class AnalyticsService {
         return out;
     }
 
-    @SuppressWarnings("unchecked")
-    private String insight(Map<String, Object> agg, long recalls, long complaints, long fires, long injuries, String llmModel) {
-        String stats = "리콜 " + recalls + "건 · 불만 " + complaints + "건 · 화재 " + fires + "건 · 부상 " + injuries + "명\n"
-                + "· 볼륨(불만 많은 차종): " + fmtTop((List<List<Object>>) agg.get("complaintByModel")) + "\n"
-                + "· 볼륨(불만 많은 부위): " + fmtTop((List<List<Object>>) agg.get("complaintTopComponents")) + "\n"
-                + "· 심각도(차종·화재수): " + fmtTop((List<List<Object>>) agg.get("safetyHotspots")) + "\n"
-                + "· 비용(부품 예상 워런티): " + fmtTop((List<List<Object>>) agg.get("partsDemand")) + "\n"
-                + "· 리콜 주요 부위: " + fmtTop((List<List<Object>>) agg.get("recallTopComponents"));
-        // 3렌즈(볼륨·심각도·비용) 분석 매뉴얼을 프롬프트로 강제 — 자유서술 대신 근거서술.
-        String prompt = "당신은 현대자동차 품질 데이터 분석가입니다. 아래 집계(결정적 SQL 결과)만 근거로 운영 인사이트를 한국어로 작성하세요.\n\n"
-                + "[분석 매뉴얼] 반드시 아래 3렌즈 순서로, 각 항목에 실제 수치를 인용해 서술하세요.\n"
-                + "1) 볼륨: 불만이 가장 많은 차종·부위.\n"
-                + "2) 심각도: 부상·화재·사고가 집중된 차종(볼륨과 다를 수 있음).\n"
-                + "3) 비용: 예상 워런티 비용이 큰 부품.\n"
-                + "그다음 두 렌즈 이상에서 겹치는 대상이 있으면 '최우선'으로 지목하고, 렌즈별 조치를 "
-                + "품질기획/품질안전/AS·재무 관점에서 한 가지씩 제시하세요.\n"
-                + "[규칙] 주어진 수치만 인용(지어내지 말 것). 표·대괄호 없이 자연스러운 문장 5~7문장. "
-                + "마지막에 한 줄로 한계 표기(수요는 프록시, 예상비용은 우선순위용).\n\n"
-                + "[집계]\n" + stats + "\n\n인사이트:";
-        try {
-            return ollama.ask(prompt, llmModel, "분석 인사이트");
-        } catch (Throwable t) {
-            log.warn("[analytics] 인사이트 생성 실패({}): {}", llmModel, t.toString());
-            return "## 인사이트 (자동 생성 실패)\n수치는 위 차트를 참고하세요. 더 가벼운 모델(qwen2.5:7b, granite4)을 권장합니다.";
-        }
-    }
 
     private String fmtTop(List<List<Object>> top) {
         if (top == null || top.isEmpty()) return "없음";

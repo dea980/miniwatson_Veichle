@@ -35,6 +35,20 @@ function Bars({ rows, unit = "", money = false }: { rows: [string, number][]; un
   );
 }
 
+// 추세 그래뉼래리티 토글 (연/월/주/일) — 개요·리콜 탭 공용
+function GranToggle({ by, setBy }: { by: "year" | "month" | "week" | "day"; setBy: (g: "year" | "month" | "week" | "day") => void }) {
+  const LABELS: Record<string, string> = { year: "연도별", month: "월별", week: "주별", day: "일별" };
+  return (
+    <div className="row" style={{ gap: 4 }}>
+      {(["year", "month", "week", "day"] as const).map((g) => (
+        <button key={g} className={by === g ? "btn" : "ghost"} style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setBy(g)}>
+          {LABELS[g]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function AnalyticsPanel() {
   const [models, setModels] = useState<Models | null>(null);
   const [model, setModel] = useState("");
@@ -46,7 +60,7 @@ export default function AnalyticsPanel() {
   // drill-down 레벨 (L0 개요 → L1 딥다이브)
   const [level, setLevel] = useState<Level>("overview");
   // 시계열 추세 (연/월/일)
-  const [by, setBy] = useState<"year" | "month" | "day">("year");
+  const [by, setBy] = useState<"year" | "month" | "week" | "day">("year");
   const [recallTrend, setRecallTrend] = useState<[string, number][]>([]);
   const [complaintTrend, setComplaintTrend] = useState<[string, number][]>([]);
 
@@ -84,10 +98,12 @@ export default function AnalyticsPanel() {
   // AI 인사이트는 *요청 시에만* 생성(느린 LLM 호출이라 자동 X)
   async function genInsight() {
     setInsLoading(true); setInsight("");
-    try { const r = await api.analyticsInsight(model || undefined); setInsight(r.insight); }
+    try { const r = await api.analyticsInsight(model || undefined, level); setInsight(r.insight); }   // 현재 탭(레벨) 기준 인사이트
     catch { setInsight("(인사이트 생성 실패)"); } finally { setInsLoading(false); }
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  // 탭(레벨) 바꾸면 이전 레벨 인사이트는 비운다 — 각 탭이 자기 기준으로 새로 생성
+  useEffect(() => { setInsight(""); }, [level]);
   // 그래뉼래리티 바꾸면 추세만 다시
   useEffect(() => { if (res) loadTrends(by); /* eslint-disable-next-line */ }, [by]);
 
@@ -193,13 +209,7 @@ export default function AnalyticsPanel() {
 
               <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
                 <div className="label" style={{ margin: 0 }}>추세 분석 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>| 전 차종</span></div>
-                <div className="row" style={{ gap: 4 }}>
-                  {(["year", "month", "day"] as const).map((g) => (
-                    <button key={g} className={by === g ? "btn" : "ghost"} style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setBy(g)}>
-                      {g === "year" ? "연도별" : g === "month" ? "월별" : "일별"}
-                    </button>
-                  ))}
-                </div>
+                <GranToggle by={by} setBy={setBy} />
               </div>
               {(recallTrend.length > 0 || complaintTrend.length > 0)
                 ? <TrendChart unit="건" series={[
@@ -213,9 +223,38 @@ export default function AnalyticsPanel() {
 
           {/* ── L1 리콜: 규제 리스크 ── */}
           {level === "recall" && (
-            res.recallTopComponents?.length > 0
-              ? (<><div className="label">리콜 주요 부위</div><Donut rows={res.recallTopComponents} unit="건" /></>)
-              : <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>리콜 데이터 없음</div>
+            <>
+              {res.recallTopComponents?.length > 0 && (<><div className="label">리콜 주요 부위</div><Donut rows={res.recallTopComponents} unit="건" /></>)}
+              {res.recallByModel?.length > 0 && (
+                <>
+                  <div className="label">차종별 리콜 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>| 주차권고 = 화재위험</span></div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table>
+                      <thead><tr><th>차종</th><th className="right">리콜</th><th className="right">주차권고</th></tr></thead>
+                      <tbody>
+                        {res.recallByModel.map((r, i) => (
+                          <tr key={i}>
+                            <td>{koModel(String(r[0]))}</td>
+                            <td className="right">{num(r[1])}</td>
+                            <td className="right">{num(r[2]) > 0 ? <span className="pill bad">{num(r[2])}</span> : 0}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+              {/* 리콜 추세 — 연/월/주/일 토글 (개요와 동일 UX) */}
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
+                <div className="label" style={{ margin: 0 }}>리콜 추세</div>
+                <GranToggle by={by} setBy={setBy} />
+              </div>
+              {recallTrend.length > 0
+                ? <TrendChart unit="건" series={[{ name: "리콜", color: "#002c5f", data: recallTrend }]} />
+                : <div className="muted" style={{ fontSize: 13 }}>추세 데이터 없음</div>}
+              {!res.recallTopComponents?.length && !res.recallByModel?.length &&
+                <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>리콜 데이터 없음</div>}
+            </>
           )}
 
           {/* ── L1 안전: 누가 다치나 ── */}
@@ -292,14 +331,14 @@ export default function AnalyticsPanel() {
 
           {/* AI 인사이트 — 전 레벨 공통(집계 기반, 요청 시 생성) */}
           <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
-            <div className="label" style={{ margin: 0 }}>AI 운영 인사이트</div>
+            <div className="label" style={{ margin: 0 }}>AI 운영 인사이트 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>| {LEVEL_META[level].label} 기준</span></div>
             {!insLoading && <button className="btn" style={{ fontSize: 12 }} onClick={genInsight}>{insight ? "다시 생성" : "AI 인사이트 생성"}</button>}
           </div>
           {insLoading
             ? <div className="empty"><div className="empty-ic"><svg className="spin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /></svg></div><div>집계를 바탕으로 AI가 인사이트를 작성 중…</div></div>
             : insight
               ? <div className="answer"><Markdown text={insight} /></div>
-              : <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>버튼을 누르면 위 집계를 근거로 AI가 운영 인사이트를 서술합니다(느린 LLM 호출이라 요청 시에만).</div>}
+              : <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>버튼을 누르면 <b>{LEVEL_META[level].label}</b> 탭의 집계(+연간·계절 시간축)를 근거로 AI가 인사이트를 서술합니다. 탭마다 결과가 달라집니다.</div>}
         </>
       )}
     </div>
