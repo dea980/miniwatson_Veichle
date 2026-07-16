@@ -10,6 +10,11 @@ spring:
   devtools:
     restart:
       enabled: false   # 대량 ingest 중 자동 재시작이 응답을 끊는 사고 방지. 일반 개발 복귀 시 true.
+  ai:
+    mcp:
+      server:
+        name: miniwatson-vehicle
+        version: 0.1.0
 
 retrieval:
   hybrid:
@@ -126,3 +131,5 @@ management:
     distribution:
       percentiles-histogram:
         miniwatson.llm.latency: true     # p50/p95/p99 히스토그램 버킷 (Prometheus histogram_quantile)
+
+
