@@ -28,6 +28,9 @@ public class AnalyticsService {
     private final double laborRate;
     private final com.miniwatson.cases.ResolvedCaseRepository resolvedRepo;
 
+    private static final java.util.Set<String> METRIC = java.util.Set.of("count", "fire", "injury", "crash");
+
+
     public AnalyticsService(TabularSqlService tabular, OllamaService ollama,
                             VehicleDataProperties data,
                             com.miniwatson.cases.ResolvedCaseRepository resolvedRepo,
@@ -39,85 +42,109 @@ public class AnalyticsService {
         this.laborRate = laborRate;
     }
 
-    public Map<String, Object> overview(String llmModel) {
+    public Map<String, Object> overview(String llmModel) { return overview(llmModel, "all"); }
+
+    /** 플릿 집계 — 기간(by)으로 전체 스코프. by ∈ all/year/month/week (기본 all=전체 누적). */
+    public Map<String, Object> overview(String llmModel, String by) {
         ensure("recalls"); ensure("complaints"); ensure("parts");
         Map<String, Object> out = new LinkedHashMap<>();
 
-        // ── 총계 KPI ──
-        long recalls    = scalar("SELECT COUNT(*) FROM recalls");
-        long complaints = scalar("SELECT COUNT(*) FROM complaints");
-        long fires      = scalar("SELECT COUNT(*) FROM complaints WHERE lower(cast(fire AS varchar)) IN ('true','1','yes','y')");
-        long injuries   = scalar("SELECT COALESCE(SUM(TRY_CAST(numberofinjuries AS INTEGER)),0) FROM complaints");
-        long crashes    = scalar("SELECT COUNT(*) FROM complaints WHERE lower(cast(crash AS varchar)) IN ('true','1','yes','y')");
+        // 날짜 파싱(deltaFacts와 동일 패턴) + 기간 조건(전체면 TRUE). 창은 각 테이블 최신일 기준 최근 N일.
+        String cDate = "COALESCE(CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%m/%d/%Y') AS DATE), "
+            + "CAST(try_strptime(CAST(datecomplaintfiled AS VARCHAR),'%Y%m%d') AS DATE), "
+            + "TRY_CAST(CAST(datecomplaintfiled AS VARCHAR) AS DATE))";
+        String rDate = "COALESCE(CAST(try_strptime(CAST(reportreceiveddate AS VARCHAR),'%m/%d/%Y') AS DATE), "
+            + "TRY_CAST(CAST(reportreceiveddate AS VARCHAR) AS DATE))";
+        String cc = periodCond(cDate, "complaints", by);   // 불만 기간 조건(전체면 TRUE)
+        String rc = periodCond(rDate, "recalls", by);      // 리콜 기간 조건
+
+        // ── 총계 KPI (기간 필터 적용) ──
+        long recalls    = scalar("SELECT COUNT(*) FROM recalls WHERE " + rc);
+        long complaints = scalar("SELECT COUNT(*) FROM complaints WHERE " + cc);
+        long fires      = scalar("SELECT COUNT(*) FROM complaints WHERE " + cc + " AND lower(cast(fire AS varchar)) IN ('true','1','yes','y')");
+        long injuries   = scalar("SELECT COALESCE(SUM(TRY_CAST(numberofinjuries AS INTEGER)),0) FROM complaints WHERE " + cc);
+        long crashes    = scalar("SELECT COUNT(*) FROM complaints WHERE " + cc + " AND lower(cast(crash AS varchar)) IN ('true','1','yes','y')");
         out.put("totals", Map.of("recalls", recalls, "complaints", complaints,
                 "fires", fires, "injuries", injuries, "crashes", crashes));
 
-        // ── 리콜 추세(연도별) — 날짜 컬럼은 DATE 타입이라 year()로 연도 추출(substr 불가) ──
+        // ── 연도별 분포는 전체 히스토리 유지(기간과 무관한 맥락 + 인사이트 fmtYears 재사용) ──
         out.put("recallByYear", rows(
             "SELECT year(reportreceiveddate) AS y, COUNT(*) n FROM recalls "
             + "WHERE reportreceiveddate IS NOT NULL GROUP BY y ORDER BY y"));
-        // ── 불만 추세(연도별) ──
         out.put("complaintByYear", rows(
             "SELECT year(datecomplaintfiled) AS y, COUNT(*) n FROM complaints "
             + "WHERE datecomplaintfiled IS NOT NULL GROUP BY y ORDER BY y"));
 
-        // ── 결함 부위 Top (리콜/불만) — 부품 수요·품질 신호 ──
+        // ── 결함 부위 Top (기간 필터) ──
         out.put("recallTopComponents", rows(
-            "SELECT component, COUNT(*) n FROM recalls GROUP BY component ORDER BY n DESC LIMIT 8"));
+            "SELECT component, COUNT(*) n FROM recalls WHERE " + rc + " GROUP BY component ORDER BY n DESC LIMIT 8"));
         out.put("complaintTopComponents", rows(
-            "SELECT components, COUNT(*) n FROM complaints GROUP BY components ORDER BY n DESC LIMIT 8"));
+            "SELECT components, COUNT(*) n FROM complaints WHERE " + cc + " GROUP BY components ORDER BY n DESC LIMIT 8"));
 
-        // ── 차종별 불만 ──
+        // ── 차종별 불만 (기간 필터) ──
         out.put("complaintByModel", rows(
-            "SELECT model, COUNT(*) n FROM complaints GROUP BY model ORDER BY n DESC LIMIT 8"));
+            "SELECT model, COUNT(*) n FROM complaints WHERE " + cc + " GROUP BY model ORDER BY n DESC LIMIT 8"));
 
-        // ── 차종별 리콜 + 주차권고(화재위험) 리콜 수 — 리콜 딥다이브용 ──
+        // ── 차종별 리콜 + 주차권고(화재위험) (기간 필터) ──
         out.put("recallByModel", rows(
             "SELECT model, COUNT(*) n, "
             + "SUM(CASE WHEN lower(cast(parkit AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END) parkit "
-            + "FROM recalls GROUP BY model ORDER BY n DESC LIMIT 8"));
+            + "FROM recalls WHERE " + rc + " GROUP BY model ORDER BY n DESC LIMIT 8"));
 
-        // ── 안전 핫스팟: 차종별 화재/부상/사고 ──
+        // ── 안전 핫스팟: 차종별 화재/부상/사고 (기간 필터) ──
         out.put("safetyHotspots", rows(
             "SELECT model, "
             + "SUM(CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END) fires, "
             + "COALESCE(SUM(TRY_CAST(numberofinjuries AS INTEGER)),0) injuries, "
             + "SUM(CASE WHEN lower(cast(crash AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END) crashes "
-            + "FROM complaints GROUP BY model ORDER BY fires DESC, injuries DESC LIMIT 8"));
+            + "FROM complaints WHERE " + cc + " GROUP BY model ORDER BY fires DESC, injuries DESC LIMIT 8"));
 
-        // ── 부품 수요/워런티 비용 프록시: 부품 부위명이 불만 components에 등장한 횟수 × 단가(+공임) ──
-        // 결함 신호(불만)를 부품 카탈로그에 매핑해 예상 수요·비용을 근사(정확 청구액 아님, 운영 우선순위용).
+        // ── 부품 수요/워런티 비용 프록시 (수요=기간 내 불만에 부위 등장 횟수 × 단가+공임) ──
         out.put("partsDemand", rows(
             "SELECT p.part, p.component, "
-            + "  (SELECT COUNT(*) FROM complaints c WHERE upper(c.components) LIKE '%'||upper(p.component)||'%') AS demand, "
+            + "  (SELECT COUNT(*) FROM complaints c WHERE " + cc + " AND upper(c.components) LIKE '%'||upper(p.component)||'%') AS demand, "
             + "  p.unit_price, "
-            + "  (SELECT COUNT(*) FROM complaints c WHERE upper(c.components) LIKE '%'||upper(p.component)||'%') "
+            + "  (SELECT COUNT(*) FROM complaints c WHERE " + cc + " AND upper(c.components) LIKE '%'||upper(p.component)||'%') "
             + "   * (TRY_CAST(p.unit_price AS DOUBLE) + TRY_CAST(p.labor_hours AS DOUBLE)*" + laborRate + ") AS est_cost "
             + "FROM parts p ORDER BY est_cost DESC LIMIT 10"));
 
-        // (OTA 비율 지표는 SELECT-전용 가드가 컬럼명 'overTheAirUpdate'의 'update'를 DML로 오탐 → 일시 제거.)
-        // 지역 핫스팟:  주(state)별 불만 , 화재, 부상 (Geographic 렌즈) ──
+        // ── 지역 핫스팟: 주(state)별 불만/화재/부상 (기간 필터) ──
         out.put("complaintsByState", rows(
                 "SELECT state, COUNT(*) n, "
                         + "SUM(CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END) fires, "
                         + "COALESCE(SUM(TRY_CAST(numberofinjuries AS INTEGER)),0) injuries "
-                        + "FROM complaints WHERE state IS NOT NULL AND state <> '' "
+                        + "FROM complaints WHERE " + cc + " AND state IS NOT NULL AND state <> '' "
                         + "GROUP BY state ORDER BY n DESC LIMIT 10"));
 
         // LLM 인사이트는 분리(/insight) — 집계(차트)는 즉시 반환하고 느린 LLM은 별도 호출로.
         return out;
     }
 
-    /** LLM 인사이트 — 레벨(탭)별로 다른 데이터·프레이밍 + 시간축(연간·계절). 느린 LLM이라 요청 시에만. */
-    public String insightText(String llmModel) { return insightText(llmModel, null); }
+    /** 기간 필터 조건식 — 테이블 최신일 기준 최근 N일. all/null이면 TRUE(전체 누적). */
+    private String periodCond(String dateExpr, String table, String by) {
+        Integer span = spanDays(by);
+        if (span == null) return "TRUE";
+        return "(" + dateExpr + " >= (SELECT max(" + dateExpr + ") FROM " + table + ") - INTERVAL " + span + " DAY)";
+    }
+    /** 기간→창 길이(일). all/null이면 필터 없음. */
+    private static Integer spanDays(String by) {
+        return switch (by == null ? "all" : by) {
+            case "week" -> 7; case "month" -> 30; case "year" -> 365; default -> null;   // all
+        };
+    }
+
+    /** LLM 인사이트 — 레벨(탭)·그래뉼래리티(연/월/주/일)별로 다른 데이터·프레이밍. 느린 LLM이라 요청 시에만. */
+    public String insightText(String llmModel) { return insightText(llmModel, null, "year"); }
+    public String insightText(String llmModel, String level) { return insightText(llmModel, level, "year"); }
 
     @SuppressWarnings("unchecked")
-    public String insightText(String llmModel, String level) {
+    public String insightText(String llmModel, String level, String by) {
         Map<String, Object> agg = overview(llmModel);
         String lv = (level == null || level.isBlank()) ? "overview" : level.toLowerCase();
+        String g = switch (by == null ? "all" : by) { case "week", "month", "year" -> by; default -> "all"; };
         String annual = fmtYears((List<List<Object>>) agg.get("complaintByYear"));
         String seasonal = fmtSeason(seasonalComplaints());
-        String deltas = deltaFacts();   // 주간·연간 증감률(%) — Java에서 결정적으로 계산(LLM 계산 금지)
+        String timeFacts = fmtTrendTail(levelTrend(lv, g), g);   // 차트와 같은 지표를 그래뉼래리티대로(직전 대비 %는 Java 계산)
         String stats, focus;
         switch (lv) {
             case "recall" -> {
@@ -155,15 +182,16 @@ public class AnalyticsService {
                 + "1) 언급하는 모든 항목에 반드시 정확한 수치를 괄호로 인용하세요. "
                 + "예: \"팰리세이드 불만이 가장 많다(2,248건)\".\n"
                 + "2) 수치는 반올림·생략·근사하지 말고 집계에 나온 값을 그대로 쓰세요. 집계에 없는 수는 만들지 마세요.\n"
-                + "3) [시간 비교]의 증감률(%)을 반드시 인용하세요. 퍼센트는 직접 계산하지 말고 주어진 값을 그대로 쓰세요. "
-                + "예: \"최근 7일 불만이 직전 대비 +12% 상승(59건 vs 53건)\".\n"
-                + "4) 연도별·계절별 변화도 시작→끝 값으로 대비하세요.\n"
+                + "3) [시간 추이]는 지금 사용자가 보는 " + granKo(g) + " 기준이다. 반드시 이 단위로 서술하고, "
+                + "제시된 '직전 대비 증감(%)'을 그대로 인용하세요(직접 계산 금지).\n"
+                + ((g.equals("week") || g.equals("month")) ? "3-1) 짧은 기간(일별 버킷)은 노이즈가 크므로 단일 급증은 단정하지 말고 '관찰' 수준으로 서술.\n" : "")
+                + "4) 계절 맥락도 시작→끝 값으로 대비하세요.\n"
                 + "5) 출력은 마크다운으로 가독성 있게 작성하세요:\n"
                 + "   - 첫 줄: 가장 중요한 신호를 한 문장으로 요약하되 **굵게**.\n"
                 + "   - 그다음 관점별 불릿 3~4개. 각 불릿은 '- **라벨**: 내용(수치)' 형식. 라벨 예: 비용/추세/계절/리스크.\n"
                 + "   - 마지막 불릿: '- **권고**: 구체적 조치'.\n"
                 + "   - 각 불릿은 1문장으로 짧게. 수치·증감률(%)은 괄호로. (수요는 프록시·예상비용은 우선순위용)\n\n"
-                + (deltas.isEmpty() ? "" : "[시간 비교]\n" + deltas + "\n\n")
+                + (timeFacts.isEmpty() ? "" : "[시간 추이 · " + granKo(g) + "]\n" + timeFacts + "\n\n")
                 + "[집계]\n" + stats + "\n\n인사이트:";
         try {
             return ollama.ask(prompt, llmModel, focus + " 인사이트");
@@ -171,6 +199,38 @@ public class AnalyticsService {
             log.warn("[analytics] 인사이트 생성 실패({}, {}): {}", lv, llmModel, t.toString());
             return "## 인사이트 (자동 생성 실패)\n수치는 위 차트를 참고하세요. 더 가벼운 모델을 권장합니다.";
         }
+    }
+
+    /** 기간 한글 라벨. */
+    private static String granKo(String g) {
+        return switch (g == null ? "all" : g) { case "week" -> "최근 1주"; case "month" -> "최근 1개월"; case "year" -> "최근 1년"; default -> "전체 기간"; };
+    }
+
+    /** 레벨의 대표 지표를 그래뉼래리티대로 뽑는다 — 인사이트 수치가 화면 추세와 일치하게. */
+    private List<List<Object>> levelTrend(String lv, String g) {
+        return switch (lv) {
+            case "recall" -> trend("recalls", g, null, "count");
+            case "safety" -> trend("complaints", g, null, "fire");   // 안전 탭 헤드라인 = 화재
+            default       -> trend("complaints", g, null, "count");  // overview/parts/geo
+        };
+    }
+
+    /** 추세 꼬리 최근 N버킷 + 직전 대비 증감(%). LLM 대신 결정적 계산. */
+    private String fmtTrendTail(List<List<Object>> rows, String g) {
+        if (rows == null || rows.isEmpty()) return "";
+        int keep = switch (g == null ? "all" : g) { case "week" -> 8; case "month" -> 14; case "year" -> 12; default -> 8; };
+        int from = Math.max(0, rows.size() - keep);
+        StringBuilder sb = new StringBuilder(granKo(g) + " 최근: ");
+        for (int i = from; i < rows.size(); i++) {
+            if (i > from) sb.append(", ");
+            sb.append(rows.get(i).get(0)).append(" ").append(rows.get(i).get(1));
+        }
+        if (rows.size() >= 2) {
+            long now = parseLong(rows.get(rows.size() - 1).get(1));
+            long prev = parseLong(rows.get(rows.size() - 2).get(1));
+            sb.append(" → 직전 대비 ").append(pct(now, prev));
+        }
+        return sb.toString();
     }
 
     /** 계절(봄/여름/가을/겨울)별 불만·화재 집계 — 시간 패턴 인사이트용. */
@@ -463,29 +523,36 @@ public class AnalyticsService {
     private static final java.util.Set<String> TBL = java.util.Set.of("recalls", "complaints");
 
     /** 시계열 추세 — 연/월/일 그래뉼래리티 + 차종 필터. [버킷, 건수] */
-    public List<List<Object>> trend(String table, String by, String model) {
+    public List<List<Object>> trend(String table, String by, String model) { return trend(table, by, model, "count"); }
+
+    public List<List<Object>> trend(String table, String by, String model, String metric) {
         if (!TBL.contains(table)) return new ArrayList<>();
+        String m = (metric == null || !METRIC.contains(metric)) ? "count" : metric;
+        if (!"complaints".equals(table)) m = "count";      // 심각도 지표는 complaints에만 존재
         ensure(table);
         String dc = "recalls".equals(table) ? "reportreceiveddate" : "datecomplaintfiled";
-        // 날짜 robust 파싱: 불만 MM/DD/YYYY + 리콜 ISO(YYYY-MM-DD) 모두 DATE로. 실패행은 NULL→제외.
-        String d = "COALESCE("
-            + "CAST(try_strptime(CAST(" + dc + " AS VARCHAR),'%m/%d/%Y') AS DATE), "
-            + "TRY_CAST(CAST(" + dc + " AS VARCHAR) AS DATE))";
-        String bucket = switch (by == null ? "year" : by) {
-            case "day"   -> "strftime(" + d + ", '%Y-%m-%d')";
-            case "week"  -> "strftime(date_trunc('week', " + d + "), '%Y-%m-%d')";   // 그 주 월요일 기준
-            case "month" -> "strftime(" + d + ", '%Y-%m')";
-            default       -> "strftime(" + d + ", '%Y')";
+        String d = "COALESCE(CAST(try_strptime(CAST(" + dc + " AS VARCHAR),'%m/%d/%Y') AS DATE), "
+                + "TRY_CAST(CAST(" + dc + " AS VARCHAR) AS DATE))";
+        // by = 기간(all/year/month/week). 기간에 맞춰 하위 버킷으로 그린다.
+        String bucket = switch (by == null ? "all" : by) {
+            case "week"  -> "strftime(" + d + ", '%Y-%m-%d')";   // 최근 7일 → 일별
+            case "month" -> "strftime(" + d + ", '%Y-%m-%d')";   // 최근 30일 → 일별
+            case "year"  -> "strftime(" + d + ", '%Y-%m')";      // 최근 1년 → 월별
+            default      -> "strftime(" + d + ", '%Y')";         // 전체 → 연별
+        };
+        String agg = switch (m) {
+            case "fire"   -> "SUM(CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END)";
+            case "injury" -> "COALESCE(SUM(TRY_CAST(numberofinjuries AS INTEGER)),0)";
+            case "crash"  -> "SUM(CASE WHEN lower(cast(crash AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END)";
+            default       -> "COUNT(*)";
         };
         StringBuilder w = new StringBuilder("WHERE " + d + " IS NOT NULL");
-        List<Object> args = new ArrayList<>();   // 사용자 입력은 ? 바인딩(SQL 인젝션 차단)
-        if (model != null && !model.isBlank()) {
-            w.append(" AND upper(model)=?");
-            args.add(model.trim().toUpperCase());
-        }
-        // 최근 120개 버킷만(DESC LIMIT) 가져온 뒤 표시용으로 오름차순 재정렬 — 일별도 최근 구간이 보이게.
-        return rows("SELECT bucket, n FROM (SELECT " + bucket + " AS bucket, COUNT(*) n FROM " + table + " " + w
-            + " GROUP BY bucket ORDER BY bucket DESC LIMIT 120) t ORDER BY bucket", args.toArray());
+        Integer span = spanDays(by);   // 기간 창(최신일 기준 최근 N일). all이면 필터 없음.
+        if (span != null) w.append(" AND " + d + " >= (SELECT max(" + d + ") FROM " + table + ") - INTERVAL " + span + " DAY");
+        List<Object> args = new ArrayList<>();
+        if (model != null && !model.isBlank()) { w.append(" AND upper(model)=?"); args.add(model.trim().toUpperCase()); }
+        return rows("SELECT bucket, n FROM (SELECT " + bucket + " AS bucket, " + agg + " n FROM " + table + " " + w
+                + " GROUP BY bucket ORDER BY bucket DESC LIMIT 120) t ORDER BY bucket", args.toArray());
     }
 
     /** 단일 리콜 상세 (캠페인번호) — 결함내용·위험·시정조치 포함. */
@@ -827,4 +894,5 @@ public class AnalyticsService {
         try { return tabular.runSelect(sql, params).rows(); }
         catch (Exception e) { log.warn("[analytics] rows 실패: {}", e.getMessage()); return new ArrayList<>(); }
     }
+
 }

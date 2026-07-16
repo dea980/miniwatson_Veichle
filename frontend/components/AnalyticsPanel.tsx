@@ -18,6 +18,15 @@ const LEVEL_META = {
   parts: { label: "부품·워런티", q: "돈이 어디로" },
   geo: { label: "지역", q: "어디서 터지나" },
 } as const;
+
+//trend META
+const TREND_META: Record<Level, { title: string; note: string}> = {
+overview: { title: "추세 분석", note: "전 차종, 리콜/불만" },
+  recall:   { title: "리콜 추세", note: "규제성 안전" },
+  safety:   { title: "안전 추세", note: "화재/부상/사고 — 볼륨 아닌 위해도" },
+  parts:    { title: "수요 추세", note: "불만 건수 프록시(청구액 아님)" },
+  geo:      { title: "불만 추세", note: "전 지역 합계(주별 분해는 아래 표)" },
+};
 type Level = keyof typeof LEVEL_META;
 
 function Bars({ rows, unit = "", money = false }: { rows: [string, number][]; unit?: string; money?: boolean }) {
@@ -35,12 +44,12 @@ function Bars({ rows, unit = "", money = false }: { rows: [string, number][]; un
   );
 }
 
-// 추세 그래뉼래리티 토글 (연/월/주/일) — 개요·리콜 탭 공용
-function GranToggle({ by, setBy }: { by: "year" | "month" | "week" | "day"; setBy: (g: "year" | "month" | "week" | "day") => void }) {
-  const LABELS: Record<string, string> = { year: "연도별", month: "월별", week: "주별", day: "일별" };
+// 기간 토글 — 전체/최근 1년·1개월·1주. 대시보드 전체(KPI·표·카드·추세)를 이 기간으로 스코프.
+function GranToggle({ by, setBy }: { by: "all" | "year" | "month" | "week"; setBy: (g: "all" | "year" | "month" | "week") => void }) {
+  const LABELS: Record<string, string> = { all: "전체", year: "최근 1년", month: "최근 1개월", week: "최근 1주" };
   return (
     <div className="row" style={{ gap: 4 }}>
-      {(["year", "month", "week", "day"] as const).map((g) => (
+      {(["all", "year", "month", "week"] as const).map((g) => (
         <button key={g} className={by === g ? "btn" : "ghost"} style={{ fontSize: 12, padding: "4px 10px" }} onClick={() => setBy(g)}>
           {LABELS[g]}
         </button>
@@ -59,11 +68,10 @@ export default function AnalyticsPanel() {
   const [insLoading, setInsLoading] = useState(false);
   // drill-down 레벨 (L0 개요 → L1 딥다이브)
   const [level, setLevel] = useState<Level>("overview");
-  // 시계열 추세 (연/월/일)
-  const [by, setBy] = useState<"year" | "month" | "week" | "day">("year");
-  const [recallTrend, setRecallTrend] = useState<[string, number][]>([]);
-  const [complaintTrend, setComplaintTrend] = useState<[string, number][]>([]);
-
+  // 기간 필터 (전체/최근 1년·1개월·1주) — 대시보드 전체 스코프
+  const [by, setBy] = useState<"all" | "year" | "month" | "week">("all");
+  type Series = { name: string; color: string; data: [string, number][] };
+  const [trends, setTrends] = useState<Series[]>([]);
   // 주간 품질 브리핑 — 캐시 히트면 즉시, 최초 생성만 LLM 수십 초
   const [brief, setBrief] = useState<Briefing | "loading" | null>(null);
 
@@ -77,20 +85,34 @@ export default function AnalyticsPanel() {
     loadBriefing();
   }, []);
 
-  async function loadTrends(g = by) {
+  async function loadTrends(g = by, lv = level) {
+    const H = "#002c5f", O = "#d97706", R = "#dc2626", W = "#f59e0b";
     try {
-      // 추세는 전 차종(플릿) 집계 — 여기 model 은 LLM 모델이라 차종 필터로 넘기면 안 됨(버그였음).
-      const [rc, cp] = await Promise.all([
-        api.trend("recalls", g),
-        api.trend("complaints", g),
-      ]);
-      setRecallTrend(rc.trend || []); setComplaintTrend(cp.trend || []);
+      let s: Series[] = [];
+      if (lv === "overview") {
+        const [rc, cp] = await Promise.all([api.trend("recalls", g), api.trend("complaints", g)]);
+        s = [{ name: "리콜", color: H, data: rc.trend || [] }, { name: "불만", color: O, data: cp.trend || [] }];
+      } else if (lv === "recall") {
+        const rc = await api.trend("recalls", g);
+        s = [{ name: "리콜", color: H, data: rc.trend || [] }];
+      } else if (lv === "safety") {
+        const [fi, inj, cr] = await Promise.all([
+          api.trend("complaints", g, undefined, "fire"),
+          api.trend("complaints", g, undefined, "injury"),
+          api.trend("complaints", g, undefined, "crash"),
+        ]);
+        s = [{ name: "화재", color: R, data: fi.trend || [] }, { name: "부상", color: W, data: inj.trend || [] }, { name: "사고", color: H, data: cr.trend || [] }];
+      } else {
+        const cp = await api.trend("complaints", g);
+        s = [{ name: lv === "parts" ? "불만(수요 프록시)" : "불만", color: O, data: cp.trend || [] }];
+      }
+      setTrends(s);
     } catch { /* 무시 */ }
   }
 
   async function load() {
     setLoading(true); setErr(""); setInsight("");   // 데이터 바뀌면 이전 인사이트 비움
-    try { setRes(await api.analytics(model || undefined)); }   // 집계(차트) — 빠름
+    try { setRes(await api.analytics(model || undefined, by)); }   // 집계(차트) — 기간 스코프, 빠름
     catch (e) { setErr(String(e)); } finally { setLoading(false); }
     loadTrends();
   }
@@ -98,14 +120,16 @@ export default function AnalyticsPanel() {
   // AI 인사이트는 *요청 시에만* 생성(느린 LLM 호출이라 자동 X)
   async function genInsight() {
     setInsLoading(true); setInsight("");
-    try { const r = await api.analyticsInsight(model || undefined, level); setInsight(r.insight); }   // 현재 탭(레벨) 기준 인사이트
+    try { const r = await api.analyticsInsight(model || undefined, level, by); setInsight(r.insight); }   // 현재 탭(레벨)·그래뉼래리티 기준
     catch { setInsight("(인사이트 생성 실패)"); } finally { setInsLoading(false); }
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
-  // 탭(레벨) 바꾸면 이전 레벨 인사이트는 비운다 — 각 탭이 자기 기준으로 새로 생성
-  useEffect(() => { setInsight(""); }, [level]);
-  // 그래뉼래리티 바꾸면 추세만 다시
-  useEffect(() => { if (res) loadTrends(by); /* eslint-disable-next-line */ }, [by]);
+  // 탭(레벨) OR 기간 바뀌면 이전 인사이트는 비운다 — 화면과 어긋난 서술을 안 남긴다
+  useEffect(() => { setInsight(""); }, [level, by]);
+  // 기간 바뀌면 전체 재집계(KPI·표·카드·추세 모두 그 기간 기준)
+  useEffect(() => { if (res) load(); /* eslint-disable-next-line */ }, [by]);
+  // 레벨만 바뀌면 추세만 다시(집계는 한 페이로드라 재요청 불필요)
+  useEffect(() => { if (res) loadTrends(by, level); /* eslint-disable-next-line */ }, [level]);
 
   const t = res?.totals;
   // 3렌즈 요약(개요) — 기존 집계에서 파생. 볼륨·심각도·비용이 서로 다른 대상을 가리킨다.
@@ -184,6 +208,17 @@ export default function AnalyticsPanel() {
             <b>{LEVEL_META[level].label}</b> — 이 레벨이 답하는 질문: <b>{LEVEL_META[level].q}</b>
           </div>
 
+          {/* 공용 추세 — 레벨별 지표(개요:리콜+불만 / 안전:화재·부상·사고 / 부품·지역:불만). 5탭 전부 자동 적용 */}
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 12 }}>
+            <div className="label" style={{ margin: 0 }}>{TREND_META[level].title}
+              <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}> | {TREND_META[level].note}</span>
+            </div>
+            <GranToggle by={by} setBy={setBy} />
+          </div>
+          {trends.some((x) => x.data.length > 0)
+            ? <TrendChart unit="건" series={trends} />
+            : <div className="muted" style={{ fontSize: 13 }}>추세 데이터 없음</div>}
+
           {/* ── L0 개요: 추세 + 차종별 불만 ── */}
           {level === "overview" && (
             <>
@@ -206,17 +241,6 @@ export default function AnalyticsPanel() {
                   <div className="lens-s">{won(num(lensCost?.[4]))}</div>
                 </div>
               </div>
-
-              <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
-                <div className="label" style={{ margin: 0 }}>추세 분석 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>| 전 차종</span></div>
-                <GranToggle by={by} setBy={setBy} />
-              </div>
-              {(recallTrend.length > 0 || complaintTrend.length > 0)
-                ? <TrendChart unit="건" series={[
-                    { name: "리콜", color: "#002c5f", data: recallTrend },
-                    { name: "불만", color: "#d97706", data: complaintTrend },
-                  ]} />
-                : <div className="muted" style={{ fontSize: 13 }}>추세 데이터 없음</div>}
               {res.complaintByModel?.length > 0 && (<><div className="label">차종별 불만</div><Bars rows={res.complaintByModel} unit="건" /></>)}
             </>
           )}
@@ -244,14 +268,6 @@ export default function AnalyticsPanel() {
                   </div>
                 </>
               )}
-              {/* 리콜 추세 — 연/월/주/일 토글 (개요와 동일 UX) */}
-              <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
-                <div className="label" style={{ margin: 0 }}>리콜 추세</div>
-                <GranToggle by={by} setBy={setBy} />
-              </div>
-              {recallTrend.length > 0
-                ? <TrendChart unit="건" series={[{ name: "리콜", color: "#002c5f", data: recallTrend }]} />
-                : <div className="muted" style={{ fontSize: 13 }}>추세 데이터 없음</div>}
               {!res.recallTopComponents?.length && !res.recallByModel?.length &&
                 <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>리콜 데이터 없음</div>}
             </>
@@ -331,7 +347,7 @@ export default function AnalyticsPanel() {
 
           {/* AI 인사이트 — 전 레벨 공통(집계 기반, 요청 시 생성) */}
           <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
-            <div className="label" style={{ margin: 0 }}>AI 운영 인사이트 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>| {LEVEL_META[level].label} 기준</span></div>
+            <div className="label" style={{ margin: 0 }}>AI 운영 인사이트 <span className="muted" style={{ textTransform: "none", letterSpacing: 0 }}>| {LEVEL_META[level].label} · {({ all: "전체", year: "최근 1년", month: "최근 1개월", week: "최근 1주" } as const)[by]} 기준</span></div>
             {!insLoading && <button className="btn" style={{ fontSize: 12 }} onClick={genInsight}>{insight ? "다시 생성" : "AI 인사이트 생성"}</button>}
           </div>
           {insLoading
