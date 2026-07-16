@@ -257,6 +257,14 @@ export const api = {
   },
   // 홈 대시보드용 경량 요약 (총계 + 최근 리콜/불만)
   summary: () => jget<Summary>("/api/analytics/summary"),
+  // 지식그래프: 차종 부위별 리스크 맵 [정규부위, 리콜수, 불만수]
+  graphModelComponents: (model: string) =>
+    jget<{ model: string; components: [string, number, number][] }>(
+      `/api/graph/model-components?model=${encodeURIComponent(model)}`),
+  // 지식그래프: 부위 프로파일 (리콜 근거 + 불만 집계 + 부품/비용)
+  graphComponentProfile: (model: string, component: string) =>
+    jget<{ model: string; component: string; recalls: [string, string, string, string][]; complaints: [number, number, number][]; parts: [string, number, number][] }>(
+      `/api/graph/component-profile?model=${encodeURIComponent(model)}&component=${encodeURIComponent(component)}`),
   // 드릴다운: 특정 차종의 개별 차량 기록(불만)
   vehicles: (model: string) =>
     jget<{ model: string; vehicles: VehicleRecord[] }>(`/api/analytics/vehicles?model=${encodeURIComponent(model)}`),

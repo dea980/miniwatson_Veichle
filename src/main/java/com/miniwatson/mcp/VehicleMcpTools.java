@@ -10,7 +10,7 @@ import com.miniwatson.service.RagService;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Service;
-
+import com.miniwatson.service.GraphService;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -22,11 +22,14 @@ public class VehicleMcpTools {
     private final PiiRedactionService pii;
     private final QueryLogRepository queryLog;
     private final ObjectMapper mapper = new ObjectMapper();
+    private final GraphService graph;
+
+
 
     public VehicleMcpTools(AnalyticsService analytics, RagService rag, AgentService agent,
-                           PiiRedactionService pii, QueryLogRepository queryLog) {
+                           PiiRedactionService pii, QueryLogRepository queryLog, GraphService graph) {
         this.analytics = analytics; this.rag = rag; this.agent = agent;
-        this.pii = pii; this.queryLog = queryLog;
+        this.pii = pii; this.queryLog = queryLog; this.graph = graph;
     }
 
     @FunctionalInterface private interface Body { String get() throws Exception; }
@@ -114,6 +117,17 @@ public class VehicleMcpTools {
             var out = new LinkedHashMap<String, Object>();
             out.put("answer", r.answer()); out.put("tool", r.tool());
             return json(out);
+        });
+    }
+
+    @Tool(name = "component_graph", description = "차종-리콜-부품-증상 온톨로지 그래프 순회. component 생략하면 차종의 부위별 리스크 맵(리콜/불만 수), 주면 그 부위의 리콜·증상·부품·비용 통합 프로파일.")
+    public String componentGraph(
+            @ToolParam(description = "차종명 (예: PALISADE, TUCSON)") String model,
+            @ToolParam(description = "정규 부위: AIR BAGS/BRAKE/ENGINE/TRANSMISSION/VISIBILITY/ELECTRICAL/FUEL/SEAT BELTS/TIRE/EXHAUST/CAMERA. 생략하면 부위별 맵.", required = false) String component) {
+        return governed("component_graph", "model=" + model + (component == null ? "" : ",component=" + component), () -> {
+            if (component == null || component.isBlank())
+                return json(Map.of("model", model, "components", graph.modelComponents(model)));
+            return json(graph.componentProfile(model, component));
         });
     }
 }
