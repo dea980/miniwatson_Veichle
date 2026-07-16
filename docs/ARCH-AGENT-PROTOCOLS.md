@@ -105,9 +105,20 @@
 - [x] McpConfig: MethodToolCallbackProvider로 툴 등록
 - [x] MCP Inspector(CLI)로 검증: /sse 200, recall_check(model=PALISADE) → 리콜 26건 정상 반환
 - [ ] Claude Desktop/Cowork에 연결(실제 호스트 데모)
-- [ ] 거버넌스 훅: 각 @Tool 진입부에서 audit/PII 통과(MVP 다음 1순위)
+- [x] 거버넌스 훅: 모든 @Tool 호출을 governed() 래퍼로 audit/PII 통과(fail-open)
 - [~] 반환 압축: recall_check는 캠페인 기준 dedup 완료(26행→12건, 연식은 years 배열로). 나머지 대량 툴은 필요 시 동일 패턴 적용
 - [ ] (선택) A2A: 진단에서 부품견적 위임하는 두 번째 에이전트가 생길 때만
+
+### 거버넌스 게이트 (MCP 툴 호출)
+
+모든 @Tool 호출은 `VehicleMcpTools.governed()` 래퍼를 통과한다. 어떤 호스트(Claude Desktop, 타 에이전트)가 불러도 동일하게 걸린다.
+
+- **감사(audit)**: 호출마다 QueryLog에 기록 — `question="mcp:<tool> <args>"`, `answer`(마스킹된 결과), `model="mcp"`, `latencyMs`, `piiCount`. 기존 `/api/governance/logs`, `/stats`에서 같이 조회된다(REST 경로와 동일 저장소).
+- **PII 마스킹**: 반환 직전 `PiiRedactionService.redact()`로 카드/SSN/이메일/전화를 치환. 치환 문자열이 `[CARD]` 형태라 JSON은 안 깨진다.
+- **fail-open**: 감사 저장이 실패해도 응답은 반환한다(OllamaService와 동일 정책). 관측성은 잃어도 기능은 안 막는다.
+- **왜 서비스가 아니라 툴 레벨**: REST 컨트롤러/서비스는 이미 자체 감사 경로가 있고, MCP는 별도 진입점이라 여기서 한 번 더 태워야 "에이전트 호출도 감사·마스킹된다"가 성립한다.
+
+이 게이트가 JD의 거버넌스 서사(에이전트가 호출해도 audit/PII가 걸린다)를 닫는 부분이다.
 
 ### 구현 노트 (밟은 함정)
 
