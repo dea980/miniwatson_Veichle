@@ -93,16 +93,14 @@ export default function Home() {
         <div className="brand">
           <span className="logo">
             <svg viewBox="0 0 40 40" aria-hidden="true">
-              <rect width="40" height="40" rx="3" fill="#002c5f" />
-              <circle cx="20" cy="20" r="9" fill="none" stroke="#fff" strokeWidth="2.2" />
-              <circle cx="20" cy="20" r="2.6" fill="#fff" />
-              <path d="M20 17.4V11.2 M17.7 21.3l-5.4 3.1 M22.3 21.3l5.4 3.1"
-                stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
+              <rect width="40" height="40" rx="8" fill="#002c5f" />
+              <path d="M13 11 V29 M27 11 V29 M13 20 H27"
+                stroke="#fff" strokeWidth="3" strokeLinecap="round" />
             </svg>
           </span>
           <div>
-            <div className="name">MiniWatson Vehicle</div>
-            <div className="sub">Automotive Domain LLM</div>
+            <div className="name">Automotive IR System</div>
+            <div className="sub">Hyundai Intelligence · LLM</div>
           </div>
         </div>
         <nav className="nav">
@@ -116,7 +114,7 @@ export default function Home() {
 
       <div className="content">
         <header className="topbar">
-          <span className="crumb">MiniWatson Vehicle <span className="muted">/</span> <b>{current.label}</b></span>
+          <span className="crumb">Automotive IR System <span className="muted">/</span> <b>{current.label}</b></span>
           <div className="row" style={{ gap: 12 }}>
             {online !== null && (
               <span className="status" data-on={online ? "1" : "0"} title={online ? "백엔드 연결됨" : "백엔드 연결 끊김"}>
@@ -166,7 +164,7 @@ export default function Home() {
           </div>
 
           <footer className="footer">
-            <span>MiniWatson Vehicle — 자동차 도메인 LLM 플랫폼</span>
+            <span>Automotive IR System — Hyundai Intelligence · LLM</span>
             <span>RAG, Agent, text-to-SQL, LoRA, 거버넌스 — <b>Daeyeop Kim</b></span>
           </footer>
         </main>

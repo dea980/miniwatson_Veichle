@@ -1,0 +1,23 @@
+/* 현대 공식 서체 Neo Hyundai — 표시용(로고·헤딩·KPI·라벨)에 사용. 본문은 Pretendard 유지.
+   파일: public/fonts/ (TTF). 브랜드 톤 = 현대. font-display:swap 으로 FOUT 최소화. */
+@font-face {
+  font-family: "Neo Hyundai";
+  src: url("/fonts/NeoHyundai-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Neo Hyundai";
+  src: url("/fonts/NeoHyundai-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Neo Hyundai";
+  src: url("/fonts/NeoHyundai-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}

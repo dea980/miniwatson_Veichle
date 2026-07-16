@@ -40,14 +40,19 @@ export default function Select({
       if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
       setOpen(false);
     };
-    const close = () => setOpen(false);
+    // 페이지 스크롤 시 닫기(fixed라 따라가지 않으므로). 단, 메뉴 내부 스크롤은 유지.
+    const onScroll = (e: Event) => {
+      if (menuRef.current && menuRef.current.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    const onResize = () => setOpen(false);
     document.addEventListener("mousedown", onDoc);
-    window.addEventListener("scroll", close, true);   // 스크롤 시 닫기(fixed 위치라 따라가지 않음)
-    window.addEventListener("resize", close);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onResize);
     return () => {
       document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);

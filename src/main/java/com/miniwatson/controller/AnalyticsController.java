@@ -20,14 +20,17 @@ public class AnalyticsController {
     }
 
     @GetMapping("/overview")
-    public Map<String, Object> overview(@RequestParam(value = "model", required = false) String model) {
-        return analytics.overview(model);
+    public Map<String, Object> overview(@RequestParam(value = "model", required = false) String model,
+                                        @RequestParam(value = "by", required = false) String by) {
+        return analytics.overview(model, by);
     }
 
     /** LLM 인사이트만 별도 (느려서 집계와 분리). */
     @GetMapping("/insight")
-    public Map<String, Object> insight(@RequestParam(value = "model", required = false) String model) {
-        try { return Map.of("insight", analytics.insightText(model)); }
+    public Map<String, Object> insight(@RequestParam(value = "model", required = false) String model,
+                                       @RequestParam(value = "level", required = false) String level,
+                                       @RequestParam(value = "by", required = false) String by) {
+        try { return Map.of("insight", analytics.insightText(model, level, by)); }
         catch (Throwable t) { return Map.of("insight", "(인사이트 생성 실패: " + t + ")"); }
     }
 
@@ -74,8 +77,9 @@ public class AnalyticsController {
     @GetMapping("/trend")
     public Map<String, Object> trend(@RequestParam String table,
                                      @RequestParam(defaultValue = "year") String by,
-                                     @RequestParam(required = false) String model) {
-        try { return Map.of("trend", analytics.trend(table, by, model)); }
+                                     @RequestParam(required = false) String model,
+                                     @RequestParam(required = false) String metric) {
+        try { return Map.of("trend", analytics.trend(table, by, model, metric)); }
         catch (Throwable t) { return Map.of("trend", java.util.List.of(), "error", t.toString()); }
     }
 

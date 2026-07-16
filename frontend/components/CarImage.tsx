@@ -18,10 +18,13 @@ function wikiTitle(model: string): string {
     "EQUUS": "Hyundai_Equus", "ENTOURAGE": "Hyundai_Entourage", "VENUE": "Hyundai_Venue",
   };
   if (map[raw]) return map[raw];
-  // 변형 접미사(하이브리드·전기·수소·N 등) 제거 → 베이스 모델의 안정적 위키 문서로.
-  //   "SANTA FE HYBRID"→SANTA FE, "IONIQ 5 N"→IONIQ 5, "KONA ELECTRIC"→KONA. (숫자 모델명 IONIQ 5 는 보존)
-  const base = raw.replace(/\s+(N LINE|HYBRID|PLUG IN HYBRID|PHEV|HEV|ELECTRIC|EV|FCEV|FUEL CELL|LONG|N)$/g, "").trim();
-  const key = map[base] ? base : (base || raw);
+  // 트림/변형 접미사(GLS·SE·SPORT·하이브리드·전기·N 등)를 끝에서부터 반복 제거 → 베이스 모델의 안정적 위키 문서로.
+  //   "SONATA GLS"→SONATA, "SANTA FE SPORT"→SANTA FE, "KONA ELECTRIC"→KONA. (숫자 모델명 IONIQ 5 는 보존)
+  const SUFFIX = /\s+(N LINE|N|HYBRID|PLUG IN HYBRID|PHEV|HEV|ELECTRIC|EV|FCEV|FUEL CELL|LONG|GLS|GL|SE|SEL|SES|LIMITED|ULTIMATE|PREFERRED|ESSENTIAL|VALUE|SPORT|LUXURY|SIGNATURE|BLUE|ECO|SMART|CALLIGRAPHY|GDI|CRDI|AWD|FWD)$/;
+  let base = raw;
+  while (SUFFIX.test(base)) base = base.replace(SUFFIX, "").trim();   // 다중 접미사(예: "SONATA GLS HYBRID")도 처리
+  if (!base) base = raw;
+  const key = base;
   if (map[key]) return map[key];
   // 폴백: 각 단어 Title-case 후 '_' 결합 (SANTA CRUZ→Hyundai_Santa_Cruz, IONIQ 5→Hyundai_Ioniq_5)
   return "Hyundai_" + key.toLowerCase().split(/\s+/)

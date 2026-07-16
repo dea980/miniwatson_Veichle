@@ -45,6 +45,10 @@ public class VllmLlmClient implements RawLlmProvider {
     @Value("${vllm.num-predict:512}")
     private int numPredict;
 
+    /** 샘플링 온도 — 낮을수록 결정적(집계 수치 인용 충실도↑). .env로 조절(VLLM_TEMPERATURE). */
+    @Value("${vllm.temperature:0.2}")
+    private double temperature;
+
     // 출력 품질 제약 — Ollama 제공자와 동일한 한국어 가드(외국 문자 누수·반복 완화).
     // 중요: system 프롬프트에 한자·가나 같은 외국 문자를 절대 넣지 않는다(소형 모델이 그대로 베낌).
     private static final String SYSTEM =
@@ -122,7 +126,7 @@ public class VllmLlmClient implements RawLlmProvider {
         Map<String, Object> body = Map.<String, Object>of(
                 "model", model,
                 "messages", messages,
-                "temperature", 0.3,          // 결정성↑(캐시 히트율·일관성)
+                "temperature", temperature,  // 결정성↑(집계 수치 인용 충실도). VLLM_TEMPERATURE로 조절
                 "max_tokens", numPredict);
 
         HttpHeaders headers = new HttpHeaders();

@@ -1,7 +1,18 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const num = (v: unknown) => Number(v) || 0;
+
+// "nice number" — 축 눈금을 1/2/5×10^n 으로 맞춰 619·1238 같은 지저분한 값 대신 500·1000 같은 깔끔한 값 생성.
+function niceNum(range: number, round: boolean): number {
+  if (range <= 0) return 1;
+  const exp = Math.floor(Math.log10(range));
+  const frac = range / Math.pow(10, exp);
+  const nf = round
+    ? (frac < 1.5 ? 1 : frac < 3 ? 2 : frac < 7 ? 5 : 10)
+    : (frac <= 1 ? 1 : frac <= 2 ? 2 : frac <= 5 ? 5 : 10);
+  return nf * Math.pow(10, exp);
+}
 
 export type Series = { name: string; color: string; data: [string, number][] };
 
@@ -27,15 +38,28 @@ export default function TrendChart({ series, unit = "" }: { series: Series[]; un
     return { labels, points, maxY };
   }, [series]);
 
+  // 컨테이너 실제 폭을 viewBox 폭으로 사용 → 1 SVG unit = 1px, 텍스트/선이 가로로 늘어나지 않음(스트레치 왜곡 제거).
+  const [cw, setCw] = useState(720);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => setCw(el.clientWidth || 720);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const n = labels.length;
-  const W = 720, H = 240, padL = 40, padR = 14, padT = 14, padB = 28;
+  const W = Math.max(320, Math.round(cw)), H = 240, padL = 40, padR = 14, padT = 14, padB = 28;
   const plotW = W - padL - padR, plotH = H - padT - padB, baseY = padT + plotH;
   const x = (i: number) => (n <= 1 ? padL + plotW / 2 : padL + (i / (n - 1)) * plotW);
-  const y = (v: number) => padT + plotH * (1 - v / maxY);
-
-  // y 눈금 4단계
-  const ticks = 4;
-  const yTicks = Array.from({ length: ticks + 1 }, (_, i) => Math.round((maxY * i) / ticks));
+  // y 축: nice number로 축 최댓값·간격을 깔끔하게 (데이터 max 2475 → 축 2500, 눈금 0·500·1000·1500·2000·2500)
+  const yStep = niceNum(maxY / 4, true) || 1;
+  const axisMax = Math.ceil(maxY / yStep) * yStep;
+  const y = (v: number) => padT + plotH * (1 - v / axisMax);
+  const yTicks: number[] = [];
+  for (let v = 0; v <= axisMax + 1e-9; v += yStep) yTicks.push(Math.round(v));
   // x 라벨은 겹치지 않게 최대 8개만 (균등 간격)
   const step = Math.max(1, Math.ceil(n / 8));
 
@@ -54,7 +78,7 @@ export default function TrendChart({ series, unit = "" }: { series: Series[]; un
 
   return (
     <div className="trend-wrap" ref={wrapRef} onMouseMove={onMove} onMouseLeave={() => setHi(null)}>
-      <svg viewBox={`0 0 ${W} ${H}`} className="trend-svg" role="img" preserveAspectRatio="none">
+      <svg viewBox={`0 0 ${W} ${H}`} className="trend-svg" role="img">
         {/* y 그리드 + 눈금 */}
         {yTicks.map((v, i) => (
           <g key={i}>

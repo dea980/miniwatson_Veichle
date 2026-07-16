@@ -10,6 +10,11 @@ spring:
   devtools:
     restart:
       enabled: false   # 대량 ingest 중 자동 재시작이 응답을 끊는 사고 방지. 일반 개발 복귀 시 true.
+  ai:
+    mcp:
+      server:
+        name: miniwatson-vehicle
+        version: 0.1.0
 
 retrieval:
   hybrid:
@@ -65,6 +70,7 @@ vllm:
   chat-model: ${VLLM_CHAT_MODEL:Qwen/Qwen2.5-7B-Instruct}
   chat-models: ${VLLM_CHAT_MODELS:Qwen/Qwen2.5-7B-Instruct}
   num-predict: ${VLLM_NUM_PREDICT:512}
+  temperature: ${VLLM_TEMPERATURE:0.2}     # 낮을수록 결정적(집계 수치 인용 충실도↑)
 
 # watsonx.ai (llm.provider=watsonx 일 때만 사용). 키/프로젝트는 .env로 주입(커밋 금지).
 watsonx:
@@ -125,3 +131,5 @@ management:
     distribution:
       percentiles-histogram:
         miniwatson.llm.latency: true     # p50/p95/p99 히스토그램 버킷 (Prometheus histogram_quantile)
+
+

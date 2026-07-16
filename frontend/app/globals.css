@@ -1,5 +1,6 @@
 /* 전역 스타일 진입점 — 섹션별 파일을 @import (순서 = cascade 우선순위, 원본과 동일).
    className 은 그대로라 컴포넌트 수정 없음. 각 파일은 app/styles/ 아래. */
+@import "./styles/fonts.css";       /* 현대 Neo Hyundai @font-face (표시용) */
 @import "./styles/tokens.css";      /* :root 토큰(색·폰트·간격) + 다크모드 오버라이드 */
 @import "./styles/shell.css";       /* 셸: 사이드바·배경 그리드·연결상태·테마토글 */
 @import "./styles/media.css";       /* 채팅 말풍선·차종 사진·히어로 배너·캘린더 */

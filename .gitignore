@@ -140,3 +140,9 @@ hs_err_pid*.log
 replay_pid*.log
 Snap.*.trc
 outputs/
+
+# 루트 npm 정크 + vim 스왑 + 브랜드 폰트 원본
+/node_modules/
+*.swp
+frontend/font/
+현대자동차 지속가능성 보고서/

@@ -113,6 +113,9 @@ export type Analytics = {
   recallTopComponents: [string, number][];
   complaintTopComponents: [string, number][];
   complaintByModel: [string, number][];
+  recallByModel: [string, number, number][];   // model, recalls, parkIt(화재위험 주차권고)
+  complaintsByState: [string, number, number, number, number, number, string][];
+    // state, complaints, fires, injuries, deaths, crashes, topComponent
   safetyHotspots: [string, number, number, number][];        // model, fires, injuries, crashes
   partsDemand: [string, string, number, number, number][];   // part, component, demand, unitPrice, estCost
   insight?: string;   // 분리됨 — analyticsInsight()로 별도 로드
@@ -237,20 +240,30 @@ export const api = {
     jpost<EstimateResult>("/api/agent/estimate", { problem, car, model }),
 
   // 분석 대시보드 (플릿 집계 + LLM 인사이트)
-  analytics: (model?: string) =>
-    jget<Analytics>(`/api/analytics/overview${model ? `?model=${encodeURIComponent(model)}` : ""}`),
-  analyticsInsight: (model?: string) =>
-    jget<{ insight: string }>(`/api/analytics/insight${model ? `?model=${encodeURIComponent(model)}` : ""}`),
+  analytics: (model?: string, by?: string) => {
+    const q = new URLSearchParams();
+    if (model) q.set("model", model);
+    if (by) q.set("by", by);
+    const qs = q.toString();
+    return jget<Analytics>(`/api/analytics/overview${qs ? `?${qs}` : ""}`);
+  },
+  analyticsInsight: (model?: string, level?: string, by?: string) => {
+    const q = new URLSearchParams();
+    if (model) q.set("model", model);
+    if (level) q.set("level", level);
+    if (by) q.set("by", by);
+    const qs = q.toString();
+    return jget<{ insight: string }>(`/api/analytics/insight${qs ? `?${qs}` : ""}`);
+  },
   // 홈 대시보드용 경량 요약 (총계 + 최근 리콜/불만)
   summary: () => jget<Summary>("/api/analytics/summary"),
   // 드릴다운: 특정 차종의 개별 차량 기록(불만)
   vehicles: (model: string) =>
     jget<{ model: string; vehicles: VehicleRecord[] }>(`/api/analytics/vehicles?model=${encodeURIComponent(model)}`),
   // 시계열 추세 (연/월/일 + 차종)
-  trend: (table: "recalls" | "complaints", by: "year" | "month" | "day", model?: string) =>
+  trend: (table: "recalls" | "complaints", by: "all" | "year" | "month" | "week", model?: string, metric?: string) =>
     jget<{ trend: [string, number][]; error?: string }>(
-      `/api/analytics/trend?table=${table}&by=${by}${model ? `&model=${encodeURIComponent(model)}` : ""}`),
-  // 점검 체크리스트: component 주면 건별(그 부위만), 없으면 차종 집계
+      `/api/analytics/trend?table=${table}&by=${by}${model ? `&model=${encodeURIComponent(model)}` : ""}${metric ? `&metric=${metric}` : ""}`),  // 점검 체크리스트: component 주면 건별(그 부위만), 없으면 차종 집계
   checklist: (model: string, component?: string) =>
     jget<{ model: string; common: [string, string][]; additional: [string, number, string][]; error?: string }>(
       `/api/analytics/checklist?model=${encodeURIComponent(model)}${component ? `&component=${encodeURIComponent(component)}` : ""}`),
