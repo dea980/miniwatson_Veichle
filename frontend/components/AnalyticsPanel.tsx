@@ -136,6 +136,12 @@ export default function AnalyticsPanel() {
   const lensVolume = res?.complaintByModel?.[0];
   const lensSeverity = res ? [...(res.safetyHotspots || [])].sort((a, b) => num(b[2]) - num(a[2]))[0] : undefined;
   const lensCost = res?.partsDemand?.[0];
+  // 교차 신호: 볼륨(불만 상위)과 심각도(위해 상위) 양쪽 top-6에 동시 등장하는 차종 → 하나의 랭킹으론 못 잡는 최우선 대상.
+  const crossModels = res ? (() => {
+    const vol = new Set((res.complaintByModel || []).slice(0, 6).map((r) => String(r[0]).toUpperCase()));
+    const sev = (res.safetyHotspots || []).slice(0, 6).map((r) => String(r[0]).toUpperCase());
+    return [...new Set(sev.filter((m) => vol.has(m)))];
+  })() : [];
 
   return (
     <>
@@ -241,6 +247,12 @@ export default function AnalyticsPanel() {
                   <div className="lens-s">{won(num(lensCost?.[4]))}</div>
                 </div>
               </div>
+              {crossModels.length > 0 && (
+                <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 10, borderLeft: "3px solid #dc2626", background: "rgba(220,38,38,0.06)", fontSize: 13 }}>
+                  <b style={{ color: "#dc2626" }}>교차 신호 · 최우선</b>{" "}
+                  <b>{crossModels.map((m) => koModel(m)).join(", ")}</b> 이(가) <b>볼륨</b>과 <b>심각도</b> 양쪽 상위에 동시 등장 — 하나의 랭킹으론 못 잡는 대상입니다.
+                </div>
+              )}
               {res.complaintByModel?.length > 0 && (<><div className="label">차종별 불만</div><Bars rows={res.complaintByModel} unit="건" /></>)}
             </>
           )}
