@@ -23,7 +23,10 @@
 - **이미지 진단에서 부품까지** — 차량 사진을 Vision과 OCR로 읽어 매뉴얼 기반 진단을 하고 필요 부품과 샘플 견적을 낸다.
 - **대화형 어시스턴트 & 차종 사진** — 멀티턴 RAG 채팅(출처 표시), 위키백과 기반 차종 사진을 홈·리포트에 표시.
 - **응답 캐시·성능** — 같은 질문·SQL·요약은 결과를 영속 캐시(compute-once)해 재요청 시 LLM을 건너뛴다. **콜드(최초 생성) p95는 57s**(LLM 병목)지만, **캐시 히트 시** DB 조회라 **p95 3.9ms**(k6 실측, [docs/GUIDE-answer-cache.md](docs/GUIDE-answer-cache.md)) — 즉 반복 질의를 없애는 최적화지 생성 자체를 빠르게 하는 건 아니다. 빈 질문 사전차단·비답변 사후가드로 헛출력을 줄인다.
-- **거버넌스** — 모든 LLM 호출을 감사 로그에 남기고 PII를 마스킹하며, 멀티프로바이더로 현대 H-Chat 게이트웨이와 정합한다.
+- **거버넌스** — 모든 LLM 호출(및 MCP 툴 호출)을 감사 로그에 남기고 PII를 마스킹하며, 멀티프로바이더로 현대 H-Chat 게이트웨이와 정합한다.
+- **에이전트 프로토콜 (MCP + A2A)** — RAG/집계/진단/그래프를 **MCP 툴 6종**으로 표준 노출(Spring AI WebMVC, `/sse`)해 Claude Desktop 같은 호스트가 자율 호출하게 하고, 진단→부품견적은 **A2A로 위임**(에이전트 카드 발견 + JSON-RPC `message/send`)한다. 모든 MCP 툴 호출은 거버넌스(audit/PII) 게이트를 통과한다. ([docs/ARCH-AGENT-PROTOCOLS.md](docs/ARCH-AGENT-PROTOCOLS.md), [docs/A2A-DESIGN.md](docs/A2A-DESIGN.md), [docs/RUNBOOK-MCP.md](docs/RUNBOOK-MCP.md))
+- **지식그래프 / 온톨로지** — 차종·리콜·부품·증상을 **정규 부위 개념으로 통합**(세 소스의 이질적 어휘를 부품 카탈로그 taxonomy로 매핑)하고, Model→Component→{Recall, Complaint, Part} 순회로 한 부위의 규제·증상·비용을 한 번에 설명한다. 검색을 이기려는 그래프가 아니라 설명가능성·내비게이션용으로 스코프. ([docs/ONTOLOGY-GRAPH.md](docs/ONTOLOGY-GRAPH.md))
+- **분석 대시보드 (의사결정 도구)** — 리콜·불만·부품 집계를 **기간 필터**(전체/최근 1년·1개월·1주)로 KPI·표·카드·추세 전체를 스코프하고, 5개 탭 각각의 시계열 추세와 **볼륨·심각도 교차 신호**(두 렌즈 동시 상위 차종)를 하이라이트한다. ([docs/ANALYTICS-DASHBOARD-DESIGN.md](docs/ANALYTICS-DASHBOARD-DESIGN.md))
 
 > 데모 화면과 정량 결과는 [docs/RESULTS.md](docs/RESULTS.md), 설계 근거는 [docs/VEHICLE_ARCHITECTURE.md](docs/VEHICLE_ARCHITECTURE.md), A/S 운영 기능(트리아지·체크리스트·스케줄)은 [docs/AS-OPERATIONS.md](docs/AS-OPERATIONS.md), 주 페르소나·성공지표는 [docs/PRD-mechanic-agent.md](docs/PRD-mechanic-agent.md), RAG 정량 평가는 [docs/RAG-EVAL-RAGAS.md](docs/RAG-EVAL-RAGAS.md), 실행·트러블슈팅은 [docs/RUNBOOK.md](docs/RUNBOOK.md), 결정 기록은 [SESSION-DECISIONS-2026-07-07](docs/SESSION-DECISIONS-2026-07-07.md)·[07-01](docs/SESSION-DECISIONS-2026-07-01.md), 전체 색인은 [docs/README.md](docs/README.md)를 참고.
 
@@ -74,15 +77,19 @@ miniwatson_Veichle/
 자동차 밸류체인 NLP을 서빙(Java)과 모델 제작(Python)으로 나누고, 완성한 모델을 `llm.provider`로 갈아끼운다. 이렇게 온디바이스와 클라우드 양쪽에 대응한다.
 
 ```
-[ 사용자 ] ── Next.js (RAG, Agent, 진단서, SQL, 거버넌스 탭)
+[ 호스트 ] Claude Desktop / IDE ──(MCP, /sse)──┐    [ 다른 에이전트 ] ──(A2A)──┐
+[ 사용자 ] ── Next.js (RAG, Agent, 진단서, SQL, 지식그래프, 거버넌스 탭)
                   │  REST / JSON  (no CORS, /api 프록시)
                   ▼
 [ 백엔드 ] Spring Boot 4 / Java 21
    ├─ Agent      질문 → 도구선택(RAG/SQL/복합) → 종합 + 트레이스, SQL 자기수정
    ├─ RAG        chunk → embed → 하이브리드(vector+BM25, RRF) → rerank → 한국어 생성
    ├─ Tabular    리콜/불만/부품 CSV → text-to-SQL (DuckDB)
+   ├─ Graph      차종-리콜-부품-증상 온톨로지 순회(어휘 정규화, DuckDB)
    ├─ 멀티모달   Vision(llava) + OCR(Tesseract) → 이미지 진단
    ├─ 거버넌스   감사 로그, PII 마스킹, 멀티프로바이더(H-Chat 정합)
+   ├─ MCP 서버   RAG/집계/진단/그래프를 MCP 툴 6종으로 노출(Spring AI, /sse) — 호스트 자율 호출
+   ├─ A2A        진단↔부품견적 에이전트 위임(에이전트 카드 + JSON-RPC message/send)
    └─ LlmClient 추상화 ── ollama | watsonx | vertex | bedrock | azure | vLLM
                   │  HTTP / Modelfile
                   ▼
@@ -207,6 +214,18 @@ curl -X POST http://localhost:8080/api/tabular/load \
   -d '{}' "http://localhost:8080/api/tabular/load?table=recalls&path=data/vehicle/recalls/hyundai_recalls_nhtsa.csv"
 curl -X POST http://localhost:8080/api/tabular/ask \
   -H "Content-Type: application/json" -d '{"table": "recalls", "question": "연도별 리콜 건수"}'
+
+# MCP 서버 (Spring AI, SSE) — 호스트가 툴 6종 자율 호출
+npx @modelcontextprotocol/inspector --cli http://localhost:8080/sse --method tools/list
+
+# 지식그래프 순회 — 차종 부위별 리스크 맵 / 부위 프로파일(리콜·증상·부품·비용)
+curl "http://localhost:8080/api/graph/model-components?model=PALISADE"
+curl "http://localhost:8080/api/graph/component-profile?model=PALISADE&component=AIR%20BAGS"
+
+# A2A — 진단→부품견적 위임(에이전트 카드 발견 + JSON-RPC message/send)
+curl http://localhost:8080/.well-known/agent-card.json
+curl -X POST http://localhost:8080/api/a2a/diagnose-estimate \
+  -H "Content-Type: application/json" -d '{"question":"브레이크 패드 교체","car":"PALISADE"}'
 ```
 
 > 자연어 질문만으로 도구·테이블을 자동 선택하게 하려면 `/api/agent/ask`를 쓰면 된다(리콜/불만 테이블 자동 로드 + 라우팅).
@@ -242,8 +261,13 @@ curl -X POST http://localhost:8080/api/tabular/ask \
 - [ ] **V25 임베딩 파인튜닝 (retrieval 개선 트랙)** — RAGAS에서 드러난 **ctx-precision 0.3~0.5(검색 병목)** 를 직접 겨냥. 도메인 (질문→정답 청크) 대조학습(hard-negative 마이닝)으로 `P0420↔촉매`·한글질문↔영문매뉴얼·DTC/부품 동의어를 임베딩 공간에서 정렬. **768차원 유지(pgvector 스키마 불변) + 전체 재인덱싱 필요.** LLM 생성 FT("1.5B는 최악")와 달리 **retrieval을 직접 개선하는 별도의 더 확실한 승부처.** 데이터(Q→청크 쌍) 확보 + 재인덱싱이라 배포 다음 단계.
 - [x] **V23 콕핏 디자인 시스템** — 다크 콕핏 기본 테마, 계기판 타이포(Rajdhani 디스플레이 폰트·44px KPI), 카운트업·스태거 모션, 히어로 계기 눈금 — 실렌더링 전/후 스크린샷 검증
 - [x] **V24 실사용 A/S 제품 트랙 (P1~P6 완료)** — 케이스 상태 워크플로 영속(접수→진단중→수리중→완료, localStorage→JPA), 진단→예약→완료 루프, 유사 케이스 검색(토큰 코사인 top-5), 차종·연식 리콜 대상 조회, 진단 리포트 인쇄/PDF, PII 마스킹 before/after, **주간 품질 브리핑**(결정적 집계+LLM 서술, 캐시 17s→0.16s). 프로세스 상세 [docs/AS-OPERATIONS.md](docs/AS-OPERATIONS.md) §9, 백로그 [docs/FEATURE-BACKLOG.md](docs/FEATURE-BACKLOG.md)
+- [x] **V26 에이전트 프로토콜 (MCP + A2A) — JD 우대: A2A/MCP** — RAG/집계/진단/그래프를 **MCP 툴 6종**으로 노출(Spring AI WebMVC, Claude Desktop 실연결·라이브 검증), 진단→부품견적 **A2A 위임**(에이전트 카드 발견 + JSON-RPC `message/send`), 모든 MCP 툴 호출 거버넌스(audit/PII) 통과 ([docs/ARCH-AGENT-PROTOCOLS.md](docs/ARCH-AGENT-PROTOCOLS.md), [docs/A2A-DESIGN.md](docs/A2A-DESIGN.md), [docs/RUNBOOK-MCP.md](docs/RUNBOOK-MCP.md))
+- [x] **V27 지식그래프 온톨로지 — JD 우대: 지식그래프/온톨로지** — 차종-리콜-부품-증상의 이질적 부위 어휘를 정규 개념으로 통합(어휘 정규화) + Model→Component→근거 순회(`GraphService`, `/api/graph`, MCP 툴 `component_graph`, 「지식그래프」 UI 탭). 검색 아닌 설명가능성용으로 스코프 ([docs/ONTOLOGY-GRAPH.md](docs/ONTOLOGY-GRAPH.md))
+- [x] **V28 대시보드 기간 필터 + 교차 신호** — 연/월/주 토글을 기간 필터로 재해석해 KPI·표·카드·추세 전체를 스코프, 5탭 시계열 추세, 볼륨·심각도 교차 신호 하이라이트 ([docs/ANALYTICS-DASHBOARD-DESIGN.md](docs/ANALYTICS-DASHBOARD-DESIGN.md))
 
 > GraphRAG는 **설계 문서 + 미연결 building block(`EntityExtractionService`, 어디에도 안 물려 있음)만** 있고 검색 파이프라인엔 구현/통합되지 않았다. 실제 RAG는 벡터+BM25 하이브리드로 동작한다. 고도화 방향은 [docs/GRAPHRAG_VEHICLE.md](docs/GRAPHRAG_VEHICLE.md)에 정리했다.
+
+> **이후 로드맵 (의도적 보류)**: V20(텔레매틱스 데이터 딜러 독점) · V21(2×GPU 하드웨어 필요) · V22/GraphRAG(eval에서 recall 못 이겨 스코프아웃) — 미완성 갭이 아니라 데이터·하드웨어·범위 제약에 따른 판단이며, 각 근거는 해당 문서에 있다.
 
 > **우선순위 통합 백로그**(기술 트랙 + 제품 트랙, 상태·노력·근거 포함)는 [docs/FEATURE-BACKLOG.md](docs/FEATURE-BACKLOG.md)가 단일 소스다.
 
