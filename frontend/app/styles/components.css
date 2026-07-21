@@ -37,10 +37,10 @@
 .mail-act { font-size: 12px; color: var(--muted); border: 1px solid var(--border-strong); border-radius: 2px; padding: 3px 8px; background: var(--surface); white-space: nowrap; }
 .mail-act:hover { color: var(--accent); border-color: var(--accent); }
 
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 /* KPI — 계기판 게이지 타이포: 디스플레이 폰트 대형 숫자 + 상단 눈금 룰 + 콘덴스드 라벨 */
-.stat { background: var(--surface-2); border: 1px solid var(--border); border-top: 2px solid var(--border-strong); padding: 12px 14px 14px; border-radius: 3px; }
-.stat .v { font-family: var(--display); font-size: 44px; font-weight: 700; line-height: 1.05; letter-spacing: 0; font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.stat { background: var(--surface-2); border: 1px solid var(--border); border-top: 2px solid var(--border-strong); padding: 12px 14px 14px; border-radius: 3px; min-width: 0; overflow: hidden; }
+.stat .v { font-family: var(--display); font-size: clamp(30px, 3.2vw, 44px); font-weight: 700; line-height: 1.05; letter-spacing: 0; font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; white-space: nowrap; }
 .stat .l { color: var(--muted); font-family: var(--display); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .14em; margin-top: 4px; }
 /* 의미색 KPI — 위험 신호를 색으로 */
 .stat.danger { background: color-mix(in srgb, var(--danger) 8%, var(--surface)); border-color: color-mix(in srgb, var(--danger) 26%, var(--border)); }
