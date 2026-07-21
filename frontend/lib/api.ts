@@ -240,10 +240,11 @@ export const api = {
     jpost<EstimateResult>("/api/agent/estimate", { problem, car, model }),
 
   // 분석 대시보드 (플릿 집계 + LLM 인사이트)
-  analytics: (model?: string, by?: string) => {
+  analytics: (model?: string, by?: string, car?: string) => {
     const q = new URLSearchParams();
     if (model) q.set("model", model);
     if (by) q.set("by", by);
+    if (car) q.set("car", car);
     const qs = q.toString();
     return jget<Analytics>(`/api/analytics/overview${qs ? `?${qs}` : ""}`);
   },

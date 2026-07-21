@@ -42,10 +42,11 @@ public class AnalyticsService {
         this.laborRate = laborRate;
     }
 
-    public Map<String, Object> overview(String llmModel) { return overview(llmModel, "all"); }
+    public Map<String, Object> overview(String llmModel) { return overview(llmModel, "all", null); }
+    public Map<String, Object> overview(String llmModel, String by) { return overview(llmModel, by, null); }
 
-    /** 플릿 집계 — 기간(by)으로 전체 스코프. by ∈ all/year/month/week (기본 all=전체 누적). */
-    public Map<String, Object> overview(String llmModel, String by) {
+    /** 플릿 집계 — 기간(by) + 차종(carModel)으로 전체 스코프. carModel 비면 전 차종. */
+    public Map<String, Object> overview(String llmModel, String by, String carModel) {
         ensure("recalls"); ensure("complaints"); ensure("parts");
         Map<String, Object> out = new LinkedHashMap<>();
 
@@ -57,63 +58,67 @@ public class AnalyticsService {
             + "TRY_CAST(CAST(reportreceiveddate AS VARCHAR) AS DATE))";
         String cc = periodCond(cDate, "complaints", by);   // 불만 기간 조건(전체면 TRUE)
         String rc = periodCond(rDate, "recalls", by);      // 리콜 기간 조건
+        // 차종 필터 — 통제 어휘라 정규화 후 인라인(따옴표/특수문자 제거로 인젝션 차단). 비면 전 차종.
+        String mv  = (carModel == null) ? "" : carModel.replaceAll("[^A-Za-z0-9 ]", "").trim().toUpperCase();
+        String cm  = mv.isEmpty() ? "" : " AND upper(model)='" + mv + "'";
+        String cmc = mv.isEmpty() ? "" : " AND upper(c.model)='" + mv + "'";
 
-        // ── 총계 KPI (기간 필터 적용) ──
-        long recalls    = scalar("SELECT COUNT(*) FROM recalls WHERE " + rc);
-        long complaints = scalar("SELECT COUNT(*) FROM complaints WHERE " + cc);
-        long fires      = scalar("SELECT COUNT(*) FROM complaints WHERE " + cc + " AND lower(cast(fire AS varchar)) IN ('true','1','yes','y')");
-        long injuries   = scalar("SELECT COALESCE(SUM(TRY_CAST(numberofinjuries AS INTEGER)),0) FROM complaints WHERE " + cc);
-        long crashes    = scalar("SELECT COUNT(*) FROM complaints WHERE " + cc + " AND lower(cast(crash AS varchar)) IN ('true','1','yes','y')");
+        // ── 총계 KPI (기간 + 차종 필터) ──
+        long recalls    = scalar("SELECT COUNT(*) FROM recalls WHERE " + rc + cm);
+        long complaints = scalar("SELECT COUNT(*) FROM complaints WHERE " + cc + cm);
+        long fires      = scalar("SELECT COUNT(*) FROM complaints WHERE " + cc + cm + " AND lower(cast(fire AS varchar)) IN ('true','1','yes','y')");
+        long injuries   = scalar("SELECT COALESCE(SUM(TRY_CAST(numberofinjuries AS INTEGER)),0) FROM complaints WHERE " + cc + cm);
+        long crashes    = scalar("SELECT COUNT(*) FROM complaints WHERE " + cc + cm + " AND lower(cast(crash AS varchar)) IN ('true','1','yes','y')");
         out.put("totals", Map.of("recalls", recalls, "complaints", complaints,
                 "fires", fires, "injuries", injuries, "crashes", crashes));
 
-        // ── 연도별 분포는 전체 히스토리 유지(기간과 무관한 맥락 + 인사이트 fmtYears 재사용) ──
+        // ── 연도별 분포(차종 필터 적용, 기간은 무관한 맥락) ──
         out.put("recallByYear", rows(
             "SELECT year(reportreceiveddate) AS y, COUNT(*) n FROM recalls "
-            + "WHERE reportreceiveddate IS NOT NULL GROUP BY y ORDER BY y"));
+            + "WHERE reportreceiveddate IS NOT NULL" + cm + " GROUP BY y ORDER BY y"));
         out.put("complaintByYear", rows(
             "SELECT year(datecomplaintfiled) AS y, COUNT(*) n FROM complaints "
-            + "WHERE datecomplaintfiled IS NOT NULL GROUP BY y ORDER BY y"));
+            + "WHERE datecomplaintfiled IS NOT NULL" + cm + " GROUP BY y ORDER BY y"));
 
-        // ── 결함 부위 Top (기간 필터) ──
+        // ── 결함 부위 Top (기간 + 차종) ──
         out.put("recallTopComponents", rows(
-            "SELECT component, COUNT(*) n FROM recalls WHERE " + rc + " GROUP BY component ORDER BY n DESC LIMIT 8"));
+            "SELECT component, COUNT(*) n FROM recalls WHERE " + rc + cm + " GROUP BY component ORDER BY n DESC LIMIT 8"));
         out.put("complaintTopComponents", rows(
-            "SELECT components, COUNT(*) n FROM complaints WHERE " + cc + " GROUP BY components ORDER BY n DESC LIMIT 8"));
+            "SELECT components, COUNT(*) n FROM complaints WHERE " + cc + cm + " GROUP BY components ORDER BY n DESC LIMIT 8"));
 
-        // ── 차종별 불만 (기간 필터) ──
+        // ── 차종별 불만 (기간 + 차종) ──
         out.put("complaintByModel", rows(
-            "SELECT model, COUNT(*) n FROM complaints WHERE " + cc + " GROUP BY model ORDER BY n DESC LIMIT 8"));
+            "SELECT model, COUNT(*) n FROM complaints WHERE " + cc + cm + " GROUP BY model ORDER BY n DESC LIMIT 8"));
 
-        // ── 차종별 리콜 + 주차권고(화재위험) (기간 필터) ──
+        // ── 차종별 리콜 + 주차권고(화재위험) (기간 + 차종) ──
         out.put("recallByModel", rows(
             "SELECT model, COUNT(*) n, "
             + "SUM(CASE WHEN lower(cast(parkit AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END) parkit "
-            + "FROM recalls WHERE " + rc + " GROUP BY model ORDER BY n DESC LIMIT 8"));
+            + "FROM recalls WHERE " + rc + cm + " GROUP BY model ORDER BY n DESC LIMIT 8"));
 
-        // ── 안전 핫스팟: 차종별 화재/부상/사고 (기간 필터) ──
+        // ── 안전 핫스팟: 차종별 화재/부상/사고 (기간 + 차종) ──
         out.put("safetyHotspots", rows(
             "SELECT model, "
             + "SUM(CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END) fires, "
             + "COALESCE(SUM(TRY_CAST(numberofinjuries AS INTEGER)),0) injuries, "
             + "SUM(CASE WHEN lower(cast(crash AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END) crashes "
-            + "FROM complaints WHERE " + cc + " GROUP BY model ORDER BY fires DESC, injuries DESC LIMIT 8"));
+            + "FROM complaints WHERE " + cc + cm + " GROUP BY model ORDER BY fires DESC, injuries DESC LIMIT 8"));
 
         // ── 부품 수요/워런티 비용 프록시 (수요=기간 내 불만에 부위 등장 횟수 × 단가+공임) ──
         out.put("partsDemand", rows(
             "SELECT p.part, p.component, "
-            + "  (SELECT COUNT(*) FROM complaints c WHERE " + cc + " AND upper(c.components) LIKE '%'||upper(p.component)||'%') AS demand, "
+            + "  (SELECT COUNT(*) FROM complaints c WHERE " + cc + cmc + " AND upper(c.components) LIKE '%'||upper(p.component)||'%') AS demand, "
             + "  p.unit_price, "
-            + "  (SELECT COUNT(*) FROM complaints c WHERE " + cc + " AND upper(c.components) LIKE '%'||upper(p.component)||'%') "
+            + "  (SELECT COUNT(*) FROM complaints c WHERE " + cc + cmc + " AND upper(c.components) LIKE '%'||upper(p.component)||'%') "
             + "   * (TRY_CAST(p.unit_price AS DOUBLE) + TRY_CAST(p.labor_hours AS DOUBLE)*" + laborRate + ") AS est_cost "
             + "FROM parts p ORDER BY est_cost DESC LIMIT 10"));
 
-        // ── 지역 핫스팟: 주(state)별 불만/화재/부상 (기간 필터) ──
+        // ── 지역 핫스팟: 주(state)별 불만/화재/부상 (기간 + 차종) ──
         out.put("complaintsByState", rows(
                 "SELECT state, COUNT(*) n, "
                         + "SUM(CASE WHEN lower(cast(fire AS varchar)) IN ('true','1','yes') THEN 1 ELSE 0 END) fires, "
                         + "COALESCE(SUM(TRY_CAST(numberofinjuries AS INTEGER)),0) injuries "
-                        + "FROM complaints WHERE " + cc + " AND state IS NOT NULL AND state <> '' "
+                        + "FROM complaints WHERE " + cc + cm + " AND state IS NOT NULL AND state <> '' "
                         + "GROUP BY state ORDER BY n DESC LIMIT 10"));
 
         // LLM 인사이트는 분리(/insight) — 집계(차트)는 즉시 반환하고 느린 LLM은 별도 호출로.

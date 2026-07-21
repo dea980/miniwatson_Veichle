@@ -72,6 +72,9 @@ export default function AnalyticsPanel() {
   const [by, setBy] = useState<"all" | "year" | "month" | "week">("all");
   type Series = { name: string; color: string; data: [string, number][] };
   const [trends, setTrends] = useState<Series[]>([]);
+  // 차종 필터 — 전역 스코프(비면 전 차종). 목록은 summary.byModel에서.
+  const [carModel, setCarModel] = useState("");
+  const [carModels, setCarModels] = useState<string[]>([]);
   // 주간 품질 브리핑 — 캐시 히트면 즉시, 최초 생성만 LLM 수십 초
   const [brief, setBrief] = useState<Briefing | "loading" | null>(null);
 
@@ -82,28 +85,30 @@ export default function AnalyticsPanel() {
 
   useEffect(() => {
     api.models().then((m) => { setModels(m); setModel(m.default); }).catch(() => {});
+    api.summary().then((s) => setCarModels((s.byModel || []).map((m) => String(m[0])))).catch(() => {});
     loadBriefing();
   }, []);
 
   async function loadTrends(g = by, lv = level) {
     const H = "#002c5f", O = "#d97706", R = "#dc2626", W = "#f59e0b";
+    const cm = carModel || undefined;   // 차종 필터(비면 전 차종)
     try {
       let s: Series[] = [];
       if (lv === "overview") {
-        const [rc, cp] = await Promise.all([api.trend("recalls", g), api.trend("complaints", g)]);
+        const [rc, cp] = await Promise.all([api.trend("recalls", g, cm), api.trend("complaints", g, cm)]);
         s = [{ name: "리콜", color: H, data: rc.trend || [] }, { name: "불만", color: O, data: cp.trend || [] }];
       } else if (lv === "recall") {
-        const rc = await api.trend("recalls", g);
+        const rc = await api.trend("recalls", g, cm);
         s = [{ name: "리콜", color: H, data: rc.trend || [] }];
       } else if (lv === "safety") {
         const [fi, inj, cr] = await Promise.all([
-          api.trend("complaints", g, undefined, "fire"),
-          api.trend("complaints", g, undefined, "injury"),
-          api.trend("complaints", g, undefined, "crash"),
+          api.trend("complaints", g, cm, "fire"),
+          api.trend("complaints", g, cm, "injury"),
+          api.trend("complaints", g, cm, "crash"),
         ]);
         s = [{ name: "화재", color: R, data: fi.trend || [] }, { name: "부상", color: W, data: inj.trend || [] }, { name: "사고", color: H, data: cr.trend || [] }];
       } else {
-        const cp = await api.trend("complaints", g);
+        const cp = await api.trend("complaints", g, cm);
         s = [{ name: lv === "parts" ? "불만(수요 프록시)" : "불만", color: O, data: cp.trend || [] }];
       }
       setTrends(s);
@@ -112,7 +117,7 @@ export default function AnalyticsPanel() {
 
   async function load() {
     setLoading(true); setErr(""); setInsight("");   // 데이터 바뀌면 이전 인사이트 비움
-    try { setRes(await api.analytics(model || undefined, by)); }   // 집계(차트) — 기간 스코프, 빠름
+    try { setRes(await api.analytics(model || undefined, by, carModel || undefined)); }   // 집계 — 기간+차종 스코프
     catch (e) { setErr(String(e)); } finally { setLoading(false); }
     loadTrends();
   }
@@ -128,6 +133,8 @@ export default function AnalyticsPanel() {
   useEffect(() => { setInsight(""); }, [level, by]);
   // 기간 바뀌면 전체 재집계(KPI·표·카드·추세 모두 그 기간 기준)
   useEffect(() => { if (res) load(); /* eslint-disable-next-line */ }, [by]);
+  // 차종 필터 바뀌면 전체 재집계
+  useEffect(() => { if (res) load(); /* eslint-disable-next-line */ }, [carModel]);
   // 레벨만 바뀌면 추세만 다시(집계는 한 페이로드라 재요청 불필요)
   useEffect(() => { if (res) loadTrends(by, level); /* eslint-disable-next-line */ }, [level]);
 
@@ -181,6 +188,7 @@ export default function AnalyticsPanel() {
       <div className="row" style={{ justifyContent: "space-between" }}>
         <h2 style={{ margin: 0 }}>플릿 분석 대시보드</h2>
         <div className="row" style={{ gap: 6 }}>
+          <Select value={carModel} onChange={setCarModel} options={["", ...carModels]} title="차종 필터(전체 스코프)" renderLabel={(v) => (v ? koModel(v) : "전 차종")} />
           <Select value={model} onChange={setModel} options={models?.available || []} title="인사이트 생성 LLM" />
           <button className="btn" onClick={load} disabled={loading}>{loading ? "분석 중…" : "새로고침"}</button>
         </div>
@@ -236,13 +244,13 @@ export default function AnalyticsPanel() {
                   <div className="lens-v">{koModel(String(lensVolume?.[0] ?? "-"))}</div>
                   <div className="lens-s">불만 {num(lensVolume?.[1]).toLocaleString("ko-KR")}건</div>
                 </div>
-                <div className="lens-card">
-                  <div className="lens-k">심각도 · 가장 위험</div>
+                <div className="lens-card" style={{ cursor: "pointer" }} onClick={() => setLevel("safety")} title="안전 딥다이브로 이동">
+                  <div className="lens-k">심각도 · 가장 위험 <span className="muted" style={{ fontWeight: 400 }}>→</span></div>
                   <div className="lens-v">{koModel(String(lensSeverity?.[0] ?? "-"))}</div>
                   <div className="lens-s">부상 {num(lensSeverity?.[2])} · 사고 {num(lensSeverity?.[3])}</div>
                 </div>
-                <div className="lens-card">
-                  <div className="lens-k">비용 · 워런티 최대</div>
+                <div className="lens-card" style={{ cursor: "pointer" }} onClick={() => setLevel("parts")} title="부품·워런티 딥다이브로 이동">
+                  <div className="lens-k">비용 · 워런티 최대 <span className="muted" style={{ fontWeight: 400 }}>→</span></div>
                   <div className="lens-v">{String(lensCost?.[0] ?? "-")}</div>
                   <div className="lens-s">{won(num(lensCost?.[4]))}</div>
                 </div>
