@@ -12,6 +12,7 @@ import AnalyticsPanel from "@/components/AnalyticsPanel";
 import CaseTriagePanel from "@/components/CaseTriagePanel";
 import SchedulePanel from "@/components/SchedulePanel";
 import GovernancePanel from "@/components/GovernancePanel";
+import GraphPanel from "@/components/GraphPanel";
 
 const ICONS: Record<string, React.ReactNode> = {
   home: <><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /></>,
@@ -25,6 +26,7 @@ const ICONS: Record<string, React.ReactNode> = {
   triage: <><path d="M3 5h18" /><path d="M6 12h12" /><path d="M10 19h4" /></>,
   schedule: <><rect x="3" y="4" width="18" height="17" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="16" y1="2" x2="16" y2="6" /></>,
   gov: <path d="M12 3l8 3v6c0 5-3.4 7.7-8 9-4.6-1.3-8-4-8-9V6z" />,
+  graph: <><circle cx="6" cy="6" r="2.3" /><circle cx="18" cy="8" r="2.3" /><circle cx="9" cy="18" r="2.3" /><line x1="8" y1="7" x2="16" y2="8" /><line x1="7" y1="8" x2="8.5" y2="15.8" /></>,
 };
 
 const TABS = [
@@ -39,6 +41,7 @@ const TABS = [
   { id: "triage", label: "케이스 트리아지", desc: "고객 불만(접수)을 심각도 우선순위로 정렬해 먼저 대응할 케이스를 위로 보여줍니다. 차종·부위 필터와 케이스별 차량 진단을 제공합니다." },
   { id: "schedule", label: "정비 스케줄", desc: "달력으로 정비 일정을 추가하고 상태(예정·진행·완료)를 관리합니다. 백엔드에 영속 저장됩니다." },
   { id: "gov", label: "거버넌스", desc: "모든 AI 호출의 기록·개인정보 마스킹·지표를 추적합니다." },
+  { id: "graph", label: "지식그래프", desc: "차종-리콜-부품-증상을 온톨로지로 통합해 부위 단위로 규제·증상·비용을 순회 탐색합니다." },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -161,6 +164,7 @@ export default function Home() {
             {tab === "triage" && <CaseTriagePanel onNavigate={navigate} initialModel={triageModel} initialCaseId={triageCase} />}
             {tab === "schedule" && <SchedulePanel />}
             {tab === "gov" && <GovernancePanel />}
+            {tab === "graph" && <GraphPanel />}
           </div>
 
           <footer className="footer">

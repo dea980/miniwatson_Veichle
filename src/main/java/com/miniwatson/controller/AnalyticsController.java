@@ -21,8 +21,9 @@ public class AnalyticsController {
 
     @GetMapping("/overview")
     public Map<String, Object> overview(@RequestParam(value = "model", required = false) String model,
-                                        @RequestParam(value = "by", required = false) String by) {
-        return analytics.overview(model, by);
+                                        @RequestParam(value = "by", required = false) String by,
+                                        @RequestParam(value = "car", required = false) String car) {
+        return analytics.overview(model, by, car);
     }
 
     /** LLM 인사이트만 별도 (느려서 집계와 분리). */
